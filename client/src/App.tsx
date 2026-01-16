@@ -1,3 +1,4 @@
+
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -5,12 +6,30 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+// Pages
+import LandingPage from "@/pages/LandingPage";
+import LoginPage from "@/pages/auth/LoginPage";
+import OnboardingPage from "@/pages/onboarding/OnboardingPage";
+import DashboardPage from "@/pages/dashboard/DashboardPage";
+import MenuPage from "@/pages/dashboard/MenuPage";
+import QRCodesPage from "@/pages/dashboard/QRCodesPage";
+import PublicMenuPage from "@/pages/public/PublicMenuPage";
+
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={LandingPage} />
+      <Route path="/auth" component={LoginPage} />
+      <Route path="/onboarding" component={OnboardingPage} />
+      
+      {/* Dashboard Routes */}
+      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/dashboard/menu" component={MenuPage} />
+      <Route path="/dashboard/qr" component={QRCodesPage} />
+      
+      {/* Public Routes */}
+      <Route path="/r/:slug" component={PublicMenuPage} />
+      
       <Route component={NotFound} />
     </Switch>
   );
