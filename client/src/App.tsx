@@ -13,6 +13,8 @@ import OnboardingPage from "@/pages/onboarding/OnboardingPage";
 import DashboardPage from "@/pages/dashboard/DashboardPage";
 import MenuPage from "@/pages/dashboard/MenuPage";
 import QRCodesPage from "@/pages/dashboard/QRCodesPage";
+import AnalyticsPage from "@/pages/dashboard/AnalyticsPage";
+import SettingsPage from "@/pages/dashboard/SettingsPage";
 import PublicMenuPage from "@/pages/public/PublicMenuPage";
 
 function Router() {
@@ -26,6 +28,8 @@ function Router() {
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/dashboard/menu" component={MenuPage} />
       <Route path="/dashboard/qr" component={QRCodesPage} />
+      <Route path="/dashboard/analytics" component={AnalyticsPage} />
+      <Route path="/dashboard/settings" component={SettingsPage} />
       
       {/* Public Routes */}
       <Route path="/r/:slug" component={PublicMenuPage} />
