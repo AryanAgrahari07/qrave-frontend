@@ -19,6 +19,7 @@ import LiveOrdersPage from "@/pages/dashboard/LiveOrdersPage";
 import KitchenPage from "@/pages/dashboard/KitchenPage";
 import StaffManagementPage from "@/pages/dashboard/StaffManagementPage";
 import PublicMenuPage from "@/pages/public/PublicMenuPage";
+import QueueRegistrationPage from "@/pages/public/QueueRegistrationPage";
 
 function Router() {
   return (
@@ -39,6 +40,7 @@ function Router() {
       
       {/* Public Routes */}
       <Route path="/r/:slug" component={PublicMenuPage} />
+      <Route path="/q/:slug" component={QueueRegistrationPage} />
       
       <Route component={NotFound} />
     </Switch>
