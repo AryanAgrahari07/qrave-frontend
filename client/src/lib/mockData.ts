@@ -73,6 +73,15 @@ export const MOCK_QUEUE = [
   { id: "Q-3", name: "Michael T.", partySize: 6, waitTime: "25m", status: "WAITING" },
 ];
 
+export const MOCK_TABLES = [
+  { id: "1", number: "1", capacity: 2, status: "OCCUPIED" },
+  { id: "2", number: "2", capacity: 2, status: "AVAILABLE" },
+  { id: "3", number: "3", capacity: 4, status: "AVAILABLE" },
+  { id: "4", number: "4", capacity: 4, status: "OCCUPIED" },
+  { id: "5", number: "5", capacity: 6, status: "AVAILABLE" },
+  { id: "6", number: "6", capacity: 8, status: "AVAILABLE" },
+];
+
 export const MOCK_STATS = {
   activeTables: 12,
   totalTables: 20,
