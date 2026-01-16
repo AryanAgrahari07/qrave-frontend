@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut, ShoppingCart, CookingPot } from "lucide-react";
+import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut, ShoppingCart, CookingPot, Users } from "lucide-react";
 
 export const MOCK_RESTAURANT = {
   id: "1",
@@ -62,6 +62,17 @@ export const MOCK_ORDERS = [
   { id: "ord-3", table: "8", items: ["Pan-Seared Salmon", "Coke"], total: 32, status: "SERVED", time: "15 mins ago" },
 ];
 
+export const MOCK_STAFF = [
+  { id: "ST-001", name: "Alice Johnson", role: "WAITER", pin: "1234" },
+  { id: "ST-002", name: "Bob Smith", role: "KITCHEN", pin: "5678" },
+];
+
+export const MOCK_QUEUE = [
+  { id: "Q-1", name: "Smith Family", partySize: 4, waitTime: "15m", status: "WAITING" },
+  { id: "Q-2", name: "Jessica R.", partySize: 2, waitTime: "5m", status: "CALLING" },
+  { id: "Q-3", name: "Michael T.", partySize: 6, waitTime: "25m", status: "WAITING" },
+];
+
 export const MOCK_STATS = {
   activeTables: 12,
   totalTables: 20,
@@ -74,6 +85,7 @@ export const NAV_LINKS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ShoppingCart, label: "Live Orders", href: "/dashboard/orders" },
   { icon: CookingPot, label: "Kitchen KDS", href: "/dashboard/kitchen" },
+  { icon: Users, label: "Staff & Queue", href: "/dashboard/staff" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
