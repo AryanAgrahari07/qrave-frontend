@@ -24,12 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="w-64 bg-background border-r border-border fixed h-full z-40 hidden md:flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-border">
           <Link href="/dashboard">
-            <a className="text-xl font-heading font-bold tracking-tight flex items-center gap-2">
+            <div className="text-xl font-heading font-bold tracking-tight flex items-center gap-2 cursor-pointer">
               <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
                 <span className="text-white text-xs font-bold">Q</span>
               </div>
               Qrave.
-            </a>
+            </div>
           </Link>
         </div>
 
@@ -52,15 +52,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               const isActive = location === link.href;
               return (
                 <Link key={link.href} href={link.href}>
-                  <a className={cn(
-                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-all",
+                  <div className={cn(
+                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-all cursor-pointer",
                     isActive 
                       ? "bg-primary/10 text-primary" 
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}>
                     <Icon className="w-4 h-4" />
                     {link.label}
-                  </a>
+                  </div>
                 </Link>
               );
             })}

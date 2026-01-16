@@ -10,17 +10,17 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/">
-            <a className="text-2xl font-heading font-bold tracking-tighter flex items-center gap-2">
+            <div className="text-2xl font-heading font-bold tracking-tighter flex items-center gap-2 cursor-pointer">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <span className="text-white text-lg">Q</span>
               </div>
               Qrave.
-            </a>
+            </div>
           </Link>
           
           <div className="flex items-center gap-6">
             <Link href="/auth">
-              <a className="text-sm font-medium hover:text-primary transition-colors">Log in</a>
+              <div className="text-sm font-medium hover:text-primary transition-colors cursor-pointer">Log in</div>
             </Link>
             <Link href="/auth?signup=true">
               <Button size="sm" className="font-semibold shadow-lg shadow-primary/20">
