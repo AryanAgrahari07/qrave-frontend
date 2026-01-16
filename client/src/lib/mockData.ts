@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut, ShoppingCart, CookingPot } from "lucide-react";
 
 export const MOCK_RESTAURANT = {
   id: "1",
@@ -50,10 +50,16 @@ export const MOCK_MENU_CATEGORIES = [
         description: "Asparagus, quinoa, lemon butter sauce",
         price: 28,
         image: "https://images.unsplash.com/photo-1467003909585-2f8a7270028d?auto=format&fit=crop&q=80&w=300&h=300",
-        available: true,
+        available: false,
       },
     ],
   },
+];
+
+export const MOCK_ORDERS = [
+  { id: "ord-1", table: "5", items: ["Wagyu Burger", "Truffle Fries"], total: 36, status: "PENDING", time: "2 mins ago" },
+  { id: "ord-2", table: "2", items: ["Crispy Calamari"], total: 16, status: "PREPARING", time: "5 mins ago" },
+  { id: "ord-3", table: "8", items: ["Pan-Seared Salmon", "Coke"], total: 32, status: "SERVED", time: "15 mins ago" },
 ];
 
 export const MOCK_STATS = {
@@ -66,6 +72,8 @@ export const MOCK_STATS = {
 
 export const NAV_LINKS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: ShoppingCart, label: "Live Orders", href: "/dashboard/orders" },
+  { icon: CookingPot, label: "Kitchen KDS", href: "/dashboard/kitchen" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },

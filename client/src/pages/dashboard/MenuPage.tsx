@@ -1,17 +1,40 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { MOCK_MENU_CATEGORIES } from "@/lib/mockData";
 import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function MenuPage() {
+  const [categories, setCategories] = useState(MOCK_MENU_CATEGORIES);
+
+  const toggleAvailability = (catId: string, itemId: string) => {
+    setCategories(prev => prev.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          items: cat.items.map(item => {
+            if (item.id === itemId) {
+              const newState = !item.available;
+              toast.success(`${item.name} is now ${newState ? 'available' : 'unavailable'}`);
+              return { ...item, available: newState };
+            }
+            return item;
+          })
+        };
+      }
+      return cat;
+    }));
+  };
+
   return (
     <DashboardLayout>
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-3xl font-heading font-bold">Menu Builder</h2>
-          <p className="text-muted-foreground">Manage your categories and dishes.</p>
+          <p className="text-muted-foreground">Manage your categories and real-time dish availability.</p>
         </div>
         <Button className="shadow-lg shadow-primary/20">
           <Plus className="w-4 h-4 mr-2" /> Add Category
@@ -19,7 +42,7 @@ export default function MenuPage() {
       </div>
 
       <div className="space-y-8">
-        {MOCK_MENU_CATEGORIES.map((category) => (
+        {categories.map((category) => (
           <div key={category.id} className="bg-background border border-border rounded-xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -52,7 +75,16 @@ export default function MenuPage() {
                       <p className="font-semibold truncate">{item.name}</p>
                       <p className="font-mono font-medium">${item.price}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">{item.description}</p>
+                    <div className="flex items-center justify-between">
+                       <p className="text-sm text-muted-foreground truncate max-w-[200px]">{item.description}</p>
+                       <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-muted-foreground">In Stock</span>
+                          <Switch 
+                            checked={item.available} 
+                            onCheckedChange={() => toggleAvailability(category.id, item.id)}
+                          />
+                       </div>
+                    </div>
                   </div>
                   
                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
