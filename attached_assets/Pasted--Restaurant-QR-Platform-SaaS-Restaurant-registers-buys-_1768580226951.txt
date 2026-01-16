@@ -1,0 +1,391 @@
+🍽️ Restaurant QR Platform (SaaS)
+
+Restaurant registers → buys plan → configures → goes live → customers scan QR (no login)
+
+This guide focuses on:
+
+SaaS platform architecture
+
+Restaurant onboarding
+
+Menu + QR + live dashboards
+
+Scalability, low latency, production readiness
+
+1️⃣ PRODUCT SCOPE (LOCK THIS FIRST)
+Phase-1 (Your current focus)
+
+✅ Restaurant onboarding
+✅ Subscription & plans
+✅ Menu builder
+✅ QR generation
+✅ Public QR menu (no login)
+✅ Live analytics dashboard
+✅ Table availability tracking
+✅ Kitchen queue (view-only initially)
+✅ Multi-language + themes
+
+Phase-2 (Later)
+
+⬜ Ordering + payments
+⬜ KDS actions
+⬜ Customer order tracking
+
+Design everything now so Phase-2 is just feature flags.
+
+2️⃣ SaaS MULTI-TENANT MODEL (CRITICAL)
+
+This is not a single restaurant app.
+
+Tenant = Restaurant
+
+Every request must be scoped by restaurant_id.
+
+JWT payload example
+
+{
+  "user_id": "uuid",
+  "restaurant_id": "uuid",
+  "role": "OWNER",
+  "plan": "PRO"
+}
+
+3️⃣ HIGH-LEVEL ARCHITECTURE
+Browser / Mobile
+ ├── Customer QR Web App (Public, No Auth)
+ ├── Restaurant Admin Dashboard
+ │
+API Gateway
+ │
+Backend (NestJS – Modular Monolith)
+ ├── Auth Module
+ ├── Billing Module
+ ├── Restaurant Module
+ ├── Menu Module
+ ├── Table Module
+ ├── Analytics Module
+ ├── QR Module
+ ├── Theme + Language Module
+ │
+Infra
+ ├── PostgreSQL
+ ├── Redis
+ ├── CDN (Cloudflare)
+ └── Object Storage (Images)
+
+
+Why modular monolith?
+
+Faster to build
+
+Easier to refactor
+
+Scales horizontally
+
+4️⃣ RESTAURANT ONBOARDING FLOW (VERY IMPORTANT)
+Step 1: Signup
+
+Email + password
+
+Verify email
+
+Create first restaurant
+
+Step 2: Choose Plan
+
+Plans control:
+
+No. of menu items
+
+Analytics depth
+
+Themes
+
+Tables
+
+Languages
+
+Step 3: Payment
+
+Razorpay subscription
+
+Webhook-based activation
+
+Step 4: Initial Setup Wizard
+
+This is mandatory for usability:
+
+Restaurant name & logo
+
+Default language
+
+Add tables (count)
+
+Choose theme
+
+Add first menu category
+
+Only then → dashboard unlocked.
+
+5️⃣ DATABASE DESIGN (CORE TABLES)
+users
+id
+email
+password_hash
+role
+
+restaurants
+id
+name
+slug
+plan
+status
+default_language
+
+subscriptions
+restaurant_id
+plan
+status
+renewal_date
+
+menu_categories
+id
+restaurant_id
+name
+order_index
+
+menu_items
+id
+restaurant_id
+category_id
+name
+price
+is_available
+image_url
+
+tables
+id
+restaurant_id
+table_number
+status (FREE, OCCUPIED)
+
+themes
+id
+restaurant_id
+config_json
+
+6️⃣ MENU BUILDER (ADMIN SIDE)
+UX rules
+
+Drag & drop categories
+
+Inline editing
+
+Image upload (compressed)
+
+One-tap enable / disable dish
+
+Best practices
+
+Store images in object storage
+
+Cache menu in Redis
+
+Invalidate cache on update
+
+7️⃣ QR GENERATION SYSTEM
+How it works
+
+Each restaurant gets:
+
+https://app.com/r/{restaurant_slug}
+
+
+Optional table QR:
+
+https://app.com/r/{slug}?table=5&token=xyz
+
+Security
+
+Signed tokens
+
+Expiry for table QR
+
+Prevent spoofing
+
+QR Use Cases
+
+Main menu
+
+Table-specific menu
+
+Poster / standee QR
+
+8️⃣ CUSTOMER QR MENU (PUBLIC APP)
+Characteristics
+
+PWA
+
+No auth
+
+Ultra-lightweight
+
+Cached aggressively
+
+Performance
+
+Static generation where possible
+
+CDN cached menu JSON
+
+Lazy image loading
+
+9️⃣ TABLE & OCCUPANCY TRACKING (PHASE-1 VIEW MODE)
+
+Even without ordering:
+
+Inputs
+
+Manual toggle by staff
+
+Timer-based auto-free (optional)
+
+Dashboard shows
+
+Total tables
+
+Occupied
+
+Free
+
+Fully booked status
+
+This solves real operational pain even without orders.
+
+🔥 10️⃣ LIVE ANALYTICS DASHBOARD
+Metrics (Phase-1)
+
+Menu views
+
+Popular dishes
+
+Peak scan time
+
+Table usage
+
+Device types
+
+Tech
+
+Event logging
+
+Batched inserts
+
+Aggregations via cron / background jobs
+
+🎨 11️⃣ THEME & BRANDING ENGINE
+Implementation
+
+CSS variables
+
+Theme JSON stored per restaurant
+
+Loaded dynamically
+
+Features
+
+Prebuilt templates
+
+Color picker
+
+Font selection
+
+Custom background
+
+Never hardcode styles.
+
+🌐 12️⃣ MULTI-LANGUAGE SYSTEM
+Structure
+{
+  "menu": {
+    "en": "Menu",
+    "hi": "मेनू"
+  }
+}
+
+Best practices
+
+Fallback language
+
+Auto-detect browser language
+
+Admin editable translations
+
+🔐 13️⃣ SECURITY & PRODUCTION BEST PRACTICES
+
+Rate limit QR scans
+
+Cache public routes
+
+JWT rotation
+
+RBAC enforcement
+
+Feature flags per plan
+
+Audit logs for admin actions
+
+📈 14️⃣ SCALABILITY STRATEGY
+Today
+
+Single region
+
+Redis cache
+
+CDN
+
+Tomorrow
+
+Horizontal scaling
+
+Read replicas
+
+Event-driven analytics
+
+Sharded restaurants
+
+Design now, implement later.
+
+🧪 15️⃣ TESTING & RELIABILITY
+
+Unit tests (menu, QR)
+
+Load test QR scans
+
+Simulate 1k concurrent users per restaurant
+
+Graceful degradation if Redis fails
+
+🚀 16️⃣ DEPLOYMENT
+
+Dockerized services
+
+CI/CD
+
+Rolling updates
+
+Health checks
+
+Zero downtime deploys
+
+🧠 FINAL PRODUCT POSITIONING
+
+“A self-serve QR platform for restaurants — no POS, no training, live instantly.”
+
+You are building:
+
+A SaaS
+
+A platform
+
+A foundation for ordering later
