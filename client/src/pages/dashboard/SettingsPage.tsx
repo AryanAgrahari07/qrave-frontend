@@ -5,9 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Globe, Bell, Lock, Store, Languages } from "lucide-react";
+import { 
+  Globe, 
+  Bell, 
+  Lock, 
+  Store, 
+  Languages, 
+  Utensils, 
+  Coffee, 
+  LayoutDashboard, 
+  Cloud, 
+  IceCream, 
+  Croissant, 
+  Beer, 
+  Pizza, 
+  Layers 
+} from "lucide-react";
 import { MOCK_RESTAURANT } from "@/lib/mockData";
-
 import { useState } from "react";
 import { 
   Dialog, 
@@ -19,22 +33,6 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { 
-  Store, 
-  Utensils, 
-  Coffee, 
-  LayoutDashboard, 
-  Cloud, 
-  IceCream, 
-  Croissant, 
-  Beer, 
-  Pizza, 
-  Layers,
-  Globe,
-  Bell,
-  Lock,
-  Languages
-} from "lucide-react";
 import { toast } from "sonner";
 
 const SHOP_TYPES = [
@@ -83,7 +81,8 @@ export default function SettingsPage() {
                       <Button variant="outline" className="w-full justify-start font-normal h-10">
                         <div className="flex items-center gap-2">
                           {(() => {
-                            const TypeIcon = SHOP_TYPES.find(t => t.id === shopType)?.icon || Store;
+                            const selected = SHOP_TYPES.find(t => t.id === shopType);
+                            const TypeIcon = selected?.icon || Store;
                             return <TypeIcon className="w-4 h-4 text-primary" />;
                           })()}
                           {SHOP_TYPES.find(t => t.id === shopType)?.label || "Select Type..."}
@@ -126,7 +125,7 @@ export default function SettingsPage() {
                 <Label>Address</Label>
                 <Input defaultValue="123 Culinary Ave, Food City" />
               </div>
-              <Button>Save Profile</Button>
+              <Button onClick={() => toast.success("Profile saved!")}>Save Profile</Button>
             </CardContent>
           </Card>
 

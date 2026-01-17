@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Package, AlertTriangle, ArrowUpRight, TrendingDown, History, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const MOCK_INVENTORY = [
   { id: "inv-1", name: "Wagyu Beef Patties", category: "Meat", stock: 15, unit: "kg", threshold: 5, lastOrdered: "2 days ago" },

@@ -15,6 +15,7 @@ import MenuPage from "@/pages/dashboard/MenuPage";
 import QRCodesPage from "@/pages/dashboard/QRCodesPage";
 import AnalyticsPage from "@/pages/dashboard/AnalyticsPage";
 import SettingsPage from "@/pages/dashboard/SettingsPage";
+import InventoryPage from "@/pages/dashboard/InventoryPage";
 import LiveOrdersPage from "@/pages/dashboard/LiveOrdersPage";
 import TransactionsPage from "@/pages/dashboard/TransactionsPage";
 import KitchenKDSPage from "@/pages/dashboard/KitchenKDSPage";
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/dashboard/transactions" component={TransactionsPage} />
       <Route path="/dashboard/staff" component={StaffManagementPage} />
       <Route path="/dashboard/menu" component={MenuPage} />
+      <Route path="/dashboard/inventory" component={InventoryPage} />
       <Route path="/dashboard/qr" component={QRCodesPage} />
       <Route path="/dashboard/analytics" component={AnalyticsPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />

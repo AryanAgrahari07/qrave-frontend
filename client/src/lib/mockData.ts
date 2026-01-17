@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut, ShoppingCart, CookingPot, Users, MapPin, FileText } from "lucide-react";
+import { LayoutDashboard, UtensilsCrossed, QrCode, BarChart3, Settings, LogOut, ShoppingCart, CookingPot, Users, MapPin, FileText, Package } from "lucide-react";
 
 export const MOCK_RESTAURANT = {
   id: "1",
@@ -94,6 +94,7 @@ export const NAV_LINKS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ShoppingCart, label: "Live Orders", href: "/dashboard/orders" },
   { icon: FileText, label: "Transactions", href: "/dashboard/transactions" },
+  { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
   { icon: Users, label: "Staff & Queue", href: "/dashboard/staff" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
