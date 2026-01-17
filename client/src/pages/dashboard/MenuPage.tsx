@@ -3,12 +3,27 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { MOCK_MENU_CATEGORIES } from "@/lib/mockData";
-import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2, X, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function MenuPage() {
   const [categories, setCategories] = useState(MOCK_MENU_CATEGORIES);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   const toggleAvailability = (catId: string, itemId: string) => {
     setCategories(prev => prev.map(cat => {
@@ -29,6 +44,18 @@ export default function MenuPage() {
     }));
   };
 
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.success("New category added successfully");
+    setIsCategoryDialogOpen(false);
+  };
+
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.success("New item added to menu");
+    setIsItemDialogOpen(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="flex justify-between items-center mb-8">
@@ -36,9 +63,29 @@ export default function MenuPage() {
           <h2 className="text-3xl font-heading font-bold">Menu Builder</h2>
           <p className="text-muted-foreground">Manage your categories and real-time dish availability.</p>
         </div>
-        <Button className="shadow-lg shadow-primary/20">
-          <Plus className="w-4 h-4 mr-2" /> Add Category
-        </Button>
+        
+        <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="shadow-lg shadow-primary/20">
+              <Plus className="w-4 h-4 mr-2" /> Add Category
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Category</DialogTitle>
+              <DialogDescription>Create a new section for your menu (e.g., Desserts, Beverages).</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddCategory} className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="category-name">Category Name</Label>
+                <Input id="category-name" placeholder="Enter category name..." required />
+              </div>
+              <DialogFooter>
+                <Button type="submit" className="w-full">Create Category</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="space-y-8">
@@ -93,9 +140,53 @@ export default function MenuPage() {
                   </div>
                 </div>
               ))}
-              <div className="p-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer text-center text-sm font-medium text-primary border-t border-dashed">
-                <Plus className="w-4 h-4 inline mr-2" /> Add Item to {category.name}
-              </div>
+              
+              <Dialog open={isItemDialogOpen && selectedCategoryId === category.id} onOpenChange={(open) => {
+                setIsItemDialogOpen(open);
+                if (!open) setSelectedCategoryId(null);
+              }}>
+                <DialogTrigger asChild>
+                  <div 
+                    className="p-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer text-center text-sm font-medium text-primary border-t border-dashed"
+                    onClick={() => setSelectedCategoryId(category.id)}
+                  >
+                    <Plus className="w-4 h-4 inline mr-2" /> Add Item to {category.name}
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add New Item</DialogTitle>
+                    <DialogDescription>Add a new dish to the {category.name} category.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleAddItem} className="space-y-4 py-4">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="item-name">Item Name</Label>
+                        <Input id="item-name" placeholder="e.g. Classic Margherita" required />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="item-price">Price ($)</Label>
+                          <Input id="item-price" type="number" step="0.01" placeholder="0.00" required />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Image</Label>
+                          <Button type="button" variant="outline" className="w-full gap-2">
+                            <Upload className="w-4 h-4" /> Upload
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="item-desc">Description</Label>
+                        <Textarea id="item-desc" placeholder="Briefly describe the dish..." />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit" className="w-full">Add to Menu</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         ))}
