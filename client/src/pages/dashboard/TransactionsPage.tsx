@@ -12,8 +12,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Search, Calendar, FileText, Download } from "lucide-react";
+import { Search, Calendar, FileText, Download, Eye, Receipt, CreditCard, Utensils, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const MOCK_TRANSACTIONS = [
   {
@@ -109,9 +119,9 @@ export default function TransactionsPage() {
                     <TableHead className="font-bold">Bill ID</TableHead>
                     <TableHead className="font-bold">Date & Time</TableHead>
                     <TableHead className="font-bold">Table</TableHead>
-                    <TableHead className="font-bold">Items Ordered</TableHead>
                     <TableHead className="font-bold">Payment</TableHead>
                     <TableHead className="font-bold text-right">Total Amount</TableHead>
+                    <TableHead className="font-bold text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -127,15 +137,6 @@ export default function TransactionsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-bold">Table {transaction.table}</TableCell>
-                      <TableCell className="max-w-[250px]">
-                        <div className="flex flex-wrap gap-1">
-                          {transaction.items.map((item, i) => (
-                            <Badge key={i} variant="outline" className="text-[10px] font-normal px-1 py-0 h-4">
-                              {item}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="font-bold text-[10px]">
                           {transaction.method}
@@ -143,6 +144,91 @@ export default function TransactionsPage() {
                       </TableCell>
                       <TableCell className="text-right font-bold font-mono text-primary">
                         ${transaction.total.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="gap-2">
+                              <Eye className="w-4 h-4" /> View Details
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-md">
+                            <DialogHeader>
+                              <DialogTitle className="flex items-center gap-2">
+                                <Receipt className="w-5 h-5 text-primary" />
+                                Bill Details - {transaction.id}
+                              </DialogTitle>
+                              <DialogDescription>Full itemized breakdown and transaction info.</DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4 space-y-6">
+                              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                                <div className="space-y-1">
+                                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1">
+                                    <Utensils className="w-3 h-3" /> Table
+                                  </p>
+                                  <p className="font-bold text-lg">{transaction.table}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Date
+                                  </p>
+                                  <p className="font-bold">{new Date(transaction.date).toLocaleDateString()}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1">
+                                    <CreditCard className="w-3 h-3" /> Method
+                                  </p>
+                                  <Badge className="font-bold">{transaction.method}</Badge>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Status</p>
+                                  <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">{transaction.status}</Badge>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <h4 className="font-bold text-sm flex items-center gap-2">
+                                  Ordered Items
+                                </h4>
+                                <ScrollArea className="max-h-[200px] pr-4">
+                                  <div className="space-y-2">
+                                    {transaction.items.map((item, i) => (
+                                      <div key={i} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted/30 transition-colors border border-transparent hover:border-border">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                          <span className="font-medium">{item}</span>
+                                        </div>
+                                        <span className="text-muted-foreground font-mono">1 x $??.??</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </ScrollArea>
+                              </div>
+
+                              <Separator />
+
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Subtotal</span>
+                                  <span className="font-mono font-medium">${transaction.subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">GST & Service Tax</span>
+                                  <span className="font-mono font-medium">${transaction.tax.toFixed(2)}</span>
+                                </div>
+                                <Separator className="my-2" />
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold text-lg">Grand Total</span>
+                                  <span className="font-bold text-2xl text-primary font-mono">${transaction.total.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-3">
+                              <Button variant="outline" className="flex-1">Print Bill</Button>
+                              <Button className="flex-1">Share PDF</Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       </TableCell>
                     </TableRow>
                   ))}
