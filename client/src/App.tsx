@@ -29,6 +29,10 @@ function Router() {
       <Route path="/auth" component={LoginPage} />
       <Route path="/onboarding" component={OnboardingPage} />
       
+      {/* Staff Direct Access Routes */}
+      <Route path="/kitchen" component={KitchenKDSPage} />
+      <Route path="/waiter" component={WaiterTerminalPage} />
+      
       {/* Dashboard Routes */}
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/dashboard/orders" component={LiveOrdersPage} />
