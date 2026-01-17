@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MOCK_ORDERS, MOCK_QUEUE, MOCK_TABLES } from "@/lib/mockData";
-import { CheckCircle2, Clock, Utensils, ArrowRight, UserPlus, Users as UsersIcon, Check, Receipt, CreditCard } from "lucide-react";
+import { CheckCircle2, Clock, Utensils, ArrowRight, UserPlus, Users as UsersIcon, Check, Receipt, CreditCard, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   Dialog, 
@@ -24,6 +24,7 @@ export default function LiveOrdersPage() {
   const [selectedTableNum, setSelectedTableNum] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [tables, setTables] = useState(MOCK_TABLES);
+  const [pastBills, setPastBills] = useState<any[]>([]);
 
   const toggleTableStatus = (tableId: string) => {
     setTables(prev => prev.map(t => {
@@ -49,6 +50,24 @@ export default function LiveOrdersPage() {
     const serviceTax = subtotal * 0.10; // 10% Service Tax
     const total = subtotal + gst + serviceTax;
     return { subtotal, gst, serviceTax, total };
+  };
+
+  const handlePayment = (order: any, method: string) => {
+    const billDetails = calculateBill(order.total);
+    const newBill = {
+      ...order,
+      ...billDetails,
+      paymentMethod: method,
+      paidAt: new Date().toISOString(),
+      billNumber: `INV-${Math.floor(1000 + Math.random() * 9000)}`
+    };
+    
+    setPastBills(prev => [newBill, ...prev]);
+    toast.success(`Payment of $${billDetails.total.toFixed(2)} received via ${method}`);
+    setSelectedOrder(null);
+    
+    // Auto-release the table
+    setTables(prev => prev.map(t => t.number === order.table ? { ...t, status: "AVAILABLE" } : t));
   };
 
   return (
@@ -188,12 +207,35 @@ export default function LiveOrdersPage() {
                                 <span className="font-bold text-2xl text-primary">${bill.total.toFixed(2)}</span>
                               </div>
                             </div>
-                            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-                              <Button variant="outline" className="flex-1">
-                                Print Receipt
-                              </Button>
-                              <Button className="flex-1" onClick={() => toast.success("Payment processed successfully!")}>
-                                <CreditCard className="w-4 h-4 mr-2" /> Mark Paid
+                            <DialogFooter className="flex flex-col gap-3">
+                              <div className="grid grid-cols-3 gap-2 w-full">
+                                <Button 
+                                  variant="outline" 
+                                  className="flex-col h-16 gap-1" 
+                                  onClick={() => handlePayment(order, "CASH")}
+                                >
+                                  <div className="text-xs font-bold opacity-50">CASH</div>
+                                  <CreditCard className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  className="flex-col h-16 gap-1"
+                                  onClick={() => handlePayment(order, "UPI")}
+                                >
+                                  <div className="text-xs font-bold opacity-50">UPI</div>
+                                  <QrCode className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  className="flex-col h-16 gap-1"
+                                  onClick={() => handlePayment(order, "CARD")}
+                                >
+                                  <div className="text-xs font-bold opacity-50">CARD</div>
+                                  <CreditCard className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <Button variant="ghost" className="w-full text-xs underline">
+                                Print Invoice
                               </Button>
                             </DialogFooter>
                           </DialogContent>
@@ -209,6 +251,38 @@ export default function LiveOrdersPage() {
 
         {/* Sidebar Queue Column */}
         <div className="lg:col-span-1 space-y-6">
+           <div className="flex items-center justify-between">
+             <h3 className="font-heading font-bold text-xl flex items-center gap-2">
+               <Receipt className="w-5 h-5 text-primary" /> Recent Bills
+             </h3>
+             <Badge variant="secondary">{pastBills.length}</Badge>
+           </div>
+           
+           <div className="space-y-3">
+             {pastBills.slice(0, 5).map((bill) => (
+               <div key={bill.billNumber} className="p-3 rounded-lg border border-border bg-white shadow-sm animate-in fade-in slide-in-from-right-2">
+                 <div className="flex justify-between items-start mb-1">
+                   <p className="font-bold text-sm">{bill.billNumber}</p>
+                   <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">{bill.paymentMethod}</Badge>
+                 </div>
+                 <div className="flex justify-between items-end">
+                   <div>
+                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Table {bill.table}</p>
+                     <p className="text-[10px] text-muted-foreground">{new Date(bill.paidAt).toLocaleTimeString()}</p>
+                   </div>
+                   <p className="font-bold text-primary font-mono text-sm">${bill.total.toFixed(2)}</p>
+                 </div>
+               </div>
+             ))}
+             {pastBills.length === 0 && (
+               <div className="text-center py-6 text-muted-foreground text-sm italic border border-dashed rounded-lg">
+                 No bills generated yet
+               </div>
+             )}
+           </div>
+
+           <Separator className="my-6" />
+
            <h3 className="font-heading font-bold text-xl flex items-center gap-2">
              <UsersIcon className="w-5 h-5 text-primary" /> Guest Queue
            </h3>
