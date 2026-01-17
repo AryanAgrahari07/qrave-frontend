@@ -18,6 +18,9 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ShoppingBag, Utensils as DineInIcon, Truck } from "lucide-react";
 
 export default function LiveOrdersPage() {
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
@@ -25,6 +28,8 @@ export default function LiveOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [tables, setTables] = useState(MOCK_TABLES);
   const [pastBills, setPastBills] = useState<any[]>([]);
+  const [orderMethod, setOrderMethod] = useState<string>("DINE_IN");
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
 
   const toggleTableStatus = (tableId: string) => {
     setTables(prev => prev.map(t => {
@@ -58,6 +63,7 @@ export default function LiveOrdersPage() {
       ...order,
       ...billDetails,
       paymentMethod: method,
+      orderMethod: orderMethod,
       paidAt: new Date().toISOString(),
       billNumber: `INV-${Math.floor(1000 + Math.random() * 9000)}`
     };
@@ -65,6 +71,7 @@ export default function LiveOrdersPage() {
     setPastBills(prev => [newBill, ...prev]);
     toast.success(`Payment of $${billDetails.total.toFixed(2)} received via ${method}`);
     setSelectedOrder(null);
+    setIsBillingOpen(false);
     
     // Auto-release the table
     setTables(prev => prev.map(t => t.number === order.table ? { ...t, status: "AVAILABLE" } : t));
@@ -163,81 +170,121 @@ export default function LiveOrdersPage() {
                           <p className="text-xs text-muted-foreground uppercase font-bold tracking-tighter">Total</p>
                           <p className="text-lg font-bold font-heading text-primary">${bill.total.toFixed(2)}</p>
                         </div>
-                        <Dialog>
+                        <Dialog open={isBillingOpen && selectedOrder?.id === order.id} onOpenChange={(open) => {
+                          setIsBillingOpen(open);
+                          if (!open) setSelectedOrder(null);
+                        }}>
                           <DialogTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => setSelectedOrder(order)}>
-                              <Receipt className="w-4 h-4 mr-2" /> Bill
+                            <Button size="sm" variant="outline" onClick={() => {
+                              setSelectedOrder(order);
+                              setIsBillingOpen(true);
+                            }}>
+                              <Receipt className="w-4 h-4 mr-2" /> Quick Bill
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-md">
                             <DialogHeader>
-                              <DialogTitle className="flex items-center gap-2">
-                                <Receipt className="w-5 h-5 text-primary" /> 
-                                Invoice - Table {order.table}
+                              <DialogTitle className="flex items-center gap-2 text-2xl">
+                                <Receipt className="w-6 h-6 text-primary" /> 
+                                Billing - Table {order.table}
                               </DialogTitle>
-                              <DialogDescription>Detailed breakdown of charges and taxes.</DialogDescription>
+                              <DialogDescription>1. Select Method → 2. Review → 3. Pay</DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div className="space-y-2">
-                                {order.items.map((item, i) => (
-                                  <div key={i} className="flex justify-between text-sm">
-                                    <span>{item}</span>
-                                    <span>$??.??</span>
+                            
+                            <div className="space-y-6 py-4">
+                              {/* Step 1: Order Method */}
+                              <div className="space-y-3">
+                                <Label className="text-xs uppercase font-bold text-muted-foreground">1. Order Method</Label>
+                                <RadioGroup 
+                                  defaultValue="DINE_IN" 
+                                  onValueChange={setOrderMethod}
+                                  className="grid grid-cols-3 gap-2"
+                                >
+                                  <div>
+                                    <RadioGroupItem value="DINE_IN" id="dine-in" className="peer sr-only" />
+                                    <Label
+                                      htmlFor="dine-in"
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <DineInIcon className="mb-2 h-5 w-5" />
+                                      <span className="text-[10px] font-bold">Dine-in</span>
+                                    </Label>
                                   </div>
-                                ))}
+                                  <div>
+                                    <RadioGroupItem value="TAKEAWAY" id="takeaway" className="peer sr-only" />
+                                    <Label
+                                      htmlFor="takeaway"
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <ShoppingBag className="mb-2 h-5 w-5" />
+                                      <span className="text-[10px] font-bold">Takeaway</span>
+                                    </Label>
+                                  </div>
+                                  <div>
+                                    <RadioGroupItem value="DELIVERY" id="delivery" className="peer sr-only" />
+                                    <Label
+                                      htmlFor="delivery"
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <Truck className="mb-2 h-5 w-5" />
+                                      <span className="text-[10px] font-bold">Delivery</span>
+                                    </Label>
+                                  </div>
+                                </RadioGroup>
                               </div>
+
                               <Separator />
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Subtotal</span>
-                                  <span>${bill.subtotal.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">GST (5%)</span>
-                                  <span>${bill.gst.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Service Tax (10%)</span>
-                                  <span>${bill.serviceTax.toFixed(2)}</span>
+
+                              {/* Step 2: Breakdown */}
+                              <div className="space-y-2">
+                                <Label className="text-xs uppercase font-bold text-muted-foreground">2. Summary</Label>
+                                <div className="bg-muted/30 p-3 rounded-lg space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Subtotal</span>
+                                    <span>${bill.subtotal.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Taxes (GST 5% + SC 10%)</span>
+                                    <span>${(bill.gst + bill.serviceTax).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                                    <span>Total Payable</span>
+                                    <span className="text-primary text-lg">${bill.total.toFixed(2)}</span>
+                                  </div>
                                 </div>
                               </div>
-                              <Separator className="h-0.5 bg-primary/20" />
-                              <div className="flex justify-between items-center">
-                                <span className="font-bold text-lg">Total Amount</span>
-                                <span className="font-bold text-2xl text-primary">${bill.total.toFixed(2)}</span>
+
+                              {/* Step 3: Payment */}
+                              <div className="space-y-3">
+                                <Label className="text-xs uppercase font-bold text-muted-foreground">3. Settle Payment</Label>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5" 
+                                    onClick={() => handlePayment(order, "CASH")}
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                    <div className="text-[10px] font-bold">CASH</div>
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5"
+                                    onClick={() => handlePayment(order, "UPI")}
+                                  >
+                                    <QrCode className="w-4 h-4" />
+                                    <div className="text-[10px] font-bold">UPI</div>
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5"
+                                    onClick={() => handlePayment(order, "CARD")}
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                    <div className="text-[10px] font-bold">CARD</div>
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                            <DialogFooter className="flex flex-col gap-3">
-                              <div className="grid grid-cols-3 gap-2 w-full">
-                                <Button 
-                                  variant="outline" 
-                                  className="flex-col h-16 gap-1" 
-                                  onClick={() => handlePayment(order, "CASH")}
-                                >
-                                  <div className="text-xs font-bold opacity-50">CASH</div>
-                                  <CreditCard className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  className="flex-col h-16 gap-1"
-                                  onClick={() => handlePayment(order, "UPI")}
-                                >
-                                  <div className="text-xs font-bold opacity-50">UPI</div>
-                                  <QrCode className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  className="flex-col h-16 gap-1"
-                                  onClick={() => handlePayment(order, "CARD")}
-                                >
-                                  <div className="text-xs font-bold opacity-50">CARD</div>
-                                  <CreditCard className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              <Button variant="ghost" className="w-full text-xs underline">
-                                Print Invoice
-                              </Button>
-                            </DialogFooter>
                           </DialogContent>
                         </Dialog>
                       </div>
@@ -263,7 +310,10 @@ export default function LiveOrdersPage() {
                <div key={bill.billNumber} className="p-3 rounded-lg border border-border bg-white shadow-sm animate-in fade-in slide-in-from-right-2">
                  <div className="flex justify-between items-start mb-1">
                    <p className="font-bold text-sm">{bill.billNumber}</p>
-                   <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">{bill.paymentMethod}</Badge>
+                   <div className="flex gap-1">
+                     <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200">{bill.orderMethod}</Badge>
+                     <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">{bill.paymentMethod}</Badge>
+                   </div>
                  </div>
                  <div className="flex justify-between items-end">
                    <div>
