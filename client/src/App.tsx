@@ -36,8 +36,6 @@ function Router() {
       {/* Dashboard Routes */}
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/dashboard/orders" component={LiveOrdersPage} />
-      <Route path="/dashboard/kitchen" component={KitchenKDSPage} />
-      <Route path="/dashboard/waiter" component={WaiterTerminalPage} />
       <Route path="/dashboard/staff" component={StaffManagementPage} />
       <Route path="/dashboard/menu" component={MenuPage} />
       <Route path="/dashboard/qr" component={QRCodesPage} />

@@ -18,9 +18,10 @@ export default function LoginPage() {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      if (role === "KITCHEN") setLocation("/dashboard/kitchen");
-      else if (role === "WAITER") setLocation("/dashboard/orders");
+      if (role === "KITCHEN") setLocation("/kitchen");
+      else if (role === "WAITER") setLocation("/waiter");
       else setLocation("/dashboard");
+      toast.success("Welcome back to Qrave!");
     }, 800);
   };
 
