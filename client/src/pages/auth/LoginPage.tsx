@@ -7,6 +7,7 @@ import { useLocation, Link } from "wouter";
 import bgImage from "@assets/generated_images/restaurant_interior_background.png";
 import { Loader2, ChefHat, UserCircle, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [_, setLocation] = useLocation();
