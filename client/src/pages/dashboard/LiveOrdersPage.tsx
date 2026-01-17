@@ -21,14 +21,27 @@ import { Separator } from "@/components/ui/separator";
 
 export default function LiveOrdersPage() {
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [selectedTableNum, setSelectedTableNum] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [tables, setTables] = useState(MOCK_TABLES);
+
+  const toggleTableStatus = (tableId: string) => {
+    setTables(prev => prev.map(t => {
+      if (t.id === tableId) {
+        const newStatus = t.status === "AVAILABLE" ? "OCCUPIED" : "AVAILABLE";
+        toast.success(`Table ${t.number} is now ${newStatus.toLowerCase()}`);
+        return { ...t, status: newStatus };
+      }
+      return t;
+    }));
+  };
 
   const handleSeatGuest = () => {
-    if (!selectedTable) return;
-    toast.success(`Seating ${selectedGuest.name} at Table ${selectedTable}`);
+    if (!selectedTableNum) return;
+    setTables(prev => prev.map(t => t.number === selectedTableNum ? { ...t, status: "OCCUPIED" } : t));
+    toast.success(`Seating ${selectedGuest.name} at Table ${selectedTableNum}`);
     setSelectedGuest(null);
-    setSelectedTable(null);
+    setSelectedTableNum(null);
   };
 
   const calculateBill = (subtotal: number) => {
@@ -56,12 +69,48 @@ export default function LiveOrdersPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Main Orders Column */}
+        {/* Floor Map Section */}
         <div className="lg:col-span-2 space-y-6">
-           <h3 className="font-heading font-bold text-xl flex items-center gap-2">
-             <Utensils className="w-5 h-5 text-primary" /> Active Orders
-           </h3>
-           <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-heading font-bold text-xl flex items-center gap-2">
+              <Utensils className="w-5 h-5 text-primary" /> Floor Map & Status
+            </h3>
+            <div className="flex gap-4 text-xs font-bold">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> AVAILABLE</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-300" /> OCCUPIED</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+            {tables.map((table) => (
+              <button
+                key={table.id}
+                onClick={() => toggleTableStatus(table.id)}
+                className={cn(
+                  "p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95",
+                  table.status === "AVAILABLE" 
+                    ? "bg-white border-green-200 shadow-sm hover:border-green-500" 
+                    : "bg-slate-100 border-slate-300 text-slate-500 hover:border-slate-400"
+                )}
+              >
+                <span className="text-xl font-bold">{table.number}</span>
+                <span className="text-[10px] uppercase tracking-wider font-bold opacity-60">Cap: {table.capacity}</span>
+                <Badge variant={table.status === "AVAILABLE" ? "default" : "outline"} className={cn(
+                  "text-[9px] px-1 py-0 h-4",
+                  table.status === "AVAILABLE" ? "bg-green-500 hover:bg-green-600" : "bg-transparent"
+                )}>
+                  {table.status}
+                </Badge>
+              </button>
+            ))}
+          </div>
+
+          <Separator className="my-8" />
+
+          <h3 className="font-heading font-bold text-xl flex items-center gap-2">
+            <Utensils className="w-5 h-5 text-primary" /> Active Orders
+          </h3>
+          <div className="space-y-4">
             {MOCK_ORDERS.map((order) => {
               const bill = calculateBill(order.total);
               return (
@@ -194,16 +243,16 @@ export default function LiveOrdersPage() {
                             Showing best available tables:
                           </p>
                           <div className="grid grid-cols-2 gap-3">
-                            {MOCK_TABLES.filter(t => t.status === "AVAILABLE").map((table) => {
+                            {tables.filter(t => t.status === "AVAILABLE").map((table) => {
                               const isOptimal = table.capacity >= (typeof guest.partySize === 'string' ? parseInt(guest.partySize) : guest.partySize);
                               return (
                                 <button
                                   key={table.id}
                                   type="button"
-                                  onClick={() => setSelectedTable(table.number)}
+                                  onClick={() => setSelectedTableNum(table.number)}
                                   className={cn(
                                     "p-4 rounded-xl border-2 text-left transition-all",
-                                    selectedTable === table.number 
+                                    selectedTableNum === table.number 
                                       ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
                                       : "border-border hover:border-primary/50"
                                   )}
@@ -219,7 +268,7 @@ export default function LiveOrdersPage() {
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button className="w-full" disabled={!selectedTable} onClick={handleSeatGuest}>
+                          <Button className="w-full" disabled={!selectedTableNum} onClick={handleSeatGuest}>
                             Confirm Seating
                           </Button>
                         </DialogFooter>

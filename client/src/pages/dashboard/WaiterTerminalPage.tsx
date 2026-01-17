@@ -22,12 +22,24 @@ export default function WaiterTerminalPage() {
   const [language, setLanguage] = useState<"en" | "es" | "hi">("en");
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<any>(null);
   const [cart, setCart] = useState<any[]>([]);
+  const [tables, setTables] = useState(MOCK_TABLES);
 
   const t = {
-    en: { title: "Waiter Terminal", floor: "Floor Map", queue: "Guest Queue", seat: "Seat Party", tables: "Tables", available: "Available", occupied: "Occupied", order: "Place Order", add: "Add to Order", confirm: "Confirm Order", items: "Items" },
-    es: { title: "Terminal del Camarero", floor: "Mapa del Piso", queue: "Cola de Invitados", seat: "Sentar Grupo", tables: "Mesas", available: "Disponible", occupied: "Ocupado", order: "Realizar Pedido", add: "Agregar", confirm: "Confirmar", items: "Artículos" },
-    hi: { title: "वेटर टर्मिनल", floor: "फ्लोर मैप", queue: "मेहमानों की सूची", seat: "बैठाएं", tables: "मेज़", available: "उपलब्ध", occupied: "भरा हुआ", order: "ऑर्डर लें", add: "जोड़ें", confirm: "ऑर्डर भेजें", items: "सामान" }
+    en: { title: "Waiter Terminal", floor: "Floor Map", queue: "Guest Queue", seat: "Seat Party", tables: "Tables", available: "Available", occupied: "Occupied", order: "Place Order", add: "Add to Order", confirm: "Confirm Order", items: "Items", markOccupied: "Mark Occupied", markAvailable: "Mark Available" },
+    es: { title: "Terminal del Camarero", floor: "Mapa del Piso", queue: "Cola de Invitados", seat: "Sentar Grupo", tables: "Mesas", available: "Disponible", occupied: "Ocupado", order: "Realizar Pedido", add: "Agregar", confirm: "Confirmar", items: "Artículos", markOccupied: "Marcar Ocupado", markAvailable: "Marcar Disponible" },
+    hi: { title: "वेटर टर्मिनल", floor: "फ्लोर मैप", queue: "मेहमानों की सूची", seat: "बैठाएं", tables: "मेज़", available: "उपलब्ध", occupied: "भरा हुआ", order: "ऑर्डर लें", add: "जोड़ें", confirm: "ऑर्डर भेजें", items: "सामान", markOccupied: "भरा हुआ मार्क करें", markAvailable: "उपलब्ध मार्क करें" }
   }[language];
+
+  const toggleTableStatus = (tableId: string) => {
+    setTables(prev => prev.map(t => {
+      if (t.id === tableId) {
+        const newStatus = t.status === "AVAILABLE" ? "OCCUPIED" : "AVAILABLE";
+        toast.success(`Table ${t.number} is now ${newStatus.toLowerCase()}`);
+        return { ...t, status: newStatus };
+      }
+      return t;
+    }));
+  };
 
   const addToCart = (item: any) => {
     setCart(prev => {
@@ -103,8 +115,21 @@ export default function WaiterTerminalPage() {
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {MOCK_TABLES.map((table) => (
+              {tables.map((table) => (
                 <div key={table.id} className="relative group">
+                  <div className="absolute -top-2 -right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                      size="icon" 
+                      variant="secondary" 
+                      className="h-8 w-8 rounded-full shadow-lg border border-slate-200"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTableStatus(table.id);
+                      }}
+                    >
+                      <Check className={cn("w-4 h-4", table.status === "AVAILABLE" ? "text-slate-400" : "text-green-600")} />
+                    </Button>
+                  </div>
                   <button
                     onClick={() => table.status === "OCCUPIED" && setSelectedTableForOrder(table)}
                     className={cn(
