@@ -85,6 +85,119 @@ export default function LiveOrdersPage() {
           <p className="text-muted-foreground">Manage orders and guest queue in real-time.</p>
         </div>
         <div className="flex gap-2">
+           <Dialog>
+             <DialogTrigger asChild>
+               <Button variant="secondary" className="shadow-lg border-primary/20 bg-primary/10 text-primary hover:bg-primary/20">
+                 <Receipt className="w-4 h-4 mr-2" /> 3-Click Quick Bill
+               </Button>
+             </DialogTrigger>
+             <DialogContent className="max-w-md">
+               <DialogHeader>
+                 <DialogTitle className="flex items-center gap-2 text-2xl">
+                   <Receipt className="w-6 h-6 text-primary" /> 
+                   Quick Billing Terminal
+                 </DialogTitle>
+                 <DialogDescription>Manual billing for walk-ins or quick service.</DialogDescription>
+               </DialogHeader>
+               
+               <div className="space-y-6 py-4">
+                 {/* Step 1: Method Selection */}
+                 <div className="space-y-3">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">1. Select Order Type</Label>
+                   <RadioGroup 
+                     defaultValue="DINE_IN" 
+                     onValueChange={setOrderMethod}
+                     className="grid grid-cols-3 gap-2"
+                   >
+                     <div>
+                       <RadioGroupItem value="DINE_IN" id="quick-dine-in" className="peer sr-only" />
+                       <Label
+                         htmlFor="quick-dine-in"
+                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
+                       >
+                         <DineInIcon className="mb-2 h-6 w-6" />
+                         <span className="text-[10px] font-bold">Dine-in</span>
+                       </Label>
+                     </div>
+                     <div>
+                       <RadioGroupItem value="TAKEAWAY" id="quick-takeaway" className="peer sr-only" />
+                       <Label
+                         htmlFor="quick-takeaway"
+                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
+                       >
+                         <ShoppingBag className="mb-2 h-6 w-6" />
+                         <span className="text-[10px] font-bold">Takeaway</span>
+                       </Label>
+                     </div>
+                     <div>
+                       <RadioGroupItem value="DELIVERY" id="quick-delivery" className="peer sr-only" />
+                       <Label
+                         htmlFor="quick-delivery"
+                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
+                       >
+                         <Truck className="mb-2 h-6 w-6" />
+                         <span className="text-[10px] font-bold">Delivery</span>
+                       </Label>
+                     </div>
+                   </RadioGroup>
+                 </div>
+
+                 <div className="space-y-2">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">2. Enter Amount</Label>
+                   <div className="relative">
+                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
+                     <Input type="number" placeholder="0.00" className="pl-7 text-lg font-bold" id="manual-amount" />
+                   </div>
+                 </div>
+
+                 {/* Step 3: Payment */}
+                 <div className="space-y-3">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">3. Settle Payment</Label>
+                   <div className="grid grid-cols-3 gap-2">
+                     <Button 
+                       variant="outline" 
+                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2" 
+                       onClick={() => {
+                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
+                         const amt = parseFloat(amtInput?.value || "0");
+                         if(amt <= 0) return toast.error("Please enter a valid amount");
+                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "CASH");
+                       }}
+                     >
+                       <CreditCard className="w-5 h-5 text-green-600" />
+                       <div className="text-[10px] font-bold">CASH</div>
+                     </Button>
+                     <Button 
+                       variant="outline" 
+                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
+                       onClick={() => {
+                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
+                         const amt = parseFloat(amtInput?.value || "0");
+                         if(amt <= 0) return toast.error("Please enter a valid amount");
+                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "UPI");
+                       }}
+                     >
+                       <QrCode className="w-5 h-5 text-blue-600" />
+                       <div className="text-[10px] font-bold">UPI</div>
+                     </Button>
+                     <Button 
+                       variant="outline" 
+                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
+                       onClick={() => {
+                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
+                         const amt = parseFloat(amtInput?.value || "0");
+                         if(amt <= 0) return toast.error("Please enter a valid amount");
+                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "CARD");
+                       }}
+                     >
+                       <CreditCard className="w-5 h-5 text-purple-600" />
+                       <div className="text-[10px] font-bold">CARD</div>
+                     </Button>
+                   </div>
+                 </div>
+               </div>
+             </DialogContent>
+           </Dialog>
            <Button variant="outline" className="shadow-sm">
              <UserPlus className="w-4 h-4 mr-2" /> New Guest
            </Button>
