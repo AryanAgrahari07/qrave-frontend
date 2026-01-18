@@ -93,9 +93,9 @@ export const MOCK_STATS = {
 export const NAV_LINKS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ShoppingCart, label: "Live Orders", href: "/dashboard/orders" },
+  { icon: Utensils, label: "Floor Map", href: "/dashboard/floor-map" },
+  { icon: Users, label: "Guest Queue", href: "/dashboard/queue" },
   { icon: FileText, label: "Transactions", href: "/dashboard/transactions" },
-  { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
-  { icon: Users, label: "Staff & Queue", href: "/dashboard/staff" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },

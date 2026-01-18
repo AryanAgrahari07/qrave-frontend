@@ -25,10 +25,7 @@ import { Label } from "@/components/ui/label";
 import { ShoppingBag, Utensils as DineInIcon, Truck } from "lucide-react";
 
 export default function LiveOrdersPage() {
-  const [selectedGuest, setSelectedGuest] = useState<any>(null);
-  const [selectedTableNum, setSelectedTableNum] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [tables, setTables] = useState(MOCK_TABLES);
   const [pastBills, setPastBills] = useState<any[]>([]);
   const [orderMethod, setOrderMethod] = useState<string>("DINE_IN");
   const [isBillingOpen, setIsBillingOpen] = useState(false);
@@ -58,25 +55,6 @@ export default function LiveOrdersPage() {
     return manualCart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   }, [manualCart]);
 
-  const toggleTableStatus = (tableId: string) => {
-    setTables(prev => prev.map(t => {
-      if (t.id === tableId) {
-        const newStatus = t.status === "AVAILABLE" ? "OCCUPIED" : "AVAILABLE";
-        toast.success(`Table ${t.number} is now ${newStatus.toLowerCase()}`);
-        return { ...t, status: newStatus };
-      }
-      return t;
-    }));
-  };
-
-  const handleSeatGuest = () => {
-    if (!selectedTableNum) return;
-    setTables(prev => prev.map(t => t.number === selectedTableNum ? { ...t, status: "OCCUPIED" } : t));
-    toast.success(`Seating ${selectedGuest.name} at Table ${selectedTableNum}`);
-    setSelectedGuest(null);
-    setSelectedTableNum(null);
-  };
-
   const calculateBill = (subtotal: number) => {
     const gst = subtotal * 0.05; // 5% GST
     const serviceTax = subtotal * 0.10; // 10% Service Tax
@@ -99,17 +77,14 @@ export default function LiveOrdersPage() {
     toast.success(`Payment of $${billDetails.total.toFixed(2)} received via ${method}`);
     setSelectedOrder(null);
     setIsBillingOpen(false);
-    
-    // Auto-release the table
-    setTables(prev => prev.map(t => t.number === order.table ? { ...t, status: "AVAILABLE" } : t));
   };
 
   return (
     <DashboardLayout>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-3xl font-heading font-bold">Live Terminal</h2>
-          <p className="text-muted-foreground">Manage orders and guest queue in real-time.</p>
+          <h2 className="text-3xl font-heading font-bold">Live Orders</h2>
+          <p className="text-muted-foreground">Monitor active orders and process payments.</p>
         </div>
         <div className="flex gap-2">
            <Dialog>
@@ -315,54 +290,14 @@ export default function LiveOrdersPage() {
                </div>
              </DialogContent>
            </Dialog>
-           <Button variant="outline" className="shadow-sm">
-             <UserPlus className="w-4 h-4 mr-2" /> New Guest
-           </Button>
            <Button className="shadow-lg shadow-primary/20">
              Place Manual Order
            </Button>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Floor Map Section */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-heading font-bold text-xl flex items-center gap-2">
-              <Utensils className="w-5 h-5 text-primary" /> Floor Map & Status
-            </h3>
-            <div className="flex gap-4 text-xs font-bold">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> AVAILABLE</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-300" /> OCCUPIED</span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            {tables.map((table) => (
-              <button
-                key={table.id}
-                onClick={() => toggleTableStatus(table.id)}
-                className={cn(
-                  "p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95",
-                  table.status === "AVAILABLE" 
-                    ? "bg-white border-green-200 shadow-sm hover:border-green-500" 
-                    : "bg-slate-100 border-slate-300 text-slate-500 hover:border-slate-400"
-                )}
-              >
-                <span className="text-xl font-bold">{table.number}</span>
-                <span className="text-[10px] uppercase tracking-wider font-bold opacity-60">Cap: {table.capacity}</span>
-                <Badge variant={table.status === "AVAILABLE" ? "default" : "outline"} className={cn(
-                  "text-[9px] px-1 py-0 h-4",
-                  table.status === "AVAILABLE" ? "bg-green-500 hover:bg-green-600" : "bg-transparent"
-                )}>
-                  {table.status}
-                </Badge>
-              </button>
-            ))}
-          </div>
-
-          <Separator className="my-8" />
-
+      <div className="grid lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-3 space-y-6">
           <h3 className="font-heading font-bold text-xl flex items-center gap-2">
             <Utensils className="w-5 h-5 text-primary" /> Active Orders
           </h3>
@@ -526,117 +461,39 @@ export default function LiveOrdersPage() {
            </div>
         </div>
 
-        {/* Sidebar Queue Column */}
         <div className="lg:col-span-1 space-y-6">
-           <div className="flex items-center justify-between">
-             <h3 className="font-heading font-bold text-xl flex items-center gap-2">
-               <Receipt className="w-5 h-5 text-primary" /> Recent Bills
-             </h3>
-             <Badge variant="secondary">{pastBills.length}</Badge>
-           </div>
-           
-           <div className="space-y-3">
-             {pastBills.slice(0, 5).map((bill) => (
-               <div key={bill.billNumber} className="p-3 rounded-lg border border-border bg-white shadow-sm animate-in fade-in slide-in-from-right-2">
-                 <div className="flex justify-between items-start mb-1">
-                   <p className="font-bold text-sm">{bill.billNumber}</p>
-                   <div className="flex gap-1">
-                     <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200">{bill.orderMethod}</Badge>
-                     <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">{bill.paymentMethod}</Badge>
-                   </div>
-                 </div>
-                 <div className="flex justify-between items-end">
-                   <div>
-                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Table {bill.table}</p>
-                     <p className="text-[10px] text-muted-foreground">{new Date(bill.paidAt).toLocaleTimeString()}</p>
-                   </div>
-                   <p className="font-bold text-primary font-mono text-sm">${bill.total.toFixed(2)}</p>
-                 </div>
-               </div>
-             ))}
-             {pastBills.length === 0 && (
-               <div className="text-center py-6 text-muted-foreground text-sm italic border border-dashed rounded-lg">
-                 No bills generated yet
-               </div>
-             )}
-           </div>
-
-           <Separator className="my-6" />
-
-           <h3 className="font-heading font-bold text-xl flex items-center gap-2">
-             <UsersIcon className="w-5 h-5 text-primary" /> Guest Queue
-           </h3>
-           <div className="space-y-4">
-             {MOCK_QUEUE.map((guest) => (
-               <Card key={guest.id} className={cn("shadow-sm", guest.status === "CALLING" && "ring-2 ring-primary bg-primary/5")}>
-                 <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="font-bold">{guest.name}</p>
-                      <Badge variant={guest.status === "CALLING" ? "default" : "secondary"} className="text-[10px]">
-                        {guest.status}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mb-4">
-                      <span>{guest.partySize} Guests</span>
-                      <span>{guest.waitTime} wait</span>
-                    </div>
-                    
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => setSelectedGuest(guest)}>
-                          Assign Table
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Assign Table for {guest.name}</DialogTitle>
-                        </DialogHeader>
-                        <div className="py-4">
-                          <p className="text-sm text-muted-foreground mb-4">
-                            Party Size: <span className="font-bold text-foreground">{guest.partySize}</span>. 
-                            Showing best available tables:
-                          </p>
-                          <div className="grid grid-cols-2 gap-3">
-                            {tables.filter(t => t.status === "AVAILABLE").map((table) => {
-                              const isOptimal = table.capacity >= (typeof guest.partySize === 'string' ? parseInt(guest.partySize) : guest.partySize);
-                              return (
-                                <button
-                                  key={table.id}
-                                  type="button"
-                                  onClick={() => setSelectedTableNum(table.number)}
-                                  className={cn(
-                                    "p-4 rounded-xl border-2 text-left transition-all",
-                                    selectedTableNum === table.number 
-                                      ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
-                                      : "border-border hover:border-primary/50"
-                                  )}
-                                >
-                                  <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-lg">Table {table.number}</span>
-                                    {isOptimal && <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Optimal</Badge>}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">Capacity: {table.capacity}</p>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button className="w-full" disabled={!selectedTableNum} onClick={handleSeatGuest}>
-                            Confirm Seating
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                 </CardContent>
-               </Card>
-             ))}
-             {MOCK_QUEUE.length === 0 && (
-               <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-xl">
-                 No one in queue
-               </div>
-             )}
-           </div>
+          <div className="flex items-center justify-between">
+            <h3 className="font-heading font-bold text-xl flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-primary" /> Recent Bills
+            </h3>
+            <Badge variant="secondary">{pastBills.length}</Badge>
+          </div>
+          
+          <div className="space-y-3">
+            {pastBills.slice(0, 5).map((bill) => (
+              <div key={bill.billNumber} className="p-3 rounded-lg border border-border bg-white shadow-sm animate-in fade-in slide-in-from-right-2">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="font-bold text-sm">{bill.billNumber}</p>
+                  <div className="flex gap-1">
+                    <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200">{bill.orderMethod}</Badge>
+                    <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">{bill.paymentMethod}</Badge>
+                  </div>
+                </div>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Table {bill.table}</p>
+                    <p className="text-[10px] text-muted-foreground">{new Date(bill.paidAt).toLocaleTimeString()}</p>
+                  </div>
+                  <p className="font-bold text-primary font-mono text-sm">${bill.total.toFixed(2)}</p>
+                </div>
+              </div>
+            ))}
+            {pastBills.length === 0 && (
+              <div className="text-center py-6 text-muted-foreground text-sm italic border border-dashed rounded-lg">
+                No bills generated yet
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </DashboardLayout>

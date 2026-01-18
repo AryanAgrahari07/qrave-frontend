@@ -16,6 +16,8 @@ import QRCodesPage from "@/pages/dashboard/QRCodesPage";
 import AnalyticsPage from "@/pages/dashboard/AnalyticsPage";
 import SettingsPage from "@/pages/dashboard/SettingsPage";
 import InventoryPage from "@/pages/dashboard/InventoryPage";
+import FloorMapPage from "@/pages/dashboard/FloorMapPage";
+import QueuePage from "@/pages/dashboard/QueuePage";
 import LiveOrdersPage from "@/pages/dashboard/LiveOrdersPage";
 import TransactionsPage from "@/pages/dashboard/TransactionsPage";
 import KitchenKDSPage from "@/pages/dashboard/KitchenKDSPage";
@@ -38,6 +40,8 @@ function Router() {
       {/* Dashboard Routes */}
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/dashboard/orders" component={LiveOrdersPage} />
+      <Route path="/dashboard/floor-map" component={FloorMapPage} />
+      <Route path="/dashboard/queue" component={QueuePage} />
       <Route path="/dashboard/transactions" component={TransactionsPage} />
       <Route path="/dashboard/staff" component={StaffManagementPage} />
       <Route path="/dashboard/menu" component={MenuPage} />
