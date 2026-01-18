@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MOCK_ORDERS, MOCK_QUEUE, MOCK_TABLES } from "@/lib/mockData";
-import { CheckCircle2, Clock, Utensils, ArrowRight, UserPlus, Users as UsersIcon, Check, Receipt, CreditCard, QrCode } from "lucide-react";
+import { MOCK_ORDERS, MOCK_QUEUE, MOCK_TABLES, MOCK_MENU_CATEGORIES } from "@/lib/mockData";
+import { CheckCircle2, Clock, Utensils, ArrowRight, UserPlus, Users as UsersIcon, Check, Receipt, CreditCard, QrCode, Plus, Minus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   Dialog, 
@@ -16,7 +16,8 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -31,6 +32,31 @@ export default function LiveOrdersPage() {
   const [pastBills, setPastBills] = useState<any[]>([]);
   const [orderMethod, setOrderMethod] = useState<string>("DINE_IN");
   const [isBillingOpen, setIsBillingOpen] = useState(false);
+  const [manualCart, setManualCart] = useState<{id: string, name: string, price: number, quantity: number}[]>([]);
+
+  const addToManualCart = (item: any) => {
+    setManualCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { id: item.id, name: item.name, price: item.price, quantity: 1 }];
+    });
+  };
+
+  const removeFromManualCart = (itemId: string) => {
+    setManualCart(prev => {
+      const existing = prev.find(i => i.id === itemId);
+      if (existing && existing.quantity > 1) {
+        return prev.map(i => i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i);
+      }
+      return prev.filter(i => i.id !== itemId);
+    });
+  };
+
+  const manualCartTotal = useMemo(() => {
+    return manualCart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  }, [manualCart]);
 
   const toggleTableStatus = (tableId: string) => {
     setTables(prev => prev.map(t => {
@@ -92,108 +118,198 @@ export default function LiveOrdersPage() {
                  <Receipt className="w-4 h-4 mr-2" /> 3-Click Quick Bill
                </Button>
              </DialogTrigger>
-             <DialogContent className="max-w-md">
+             <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                <DialogHeader>
                  <DialogTitle className="flex items-center gap-2 text-2xl">
                    <Receipt className="w-6 h-6 text-primary" /> 
                    Quick Billing Terminal
                  </DialogTitle>
-                 <DialogDescription>Manual billing for walk-ins or quick service.</DialogDescription>
+                 <DialogDescription>Add items, select method, and settle payment.</DialogDescription>
                </DialogHeader>
                
-               <div className="space-y-6 py-4">
-                 {/* Step 1: Method Selection */}
-                 <div className="space-y-3">
-                   <Label className="text-xs uppercase font-bold text-muted-foreground">1. Select Order Type</Label>
-                   <RadioGroup 
-                     defaultValue="DINE_IN" 
-                     onValueChange={setOrderMethod}
-                     className="grid grid-cols-3 gap-2"
-                   >
-                     <div>
-                       <RadioGroupItem value="DINE_IN" id="quick-dine-in" className="peer sr-only" />
-                       <Label
-                         htmlFor="quick-dine-in"
-                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
-                       >
-                         <DineInIcon className="mb-2 h-6 w-6" />
-                         <span className="text-[10px] font-bold">Dine-in</span>
-                       </Label>
+               <div className="flex-1 overflow-hidden grid md:grid-cols-2 gap-6 py-4">
+                 {/* Left: Menu Selection */}
+                 <div className="flex flex-col gap-4 overflow-hidden border-r pr-6">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">1. Select Food Items</Label>
+                   <ScrollArea className="flex-1">
+                     <div className="space-y-6">
+                       {MOCK_MENU_CATEGORIES.map(category => (
+                         <div key={category.id} className="space-y-2">
+                           <h4 className="text-sm font-bold border-b pb-1">{category.name}</h4>
+                           <div className="grid grid-cols-1 gap-2">
+                             {category.items.map(item => (
+                               <Button
+                                 key={item.id}
+                                 variant="outline"
+                                 className="justify-between h-auto py-2 px-3 text-left hover:border-primary hover:bg-primary/5 group"
+                                 onClick={() => addToManualCart(item)}
+                               >
+                                 <div className="flex flex-col">
+                                   <span className="font-bold text-sm">{item.name}</span>
+                                   <span className="text-xs text-muted-foreground">${item.price}</span>
+                                 </div>
+                                 <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                               </Button>
+                             ))}
+                           </div>
+                         </div>
+                       ))}
                      </div>
-                     <div>
-                       <RadioGroupItem value="TAKEAWAY" id="quick-takeaway" className="peer sr-only" />
-                       <Label
-                         htmlFor="quick-takeaway"
-                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
-                       >
-                         <ShoppingBag className="mb-2 h-6 w-6" />
-                         <span className="text-[10px] font-bold">Takeaway</span>
-                       </Label>
-                     </div>
-                     <div>
-                       <RadioGroupItem value="DELIVERY" id="quick-delivery" className="peer sr-only" />
-                       <Label
-                         htmlFor="quick-delivery"
-                         className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
-                       >
-                         <Truck className="mb-2 h-6 w-6" />
-                         <span className="text-[10px] font-bold">Delivery</span>
-                       </Label>
-                     </div>
-                   </RadioGroup>
+                   </ScrollArea>
                  </div>
 
-                 <div className="space-y-2">
-                   <Label className="text-xs uppercase font-bold text-muted-foreground">2. Enter Amount</Label>
-                   <div className="relative">
-                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
-                     <Input type="number" placeholder="0.00" className="pl-7 text-lg font-bold" id="manual-amount" />
+                 {/* Right: Cart & Payment */}
+                 <div className="flex flex-col gap-6 overflow-hidden">
+                   <div className="flex flex-col gap-3 flex-1 overflow-hidden">
+                     <Label className="text-xs uppercase font-bold text-muted-foreground">2. Bill Details</Label>
+                     
+                     {/* Cart Items */}
+                     <ScrollArea className="flex-1 border rounded-lg p-3 bg-muted/20">
+                       <div className="space-y-3">
+                         {manualCart.length === 0 ? (
+                           <div className="text-center py-10 text-muted-foreground text-sm italic">
+                             No items added to bill
+                           </div>
+                         ) : (
+                           manualCart.map(item => (
+                             <div key={item.id} className="flex items-center justify-between group">
+                               <div className="flex flex-col">
+                                 <span className="text-sm font-bold">{item.name}</span>
+                                 <span className="text-xs text-muted-foreground">${item.price} x {item.quantity}</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 <Button 
+                                   variant="ghost" 
+                                   size="icon" 
+                                   className="h-7 w-7 rounded-full border"
+                                   onClick={() => removeFromManualCart(item.id)}
+                                 >
+                                   <Minus className="w-3 h-3" />
+                                 </Button>
+                                 <span className="text-sm font-bold min-w-[20px] text-center">{item.quantity}</span>
+                                 <Button 
+                                   variant="ghost" 
+                                   size="icon" 
+                                   className="h-7 w-7 rounded-full border"
+                                   onClick={() => addToManualCart(item)}
+                                 >
+                                   <Plus className="w-3 h-3" />
+                                 </Button>
+                               </div>
+                             </div>
+                           ))
+                         )}
+                       </div>
+                     </ScrollArea>
+
+                     {/* Breakdown */}
+                     <div className="bg-muted/30 p-3 rounded-lg space-y-2 text-sm">
+                       <div className="flex justify-between">
+                         <span className="text-muted-foreground">Subtotal</span>
+                         <span>${manualCartTotal.toFixed(2)}</span>
+                       </div>
+                       <div className="flex justify-between">
+                         <span className="text-muted-foreground">Taxes (GST 5% + SC 10%)</span>
+                         <span>${(manualCartTotal * 0.15).toFixed(2)}</span>
+                       </div>
+                       <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                         <span>Total Payable</span>
+                         <span className="text-primary text-lg">${(manualCartTotal * 1.15).toFixed(2)}</span>
+                       </div>
+                     </div>
                    </div>
-                 </div>
 
-                 {/* Step 3: Payment */}
-                 <div className="space-y-3">
-                   <Label className="text-xs uppercase font-bold text-muted-foreground">3. Settle Payment</Label>
-                   <div className="grid grid-cols-3 gap-2">
-                     <Button 
-                       variant="outline" 
-                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2" 
-                       onClick={() => {
-                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
-                         const amt = parseFloat(amtInput?.value || "0");
-                         if(amt <= 0) return toast.error("Please enter a valid amount");
-                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "CASH");
-                       }}
-                     >
-                       <CreditCard className="w-5 h-5 text-green-600" />
-                       <div className="text-[10px] font-bold">CASH</div>
-                     </Button>
-                     <Button 
-                       variant="outline" 
-                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
-                       onClick={() => {
-                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
-                         const amt = parseFloat(amtInput?.value || "0");
-                         if(amt <= 0) return toast.error("Please enter a valid amount");
-                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "UPI");
-                       }}
-                     >
-                       <QrCode className="w-5 h-5 text-blue-600" />
-                       <div className="text-[10px] font-bold">UPI</div>
-                     </Button>
-                     <Button 
-                       variant="outline" 
-                       className="flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
-                       onClick={() => {
-                         const amtInput = document.getElementById('manual-amount') as HTMLInputElement;
-                         const amt = parseFloat(amtInput?.value || "0");
-                         if(amt <= 0) return toast.error("Please enter a valid amount");
-                         handlePayment({ id: 'manual', table: 'N/A', total: amt, items: ['Manual Entry'] }, "CARD");
-                       }}
-                     >
-                       <CreditCard className="w-5 h-5 text-purple-600" />
-                       <div className="text-[10px] font-bold">CARD</div>
-                     </Button>
+                   {/* Step 3: Method & Payment */}
+                   <div className="space-y-4">
+                     <div className="space-y-2">
+                       <Label className="text-xs uppercase font-bold text-muted-foreground">3. Select Type & Settle</Label>
+                       <RadioGroup 
+                         defaultValue="DINE_IN" 
+                         onValueChange={setOrderMethod}
+                         className="grid grid-cols-3 gap-2"
+                       >
+                         <RadioGroupItem value="DINE_IN" id="quick-dine-in" className="peer sr-only" />
+                         <Label
+                           htmlFor="quick-dine-in"
+                           className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
+                         >
+                           <DineInIcon className="h-4 w-4 mb-1" />
+                           <span className="text-[10px] font-bold">Dine-in</span>
+                         </Label>
+
+                         <RadioGroupItem value="TAKEAWAY" id="quick-takeaway" className="peer sr-only" />
+                         <Label
+                           htmlFor="quick-takeaway"
+                           className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
+                         >
+                           <ShoppingBag className="h-4 w-4 mb-1" />
+                           <span className="text-[10px] font-bold">Takeaway</span>
+                         </Label>
+
+                         <RadioGroupItem value="DELIVERY" id="quick-delivery" className="peer sr-only" />
+                         <Label
+                           htmlFor="quick-delivery"
+                           className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
+                         >
+                           <Truck className="h-4 w-4 mb-1" />
+                           <span className="text-[10px] font-bold">Delivery</span>
+                         </Label>
+                       </RadioGroup>
+                     </div>
+
+                     <div className="grid grid-cols-3 gap-2">
+                       <Button 
+                         variant="outline" 
+                         className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2" 
+                         onClick={() => {
+                           if(manualCartTotal <= 0) return toast.error("Please add items to bill");
+                           handlePayment({ 
+                             id: 'manual', 
+                             table: 'N/A', 
+                             total: manualCartTotal, 
+                             items: manualCart.map(i => `${i.name} x${i.quantity}`) 
+                           }, "CASH");
+                           setManualCart([]);
+                         }}
+                       >
+                         <CreditCard className="w-4 h-4 text-green-600" />
+                         <div className="text-[10px] font-bold">CASH</div>
+                       </Button>
+                       <Button 
+                         variant="outline" 
+                         className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
+                         onClick={() => {
+                           if(manualCartTotal <= 0) return toast.error("Please add items to bill");
+                           handlePayment({ 
+                             id: 'manual', 
+                             table: 'N/A', 
+                             total: manualCartTotal, 
+                             items: manualCart.map(i => `${i.name} x${i.quantity}`) 
+                           }, "UPI");
+                           setManualCart([]);
+                         }}
+                       >
+                         <QrCode className="w-4 h-4 text-blue-600" />
+                         <div className="text-[10px] font-bold">UPI</div>
+                       </Button>
+                       <Button 
+                         variant="outline" 
+                         className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
+                         onClick={() => {
+                           if(manualCartTotal <= 0) return toast.error("Please add items to bill");
+                           handlePayment({ 
+                             id: 'manual', 
+                             table: 'N/A', 
+                             total: manualCartTotal, 
+                             items: manualCart.map(i => `${i.name} x${i.quantity}`) 
+                           }, "CARD");
+                           setManualCart([]);
+                         }}
+                       >
+                         <CreditCard className="w-4 h-4 text-purple-600" />
+                         <div className="text-[10px] font-bold">CARD</div>
+                       </Button>
+                     </div>
                    </div>
                  </div>
                </div>
