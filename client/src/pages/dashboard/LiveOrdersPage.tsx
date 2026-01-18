@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { MOCK_ORDERS, MOCK_QUEUE, MOCK_TABLES } from "@/lib/mockData";
 import { CheckCircle2, Clock, Utensils, ArrowRight, UserPlus, Users as UsersIcon, Check, Receipt, CreditCard, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
