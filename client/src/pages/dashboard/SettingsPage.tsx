@@ -1,39 +1,50 @@
-
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  Globe, 
-  Bell, 
-  Lock, 
-  Store, 
-  Languages, 
-  Utensils, 
-  Coffee, 
-  LayoutDashboard, 
-  Cloud, 
-  IceCream, 
-  Croissant, 
-  Beer, 
-  Pizza, 
-  Layers 
+import {
+  Bell,
+  Store,
+  Languages,
+  Utensils,
+  Coffee,
+  LayoutDashboard,
+  Cloud,
+  IceCream,
+  Croissant,
+  Beer,
+  Pizza,
+  Layers,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
-import { MOCK_RESTAURANT } from "@/lib/mockData";
-import { useState } from "react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import { useEffect, useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import { useRestaurant, useUpdateRestaurant, useCountries, useStates, useCities, useCurrencies } from "@/hooks/api";
+import type { RestaurantSettings, LocationOption, CurrencyOption } from "@/types";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const SHOP_TYPES = [
   { id: "fine-dine", label: "Fine Dine", icon: Utensils, desc: "Premium dining experience with table service." },
@@ -49,53 +60,243 @@ const SHOP_TYPES = [
 ];
 
 export default function SettingsPage() {
+  const { restaurantId } = useAuth();
+  const { data: restaurant } = useRestaurant(restaurantId);
+  const updateRestaurant = useUpdateRestaurant();
+
   const [shopType, setShopType] = useState("cafe");
+  const [restaurantName, setRestaurantName] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [country, setCountry] = useState("");
+  const [currency, setCurrency] = useState("₹");
+  const [taxRateGst, setTaxRateGst] = useState("5.00");
+  const [taxRateService, setTaxRateService] = useState("10.00");
+  const [spanishEnabled, setSpanishEnabled] = useState(false);
+  const [hindiEnabled, setHindiEnabled] = useState(false);
+  const [emailReports, setEmailReports] = useState(true);
+  const [tableAlerts, setTableAlerts] = useState(false);
+
+  const [countrySearch, setCountrySearch] = useState("");
+  const [stateSearch, setStateSearch] = useState("");
+  const [citySearch, setCitySearch] = useState("");
+  const [currencySearch, setCurrencySearch] = useState("");
+
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
+  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
+
+  // Popover open states
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+
+  const { data: countryOptions, isLoading: loadingCountries } = useCountries(countrySearch);
+  const { data: stateOptions, isLoading: loadingStates } = useStates(selectedCountryCode, stateSearch);
+  const { data: cityOptions, isLoading: loadingCities } = useCities(selectedStateCode, citySearch);
+  const { data: currencyOptions, isLoading: loadingCurrencies } = useCurrencies(currencySearch);
+
+  const selectedCountry = useMemo(
+    () => countryOptions?.find((c: LocationOption) => c.name === country || c.code === selectedCountryCode),
+    [countryOptions, country, selectedCountryCode],
+  );
+  const selectedState = useMemo(
+    () => stateOptions?.find((s: LocationOption) => s.name === state || s.code === selectedStateCode),
+    [stateOptions, state, selectedStateCode],
+  );
+  const selectedCity = useMemo(
+    () => cityOptions?.find((c: LocationOption) => c.name === city),
+    [cityOptions, city],
+  );
+  const selectedCurrency = useMemo(
+    () => currencyOptions?.find((c: CurrencyOption) => c.symbol === currency || c.code === currency),
+    [currencyOptions, currency],
+  );
+
+  useEffect(() => {
+    if (!restaurant) return;
+
+    setRestaurantName(restaurant.name ?? "");
+    setAddressLine1(restaurant.addressLine1 ?? "");
+    setShopType(restaurant.type || "cafe");
+
+    setCity(restaurant.city ?? "");
+    setState(restaurant.state ?? "");
+    setPostalCode(restaurant.postalCode ?? "");
+    setCountry(restaurant.country ?? "India");
+    setCurrency(restaurant.currency ?? "₹");
+    setTaxRateGst(restaurant.taxRateGst ?? "5.00");
+    setTaxRateService(restaurant.taxRateService ?? "10.00");
+
+    const settings = (restaurant as { settings?: RestaurantSettings }).settings;
+    const languages = settings?.languages;
+    const notifications = settings?.notifications;
+
+    setSpanishEnabled(!!languages?.es);
+    setHindiEnabled(!!languages?.hi);
+    setEmailReports(notifications?.emailReports ?? true);
+    setTableAlerts(notifications?.tableAlerts ?? false);
+  }, [restaurant]);
+
+  // Auto-load countries on mount (search with empty string to get all)
+  useEffect(() => {
+    if (!selectedCountryCode && country) {
+      // Try to find country code from initial country name
+      const foundCountry = countryOptions?.find(c => c.name === country);
+      if (foundCountry) {
+        setSelectedCountryCode(foundCountry.code);
+      }
+    }
+  }, [countryOptions, country, selectedCountryCode]);
+
+  // Auto-load states when country is selected
+  useEffect(() => {
+    if (!selectedStateCode && state && selectedCountryCode) {
+      // Try to find state code from initial state name
+      const foundState = stateOptions?.find(s => s.name === state);
+      if (foundState) {
+        setSelectedStateCode(foundState.code);
+      }
+    }
+  }, [stateOptions, state, selectedStateCode, selectedCountryCode]);
+
+  async function handleSaveProfile() {
+    if (!restaurantId) {
+      toast.error("No restaurant selected");
+      return;
+    }
+
+    try {
+      const selectedType = SHOP_TYPES.find((t) => t.id === shopType)?.label;
+      await updateRestaurant.mutateAsync({
+        id: restaurantId,
+        data: {
+          name: restaurantName,
+          type: selectedType,
+          addressLine1,
+          city: city,
+          state: state,
+          postalCode: postalCode,
+          country: country || "India",
+          currency,
+          taxRateGst,
+          taxRateService,
+        },
+      });
+      toast.success("Profile saved!");
+    } catch (error) {
+      console.error(error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to save profile");
+      }
+    }
+  }
+
+  async function handleSavePreferences() {
+    if (!restaurantId) {
+      toast.error("No restaurant selected");
+      return;
+    }
+
+    try {
+      const existingSettings = (restaurant as { settings?: RestaurantSettings } | undefined)?.settings ?? {};
+      const nextSettings: RestaurantSettings = {
+        ...existingSettings,
+        languages: {
+          ...(existingSettings.languages ?? {}),
+          es: spanishEnabled,
+          hi: hindiEnabled,
+        },
+        notifications: {
+          ...(existingSettings.notifications ?? {}),
+          emailReports,
+          tableAlerts,
+        },
+      };
+
+      await updateRestaurant.mutateAsync({
+        id: restaurantId,
+        data: {
+          settings: nextSettings,
+        },
+      });
+      toast.success("Settings saved!");
+    } catch (error) {
+      console.error(error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to save settings");
+      }
+    }
+  }
+
+  if (!restaurantId) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-2xl px-4 sm:px-0">
+          <h2 className="text-xl sm:text-2xl font-heading font-bold mb-2">Store Settings</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            No restaurant is selected. Please log in or complete onboarding to configure settings.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl space-y-8">
+      <div className="max-w-4xl space-y-6 sm:space-y-8 px-4 sm:px-0">
         <div>
-          <h2 className="text-3xl font-heading font-bold">Store Settings</h2>
-          <p className="text-muted-foreground">Configure your restaurant profile and operations.</p>
+          <h2 className="text-2xl sm:text-3xl font-heading font-bold">Store Settings</h2>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">Configure your restaurant profile and operations.</p>
         </div>
 
-        <div className="grid gap-8">
+        <div className="grid gap-6 sm:gap-8">
           <Card>
-            <CardHeader>
+            <CardHeader className="px-4 sm:px-6">
               <div className="flex items-center gap-2">
-                <Store className="w-5 h-5 text-primary" />
-                <CardTitle>Business Profile</CardTitle>
+                <Store className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                <CardTitle className="text-lg sm:text-xl">Business Profile</CardTitle>
               </div>
-              <CardDescription>Update your restaurant details and business category.</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Update your restaurant details and business category.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
+            <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Restaurant Name</Label>
-                  <Input defaultValue={MOCK_RESTAURANT.name} />
+                  <Label className="text-sm">Restaurant Name</Label>
+                  <Input
+                    value={restaurantName}
+                    onChange={(e) => setRestaurantName(e.target.value)}
+                    className="text-sm"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Business Type</Label>
+                  <Label className="text-sm">Business Type</Label>
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start font-normal h-10">
+                      <Button variant="outline" className="w-full justify-start font-normal h-10 text-sm">
                         <div className="flex items-center gap-2">
                           {(() => {
                             const selected = SHOP_TYPES.find(t => t.id === shopType);
                             const TypeIcon = selected?.icon || Store;
-                            return <TypeIcon className="w-4 h-4 text-primary" />;
+                            return <TypeIcon className="w-4 h-4 text-primary flex-shrink-0" />;
                           })()}
-                          {SHOP_TYPES.find(t => t.id === shopType)?.label || "Select Type..."}
+                          <span className="truncate">{SHOP_TYPES.find(t => t.id === shopType)?.label || "Select Type..."}</span>
                         </div>
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Select Business Type</DialogTitle>
-                        <DialogDescription>Choose the category that best describes your establishment.</DialogDescription>
+                        <DialogTitle className="text-lg sm:text-xl">Select Business Type</DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm">Choose the category that best describes your establishment.</DialogDescription>
                       </DialogHeader>
                       <div className="py-4">
-                        <RadioGroup value={shopType} onValueChange={setShopType} className="grid grid-cols-2 gap-3">
+                        <RadioGroup value={shopType} onValueChange={setShopType} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {SHOP_TYPES.map((type) => {
                             const Icon = type.icon;
                             return (
@@ -103,10 +304,10 @@ export default function SettingsPage() {
                                 <RadioGroupItem value={type.id} id={type.id} className="peer sr-only" />
                                 <Label
                                   htmlFor={type.id}
-                                  className="flex flex-col h-full rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
+                                  className="flex flex-col h-full rounded-xl border-2 border-muted bg-popover p-3 sm:p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 [&:has([data-state=checked])]:border-primary transition-all cursor-pointer"
                                 >
-                                  <Icon className="mb-2 h-5 w-5 text-primary" />
-                                  <span className="font-bold text-sm">{type.label}</span>
+                                  <Icon className="mb-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                  <span className="font-bold text-xs sm:text-sm">{type.label}</span>
                                   <span className="text-[10px] text-muted-foreground leading-tight mt-1">{type.desc}</span>
                                 </Label>
                               </div>
@@ -115,70 +316,343 @@ export default function SettingsPage() {
                         </RadioGroup>
                       </div>
                       <DialogFooter>
-                        <Button className="w-full" onClick={() => toast.success("Business type updated!")}>Save Changes</Button>
+                        <Button className="w-full text-sm" onClick={() => toast.success("Business type updated!")}>Save Changes</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Address</Label>
-                <Input defaultValue="123 Culinary Ave, Food City" />
+                <Label className="text-sm">Address Line 1</Label>
+                <Input
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="Street, building, locality"
+                  className="text-sm"
+                />
               </div>
-              <Button onClick={() => toast.success("Profile saved!")}>Save Profile</Button>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label className="text-sm">Country</Label>
+                  <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        role="combobox"
+                        aria-expanded={countryOpen}
+                        className="w-full justify-between text-sm h-10"
+                      >
+                        <span className="truncate">{selectedCountry?.name || country || "Select country"}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
+                      <Command>
+                        <CommandInput
+                          value={countrySearch}
+                          onValueChange={setCountrySearch}
+                          placeholder="Search countries..."
+                          className="text-sm"
+                        />
+                        <CommandList>
+                          <CommandEmpty className="text-sm">{loadingCountries ? "Loading..." : "No countries found."}</CommandEmpty>
+                          <CommandGroup>
+                            {(countryOptions || []).map((c: LocationOption) => (
+                              <CommandItem
+                                key={c.code}
+                                value={c.name}
+                                onSelect={() => {
+                                  setCountry(c.name);
+                                  setSelectedCountryCode(c.code);
+                                  setSelectedStateCode(null);
+                                  setState("");
+                                  setCity("");
+                                  setCountryOpen(false);
+                                }}
+                                className="text-sm"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedCountry?.code === c.code ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {c.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">State</Label>
+                  <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        role="combobox"
+                        aria-expanded={stateOpen}
+                        disabled={!selectedCountryCode}
+                        className="w-full justify-between text-sm h-10"
+                      >
+                        <span className="truncate">{state || "Select state"}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
+                      <Command>
+                        <CommandInput
+                          value={stateSearch}
+                          onValueChange={setStateSearch}
+                          placeholder="Search states..."
+                          className="text-sm"
+                        />
+                        <CommandList>
+                          <CommandEmpty className="text-sm">{loadingStates ? "Loading..." : "No states found."}</CommandEmpty>
+                          <CommandGroup>
+                            {(stateOptions || []).map((s: LocationOption) => (
+                              <CommandItem
+                                key={s.code}
+                                value={s.name}
+                                onSelect={() => {
+                                  setState(s.name);
+                                  setSelectedStateCode(s.code);
+                                  setCity("");
+                                  setStateOpen(false);
+                                }}
+                                className="text-sm"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedState?.code === s.code ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {s.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">City</Label>
+                  <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        role="combobox"
+                        aria-expanded={cityOpen}
+                        disabled={!selectedStateCode}
+                        className="w-full justify-between text-sm h-10"
+                      >
+                        <span className="truncate">{city || "Select city"}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
+                      <Command>
+                        <CommandInput
+                          value={citySearch}
+                          onValueChange={setCitySearch}
+                          placeholder="Search cities..."
+                          className="text-sm"
+                        />
+                        <CommandList>
+                          <CommandEmpty className="text-sm">{loadingCities ? "Loading..." : "No cities found."}</CommandEmpty>
+                          <CommandGroup>
+                            {(cityOptions || []).map((c: LocationOption) => (
+                              <CommandItem
+                                key={c.code}
+                                value={c.name}
+                                onSelect={() => {
+                                  setCity(c.name);
+                                  setCityOpen(false);
+                                }}
+                                className="text-sm"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedCity?.code === c.code ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {c.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label className="text-sm">Postal Code</Label>
+                  <Input
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Currency</Label>
+                  <Popover open={currencyOpen} onOpenChange={setCurrencyOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        role="combobox"
+                        aria-expanded={currencyOpen}
+                        className="w-full justify-between text-sm h-10"
+                      >
+                        <span className="truncate">
+                          {selectedCurrency ? `${selectedCurrency.symbol} • ${selectedCurrency.code}` : currency || "Select currency"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
+                      <Command>
+                        <CommandInput
+                          value={currencySearch}
+                          onValueChange={setCurrencySearch}
+                          placeholder="Search currencies..."
+                          className="text-sm"
+                        />
+                        <CommandList>
+                          <CommandEmpty className="text-sm">{loadingCurrencies ? "Loading..." : "No currencies found."}</CommandEmpty>
+                          <CommandGroup>
+                            {(currencyOptions || []).map((c: CurrencyOption) => (
+                              <CommandItem
+                                key={c.code}
+                                value={`${c.code} ${c.symbol}`}
+                                onSelect={() => {
+                                  setCurrency(c.symbol);
+                                  setCurrencyOpen(false);
+                                }}
+                                className="text-sm"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedCurrency?.code === c.code ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <span className="mr-2">{c.symbol}</span>
+                                <span>{c.name}</span>
+                                <span className="ml-auto text-xs text-muted-foreground">{c.code}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">GST %</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={taxRateGst}
+                    onChange={(e) => setTaxRateGst(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label className="text-sm">Service Tax %</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={taxRateService}
+                    onChange={(e) => setTaxRateService(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleSaveProfile} disabled={updateRestaurant.isPending} className="w-full sm:w-auto text-sm">
+                {updateRestaurant.isPending ? "Saving..." : "Save Profile"}
+              </Button>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="px-4 sm:px-6">
               <div className="flex items-center gap-2">
-                <Languages className="w-5 h-5 text-primary" />
-                <CardTitle>Language Support</CardTitle>
+                <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                <CardTitle className="text-lg sm:text-xl">Language Support</CardTitle>
               </div>
-              <CardDescription>Enable multiple languages for your digital menu.</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Enable multiple languages for your digital menu.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+            <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
+              <div className="flex items-center justify-between p-3 sm:p-4 bg-muted/30 rounded-lg">
                 <div className="space-y-0.5">
-                  <p className="font-medium">English (Default)</p>
-                  <p className="text-sm text-muted-foreground">Main language for your menu</p>
+                  <p className="font-medium text-sm sm:text-base">English (Default)</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Main language for your menu</p>
                 </div>
                 <Switch checked disabled />
               </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg">
                 <div className="space-y-0.5">
-                  <p className="font-medium">Spanish</p>
-                  <p className="text-sm text-muted-foreground">Enable Spanish translations</p>
+                  <p className="font-medium text-sm sm:text-base">Spanish</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Enable Spanish translations</p>
                 </div>
-                <Switch />
+                <Switch
+                  checked={spanishEnabled}
+                  onCheckedChange={setSpanishEnabled}
+                />
               </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg">
                 <div className="space-y-0.5">
-                  <p className="font-medium">Hindi</p>
-                  <p className="text-sm text-muted-foreground">Enable Hindi translations</p>
+                  <p className="font-medium text-sm sm:text-base">Hindi</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Enable Hindi translations</p>
                 </div>
-                <Switch />
+                <Switch
+                  checked={hindiEnabled}
+                  onCheckedChange={setHindiEnabled}
+                />
               </div>
-              <Button variant="outline" className="w-full">Add New Language</Button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-2">
+                <Button variant="outline" className="flex-1 text-sm">Add New Language</Button>
+                <Button onClick={handleSavePreferences} disabled={updateRestaurant.isPending} className="flex-1 sm:flex-none text-sm">
+                  {updateRestaurant.isPending ? "Saving..." : "Save Language Settings"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="px-4 sm:px-6">
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                <CardTitle>Notifications</CardTitle>
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                <CardTitle className="text-lg sm:text-xl">Notifications</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               <div className="flex items-center justify-between">
-                <Label>Email reports</Label>
-                <Switch defaultChecked />
+                <Label className="text-sm sm:text-base">Email reports</Label>
+                <Switch
+                  checked={emailReports}
+                  onCheckedChange={setEmailReports}
+                />
               </div>
               <div className="flex items-center justify-between">
-                <Label>Table occupancy alerts</Label>
-                <Switch />
+                <Label className="text-sm sm:text-base">Table occupancy alerts</Label>
+                <Switch
+                  checked={tableAlerts}
+                  onCheckedChange={setTableAlerts}
+                />
               </div>
+              <Button onClick={handleSavePreferences} disabled={updateRestaurant.isPending} className="w-full sm:w-auto text-sm">
+                {updateRestaurant.isPending ? "Saving..." : "Save Notification Settings"}
+              </Button>
             </CardContent>
           </Card>
         </div>

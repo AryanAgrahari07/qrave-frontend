@@ -22,7 +22,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Link href="/auth">
               <div className="text-sm font-medium hover:text-primary transition-colors cursor-pointer">Log in</div>
             </Link>
-            <Link href="/auth?signup=true">
+            <Link href="/signup">
               <Button size="sm" className="font-semibold shadow-lg shadow-primary/20">
                 Start Free Trial
               </Button>

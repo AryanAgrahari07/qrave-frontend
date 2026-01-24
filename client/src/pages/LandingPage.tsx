@@ -1,4 +1,3 @@
-
 import MarketingLayout from "@/components/layout/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Check, QrCode, Smartphone, Zap, BarChart3 } from "lucide-react";
@@ -30,7 +29,7 @@ export default function LandingPage() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/auth?signup=true">
+                <Link href="/signup">
                   <Button size="lg" className="text-lg px-8 py-6 rounded-xl shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all hover:-translate-y-1">
                     Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>

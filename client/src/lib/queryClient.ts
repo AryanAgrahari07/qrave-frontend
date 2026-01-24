@@ -1,5 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// API Base URL - uses environment variable or defaults to relative path
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,7 +15,10 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // If url already starts with http, use as-is, otherwise prepend API_BASE_URL
+  const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -29,7 +35,11 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    // If queryKey is an array starting with http, use as-is, otherwise prepend API_BASE_URL
+    const queryUrl = queryKey.join("/") as string;
+    const fullUrl = queryUrl.startsWith("http") ? queryUrl : `${API_BASE_URL}${queryUrl}`;
+    
+    const res = await fetch(fullUrl, {
       credentials: "include",
     });
 
@@ -47,7 +57,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 1000 * 60, // 1 minute stale time - data will refetch after invalidation
       retry: false,
     },
     mutations: {

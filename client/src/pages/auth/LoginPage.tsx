@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,22 +7,31 @@ import bgImage from "@assets/generated_images/restaurant_interior_background.png
 import { Loader2, ChefHat, UserCircle, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [_, setLocation] = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "WAITER" | "KITCHEN">("ADMIN");
+  const { login, staffLogin, isLoading: authLoading } = useAuth();
+  const isLoading = authLoading;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      if (role === "KITCHEN") setLocation("/kitchen");
-      else if (role === "WAITER") setLocation("/waiter");
-      else setLocation("/dashboard");
+    try {
+      const { user } =
+        role === "ADMIN"
+          ? await login(email, password)
+          : await staffLogin(email, password); // `password` field used as passcode for staff terminals
       toast.success("Welcome back to Qrave!");
-    }, 800);
+      const r = user?.role ?? role;
+      if (r === "KITCHEN") setLocation("/kitchen");
+      else if (r === "WAITER") setLocation("/waiter");
+      else setLocation("/dashboard");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Login failed");
+    }
   };
 
   return (
@@ -67,14 +75,21 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="id">{role === "ADMIN" ? "Email" : "Staff ID"}</Label>
-              <Input id="id" placeholder={role === "ADMIN" ? "owner@restaurant.com" : "Enter Staff ID"} required className="h-11 bg-muted/30" />
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" placeholder="owner@restaurant.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 bg-muted/30" />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">PIN / Password</Label>
-              </div>
-              <Input id="password" type="password" required className="h-11 bg-muted/30" placeholder="••••" />
+              <Label htmlFor="password">{role === "ADMIN" ? "Password" : "Passcode"}</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-11 bg-muted/30"
+                placeholder={role === "ADMIN" ? "••••" : "4-digit PIN"}
+                maxLength={role === "ADMIN" ? undefined : 50}
+              />
             </div>
             
             <Button type="submit" className="w-full h-12 text-base font-bold shadow-lg shadow-primary/20" disabled={isLoading}>
@@ -85,7 +100,7 @@ export default function LoginPage() {
           {role === "ADMIN" && (
             <div className="text-center text-sm text-muted-foreground">
               Don't have an account?{" "}
-              <Link href="/auth?signup=true">
+              <Link href="/signup">
                 <span className="font-semibold text-primary hover:underline cursor-pointer">Start free trial</span>
               </Link>
             </div>
