@@ -28,6 +28,40 @@ import type {
   DashboardSummary,
 } from "@/types";
 
+// === Extraction Types ===
+interface ExtractionJob {
+  id: string;
+  restaurant_id: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CONFIRMED';
+  uploaded_by: string;
+  image_url: string;
+  image_s3_key: string;
+  image_size_bytes: number;
+  extracted_data?: {
+    currency?: string;
+    categories?: Array<{
+      name: string;
+      items: Array<{
+        name: string;
+        price: number;
+        description: string;
+        dietaryType: string;
+        confidence: number;
+      }>;
+    }>;
+  };
+  extraction_confidence?: number;
+  ai_model_used?: string;
+  items_extracted?: number;
+  items_confirmed?: number;
+  error_message?: string;
+  processing_time_ms?: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  confirmed_at?: string;
+}
+
 // === Query Keys ===
 const queryKeys = {
   restaurants: ["restaurants"] as const,
@@ -61,7 +95,12 @@ const queryKeys = {
     scanActivity: () => ["dashboard", "scan-activity"] as const,
     recentOrders: (limit?: number) => ["dashboard", "recent-orders", limit] as const,
   },
-
+  extraction: {
+    job: (restaurantId: string | null, jobId: string | null) => 
+      ["extraction-job", restaurantId, jobId] as const,
+    jobs: (restaurantId: string | null) => 
+      ["extraction-jobs", restaurantId] as const,
+  },
 };
 
 // === Restaurants ===
@@ -137,6 +176,8 @@ export function useMenuCategories(restaurantId: string | null, slug: string | nu
     enabled: !!slug,
     staleTime: 0, // Always consider stale for instant updates
     refetchInterval: 5000, // Poll every 5 seconds for menu changes
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 }
 
@@ -146,8 +187,13 @@ export function useCreateCategory(restaurantId: string | null) {
     mutationFn: (data: { name: string; sortOrder?: number }) =>
       api.post<{ category: MenuCategory }>(`/api/menu/${restaurantId}/categories`, data).then((r) => r.category),
     onSuccess: () => {
+      // Invalidate ALL menu-related queries more aggressively
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
+
       toast.success("Category created successfully");
     },
     onError: (e: Error) => toast.error(e.message || "Failed to create category"),
@@ -160,6 +206,10 @@ export function useUpdateCategory(restaurantId: string | null) {
     mutationFn: ({ categoryId, data }: { categoryId: string; data: Partial<MenuCategory> }) =>
       api.put<{ category: MenuCategory }>(`/api/menu/${restaurantId}/categories/${categoryId}`, data).then((r) => r.category),
     onSuccess: () => {
+      // Invalidate ALL menu-related queries more aggressively
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
       toast.success("Category updated successfully");
@@ -174,6 +224,9 @@ export function useDeleteCategory(restaurantId: string | null) {
     mutationFn: (categoryId: string) =>
       api.delete<{ category: MenuCategory; deleted: boolean }>(`/api/menu/${restaurantId}/categories/${categoryId}`),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
       toast.success("Category deleted successfully");
@@ -800,18 +853,13 @@ export function useCurrencies(search: string) {
   });
 }
 
-
 export function useAnalytics(restaurantId: string | null, timeframe: string = "day") {
-  // console.log("useAnalytics called with:", { restaurantId, timeframe });
-  
   return useQuery({
     queryKey: queryKeys.analytics(restaurantId, timeframe),
     queryFn: async () => {
-      // console.log("Making API request to:", `/api/analytics/${restaurantId}/summary?timeframe=${timeframe}`);
       const response = await api.get<{ analytics: AnalyticsData }>(
         `/api/analytics/${restaurantId}/summary?timeframe=${timeframe}`
       );
-      // console.log("API response:", response);
       return response.analytics;
     },
     enabled: !!restaurantId,
@@ -819,7 +867,6 @@ export function useAnalytics(restaurantId: string | null, timeframe: string = "d
     refetchInterval: 60000, // Refetch every minute
   });
 }
-
 
 // Dashboard hooks
 export function useDashboardSummary(restaurantId: string | null) {
@@ -873,5 +920,142 @@ export function useRecentOrders(restaurantId: string | null, limit: number = 5) 
     queryFn: () => api.get<RecentOrder[]>(`/api/dashboard/${restaurantId}/recent-orders?limit=${limit}`),
     staleTime: 15000,
     refetchInterval: 15000,
+  });
+}
+
+// === Menu Extraction ===
+
+/**
+ * Get extraction job status (with automatic polling)
+ */export function useExtractionJob(
+  restaurantId: string | null,
+  jobId: string | null
+) {
+  return useQuery({
+    queryKey: queryKeys.extraction.job(restaurantId, jobId),
+    queryFn: () =>
+      api
+        .get<{ job: ExtractionJob }>(
+          `/api/menu/${restaurantId}/extract/${jobId}`
+        )
+        .then(r => r.job),
+
+    enabled: !!restaurantId && !!jobId,
+
+    refetchInterval: (query) => {
+      const data = query.state.data;
+
+      if (!data) return 2000;
+
+      return data.status === 'PROCESSING' ? 2000 : false;
+    },
+
+    staleTime: 0,
+  });
+}
+
+
+/**
+ * Get extraction history for a restaurant
+ */
+export function useExtractionJobs(restaurantId: string | null, limit?: number) {
+  return useQuery({
+    queryKey: queryKeys.extraction.jobs(restaurantId),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (limit) params.set('limit', String(limit));
+      const queryString = params.toString();
+      return api.get<{ extractions: ExtractionJob[] }>(
+        `/api/menu/${restaurantId}/extractions${queryString ? `?${queryString}` : ''}`
+      ).then(r => r.extractions);
+    },
+    enabled: !!restaurantId,
+  });
+}
+
+/**
+ * Create extraction job
+ */
+export function useCreateExtractionJob(restaurantId: string | null) {
+  const qc = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: { imageUrl: string; imageS3Key: string; imageSizeBytes: number }) =>
+      api.post<{ job: ExtractionJob }>(`/api/menu/${restaurantId}/extract`, data).then(r => r.job),
+    onSuccess: (job) => {
+      // Invalidate extraction jobs list
+      qc.invalidateQueries({ queryKey: queryKeys.extraction.jobs(restaurantId) });
+      // Set the initial job data
+      qc.setQueryData(queryKeys.extraction.job(restaurantId, job.id), { job });
+      toast.success("Extraction started");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to start extraction"),
+  });
+}
+
+/**
+ * Confirm extraction and add items to menu
+ */
+export function useConfirmExtraction(restaurantId: string | null, jobId: string | null, slug: string | null) {
+  const qc = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: { items: Array<{
+      categoryName: string;
+      name: string;
+      price: number;
+      description?: string;
+      dietaryType?: 'Veg' | 'Non-Veg';
+    }> }) =>
+      api.post<{ 
+        success: boolean;
+        itemsCreated: number;
+        items: MenuItem[];
+        timestamp: number;
+      }>(`/api/menu/${restaurantId}/extract/${jobId}/confirm`, data),
+    onSuccess: async (data) => {
+      toast.success(`🎉 Added ${data.itemsCreated} items to your menu!`);
+      
+      // Wait for backend cache invalidation to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+       // Invalidate and refetch ALL menu-related queries
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["menu-public"] }),
+        qc.invalidateQueries({ queryKey: ["menu-categories"] }),
+        qc.invalidateQueries({ queryKey: queryKeys.extraction.job(restaurantId, jobId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.extraction.jobs(restaurantId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.restaurantBySlug(slug) }),
+      ]);
+      
+      // Force immediate refetch
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ["menu-public", slug], type: "active" }),
+        qc.refetchQueries({ queryKey: ["menu-categories", restaurantId], type: "active" }),
+      ]);
+      
+      console.log('[Cache] Menu cache invalidated and refetched after extraction confirmation');
+    },
+    onError: (e: Error) => {
+      console.error("Extraction confirmation error:", e);
+      toast.error(e.message || "Failed to add items. Please try again.");
+    },
+  });
+}
+
+/**
+ * Get presigned URL for menu card upload
+ */
+export function useMenuCardUploadUrl(restaurantId: string | null) {
+  return useMutation({
+    mutationFn: (data?: { contentType?: string }) =>
+      api.post<{
+        uploadUrl: string;
+        key: string;
+        publicUrl: string;
+        expiresIn: number;
+      }>(`/api/menu/${restaurantId}/menu-card/upload-url`, data || {}),
+    onError: (e: Error) => toast.error(e.message || "Failed to get upload URL"),
   });
 }

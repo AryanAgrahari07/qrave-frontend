@@ -4,6 +4,11 @@
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+console.log(import.meta.env.VITE_API_URL);
+
+console.log("ENV OBJECT:", import.meta.env);
+console.log("API URL:", import.meta.env.VITE_API_URL);
+
 
 const TOKEN_KEY = "qrave_token";
 
