@@ -2,8 +2,8 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2, X, Upload, Search, Sparkles, Loader2 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2, X, Upload, Search, Sparkles, Loader2, Settings } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -21,10 +21,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
-import { useRestaurant, useMenuCategories, useCreateCategory, useUpdateCategory, useCreateMenuItem, useUpdateMenuItem, useUpdateMenuItemAvailability, useDeleteMenuItem, useDeleteCategory } from "@/hooks/api";
+import { useRestaurant, useMenuCategories, useCreateCategory, useUpdateCategory, useCreateMenuItem, useUpdateMenuItem, useUpdateMenuItemAvailability, useDeleteMenuItem, useDeleteCategory, useVariantsForMenuItem, useModifierGroupsForMenuItem } from "@/hooks/api";
 import type { MenuCategory, MenuItem } from "@/types";
-import { MenuCardUploader } from "@/components/menu/MenuCardUploader"
+import { MenuCardUploader } from "@/components/menu/MenuCardUploader";
 import { ExtractionPreview } from "@/components/menu/ExtractionPreview";
+import { MenuItemCustomization } from "@/components/menu/MenuItemCustomization";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 
 // Prefilled item suggestions
 const PREFILLED_ITEMS = [
@@ -39,6 +42,357 @@ const PREFILLED_ITEMS = [
   { name: "Masala Dosa", description: "Crispy rice crepe filled with spiced potato filling.", price: 149, image: "https://images.unsplash.com/photo-1630383249896-424e482df921?auto=format&fit=crop&q=80&w=300&h=300" },
   { name: "Biryani", description: "Fragrant basmati rice layered with spiced meat.", price: 349, image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=300&h=300" },
 ];
+
+// Image Crop Dialog Component
+function ImageCropDialog({
+  imageUrl,
+  isOpen,
+  onClose,
+  onCropComplete,
+}: {
+  imageUrl: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onCropComplete: (croppedImageUrl: string) => void;
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const onCropCompleteInternal = useCallback(
+    (croppedArea: Area, croppedAreaPixels: Area) => {
+      setCroppedAreaPixels(croppedAreaPixels);
+    },
+    []
+  );
+
+  const createCroppedImage = useCallback(async () => {
+    if (!croppedAreaPixels) return;
+
+    setIsProcessing(true);
+    try {
+      const image = new Image();
+      image.src = imageUrl;
+      
+      await new Promise((resolve) => {
+        image.onload = resolve;
+      });
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("Failed to get canvas context");
+      }
+
+      // Set canvas size to cropped area
+      canvas.width = croppedAreaPixels.width;
+      canvas.height = croppedAreaPixels.height;
+
+      // Draw the cropped image
+      ctx.drawImage(
+        image,
+        croppedAreaPixels.x,
+        croppedAreaPixels.y,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height,
+        0,
+        0,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height
+      );
+
+      // Convert canvas to blob and then to URL
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const croppedImageUrl = URL.createObjectURL(blob);
+          onCropComplete(croppedImageUrl);
+          toast.success("Image cropped successfully!");
+          onClose();
+        }
+      }, "image/jpeg", 0.95);
+    } catch (error) {
+      console.error("Error cropping image:", error);
+      toast.error("Failed to crop image");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [croppedAreaPixels, imageUrl, onCropComplete, onClose]);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl mx-4 max-h-[85vh] p-0 gap-0">
+        <div className="p-3 sm:p-4 border-b">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Crop Image</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Adjust the image crop area and zoom level
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+        
+        <div className="relative h-[280px] sm:h-[320px] md:h-[380px] bg-gray-900 overflow-hidden">
+          <Cropper
+            image={imageUrl}
+            crop={crop}
+            zoom={zoom}
+            aspect={4 / 3}
+            onCropChange={setCrop}
+            onZoomChange={setZoom}
+            onCropComplete={onCropCompleteInternal}
+            style={{
+              containerStyle: {
+                backgroundColor: '#1a1a1a',
+              },
+            }}
+          />
+        </div>
+
+        <div className="p-3 sm:p-4 space-y-3 border-t">
+          <div className="space-y-2">
+            <Label className="text-xs sm:text-sm font-medium">Zoom</Label>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="text-[10px] sm:text-xs text-muted-foreground">1x</span>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                style={{
+                  background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${((zoom - 1) / 2) * 100}%, hsl(var(--muted)) ${((zoom - 1) / 2) * 100}%, hsl(var(--muted)) 100%)`
+                }}
+              />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">3x</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3 sm:p-4 border-t flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 h-9 sm:h-10 text-sm"
+            disabled={isProcessing}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={createCroppedImage}
+            className="flex-1 h-9 sm:h-10 text-sm bg-primary hover:bg-primary/90"
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Processing...
+              </>
+            ) : (
+              "Apply Crop"
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Separate component for menu item row to properly use hooks
+function MenuItemRow({ 
+  item, 
+  currency, 
+  onToggleAvailability, 
+  onEdit, 
+  onDelete, 
+  onCustomize,
+  updateAvailabilityPending,
+  hasCustomizations 
+}: { 
+  item: MenuItem; 
+  currency: string;
+  onToggleAvailability: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onCustomize: () => void;
+  updateAvailabilityPending: boolean;
+  hasCustomizations: boolean;
+}) {
+  return (
+    <div className="p-2.5 sm:p-3 md:p-4 flex items-start gap-2 sm:gap-3 md:gap-4 hover:bg-muted/10 transition-colors group">
+      {/* Item Image */}
+      <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-md sm:rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
+        {item.imageUrl ? (
+          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+            <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+          </div>
+        )}
+      </div>
+      
+      {/* Item Details */}
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-0.5 sm:gap-2 mb-1">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <p className="font-semibold text-xs sm:text-sm md:text-base truncate">{item.name}</p>
+            {item.dietaryTags?.map((tag, i) => {
+              const isVeg = tag.toLowerCase() === "veg";
+              const isNonVeg = tag.toLowerCase() === "non-veg";
+              return (
+                <Badge 
+                  key={i}
+                  className={cn(
+                    "text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0 h-3 sm:h-3.5 md:h-4",
+                    isVeg && "bg-green-100 text-green-800 border-green-200",
+                    isNonVeg && "bg-red-100 text-red-800 border-red-200"
+                  )}
+                >
+                  {tag}
+                </Badge>
+              );
+            })}
+            {hasCustomizations && (
+              <Badge 
+                className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0 h-3 sm:h-3.5 md:h-4 bg-blue-100 text-blue-800 border-blue-200"
+              >
+                <Settings className="w-2 h-2 sm:w-2.5 sm:h-2.5 mr-0.5" />
+                Customized
+              </Badge>
+            )}
+          </div>
+          <p className="font-mono font-medium text-xs sm:text-sm md:text-base flex-shrink-0">{currency}{item.price}</p>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
+          <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground line-clamp-1 sm:line-clamp-none">
+            {item.description || "No description"}
+          </p>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <span className="text-[9px] sm:text-[10px] md:text-xs font-bold text-muted-foreground whitespace-nowrap">In Stock</span>
+            <Switch 
+              checked={item.isAvailable} 
+              onCheckedChange={onToggleAvailability}
+              disabled={updateAvailabilityPending}
+              className="scale-75 sm:scale-100"
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Action Buttons - Mobile */}
+      <div className="flex flex-col sm:hidden gap-0.5 flex-shrink-0">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-6 text-[10px] px-1.5"
+          onClick={onCustomize}
+        >
+          <Settings className="w-3 h-3 mr-0.5" />
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-6 text-[10px] px-1.5"
+          onClick={onEdit}
+        >
+          Edit
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-6 text-[10px] px-1.5 text-destructive hover:bg-destructive/10"
+          onClick={onDelete}
+        >
+          Del
+        </Button>
+      </div>
+      
+      {/* Action Buttons - Desktop */}
+      <div className="hidden sm:flex items-center gap-1.5 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-7 md:h-8 text-xs gap-1"
+          onClick={onCustomize}
+        >
+          <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-7 md:h-8 text-xs"
+          onClick={onEdit}
+        >
+          Edit
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-7 w-7 md:h-8 md:w-8 text-destructive hover:bg-destructive/10"
+          onClick={onDelete}
+        >
+          <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Hook to check if an item has customizations
+function useItemCustomizations(restaurantId: string, menuItemId: string, isDialogOpen: boolean) {
+  const { data: variants } = useVariantsForMenuItem(restaurantId, isDialogOpen ? null : menuItemId);
+  const { data: modifierGroups } = useModifierGroupsForMenuItem(restaurantId, isDialogOpen ? null : menuItemId);
+  
+  const hasCustomizations = useMemo(() => {
+    const hasVariants = variants && variants.length > 0;
+    const hasModifiers = modifierGroups && modifierGroups.length > 0;
+    return !!(hasVariants || hasModifiers);
+  }, [variants, modifierGroups]);
+
+  return hasCustomizations;
+}
+
+// Wrapper component to use the customization hook
+function MenuItemRowWithCustomizations({ 
+  item, 
+  currency, 
+  onToggleAvailability, 
+  onEdit, 
+  onDelete, 
+  onCustomize,
+  updateAvailabilityPending,
+  restaurantId,
+  isDialogOpen
+}: { 
+  item: MenuItem; 
+  currency: string;
+  onToggleAvailability: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onCustomize: () => void;
+  updateAvailabilityPending: boolean;
+  restaurantId: string | null;
+  isDialogOpen: boolean;
+}) {
+  const hasCustomizations = useItemCustomizations(restaurantId ?? "", item.id, isDialogOpen);
+  
+  return (
+    <MenuItemRow
+      item={item}
+      currency={currency}
+      onToggleAvailability={onToggleAvailability}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onCustomize={onCustomize}
+      updateAvailabilityPending={updateAvailabilityPending}
+      hasCustomizations={hasCustomizations}
+    />
+  );
+}
 
 export default function MenuPage() {
   const { restaurantId } = useAuth();
@@ -73,7 +427,14 @@ export default function MenuPage() {
     dietaryType: "" as "" | "Veg" | "Non-Veg"
   });
 
+  // Image crop states
+  const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
+  const [isCropDialogOpen, setIsCropDialogOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+
   const [extractionJobId, setExtractionJobId] = useState<string | null>(null);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
 
   const categoriesWithItems = useMemo(() => {
     if (!menuData) return [];
@@ -126,6 +487,18 @@ export default function MenuPage() {
       dietaryType: "" as "" | "Veg" | "Non-Veg"
     });
     toast.info("Item details prefilled!");
+  };
+
+  const handleImageUpload = (file: File, forEdit: boolean = false) => {
+    const url = URL.createObjectURL(file);
+    setTempImageUrl(url);
+    setIsEditMode(forEdit);
+    setIsCropDialogOpen(true);
+  };
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    setNewItem({ ...newItem, image: croppedImageUrl });
+    setTempImageUrl(null);
   };
 
   const handleToggleAvailability = async (item: MenuItem) => {
@@ -226,6 +599,11 @@ export default function MenuPage() {
     deleteCategory.mutate(categoryId);
   };
 
+  const handleCustomizationClose = () => {
+    setIsCustomizationOpen(false);
+    setCustomizingItem(null);
+  };
+
   const currency = restaurant?.currency || "₹";
 
   if (isLoading) {
@@ -240,12 +618,25 @@ export default function MenuPage() {
 
   return (
     <DashboardLayout>
+      {/* Image Crop Dialog */}
+      {tempImageUrl && (
+        <ImageCropDialog
+          imageUrl={tempImageUrl}
+          isOpen={isCropDialogOpen}
+          onClose={() => {
+            setIsCropDialogOpen(false);
+            setTempImageUrl(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
+
       {/* Header - Responsive */}
       <div className="flex flex-col gap-3 mb-4 sm:mb-6 md:mb-8">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold">Menu Builder</h2>
           <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-0.5">
-            Manage categories and dish availability
+            Manage categories, dishes, and customizations
           </p>
         </div>
 
@@ -438,97 +829,21 @@ export default function MenuPage() {
                   </div>
                 ) : (
                   category.items.map((item: MenuItem) => (
-                    <div key={item.id} className="p-2.5 sm:p-3 md:p-4 flex items-start gap-2 sm:gap-3 md:gap-4 hover:bg-muted/10 transition-colors group">
-                      {/* Item Image */}
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-md sm:rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Item Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-0.5 sm:gap-2 mb-1">
-                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <p className="font-semibold text-xs sm:text-sm md:text-base truncate">{item.name}</p>
-                            {item.dietaryTags?.map((tag, i) => {
-                              const isVeg = tag.toLowerCase() === "veg";
-                              const isNonVeg = tag.toLowerCase() === "non-veg";
-                              return (
-                                <Badge 
-                                  key={i}
-                                  className={cn(
-                                    "text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0 h-3 sm:h-3.5 md:h-4",
-                                    isVeg && "bg-green-100 text-green-800 border-green-200",
-                                    isNonVeg && "bg-red-100 text-red-800 border-red-200"
-                                  )}
-                                >
-                                  {tag}
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                          <p className="font-mono font-medium text-xs sm:text-sm md:text-base flex-shrink-0">{currency}{item.price}</p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
-                          <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground line-clamp-1 sm:line-clamp-none">
-                            {item.description || "No description"}
-                          </p>
-                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                            <span className="text-[9px] sm:text-[10px] md:text-xs font-bold text-muted-foreground whitespace-nowrap">In Stock</span>
-                            <Switch 
-                              checked={item.isAvailable} 
-                              onCheckedChange={() => handleToggleAvailability(item)}
-                              disabled={updateAvailability.isPending}
-                              className="scale-75 sm:scale-100"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Action Buttons - Mobile & Desktop */}
-                      <div className="flex flex-col sm:hidden gap-0.5 flex-shrink-0">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-6 text-[10px] px-1.5"
-                          onClick={() => handleOpenEditItem(item)}
-                        >
-                          Edit
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 text-[10px] px-1.5 text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteItem(item.id)}
-                        >
-                          Del
-                        </Button>
-                      </div>
-                      
-                      <div className="hidden sm:flex items-center gap-1.5 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-7 md:h-8 text-xs"
-                          onClick={() => handleOpenEditItem(item)}
-                        >
-                          Edit
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 md:h-8 md:w-8 text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteItem(item.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                        </Button>
-                      </div>
-                    </div>
+                    <MenuItemRowWithCustomizations
+                      key={item.id}
+                      item={item}
+                      currency={currency}
+                      onToggleAvailability={() => handleToggleAvailability(item)}
+                      onEdit={() => handleOpenEditItem(item)}
+                      onDelete={() => handleDeleteItem(item.id)}
+                      onCustomize={() => {
+                        setCustomizingItem(item);
+                        setIsCustomizationOpen(true);
+                      }}
+                      updateAvailabilityPending={updateAvailability.isPending}
+                      restaurantId={restaurantId}
+                      isDialogOpen={isCustomizationOpen && customizingItem?.id === item.id}
+                    />
                   ))
                 )}
                 
@@ -640,9 +955,7 @@ export default function MenuPage() {
                                     onChange={(e) => {
                                       const file = e.target.files?.[0];
                                       if (file) {
-                                        const url = URL.createObjectURL(file);
-                                        setNewItem({...newItem, image: url});
-                                        toast.success("Image selected!");
+                                        handleImageUpload(file, false);
                                       }
                                     }}
                                   />
@@ -763,9 +1076,7 @@ export default function MenuPage() {
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const url = URL.createObjectURL(file);
-                            setNewItem({...newItem, image: url});
-                            toast.success("Image selected!");
+                            handleImageUpload(file, true);
                           }
                         }}
                       />
@@ -817,6 +1128,20 @@ export default function MenuPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Menu Item Customization Dialog */}
+      {customizingItem && (
+        <MenuItemCustomization
+          restaurantId={restaurantId ?? "" as string}
+          menuItemId={customizingItem.id}
+          menuItemName={customizingItem.name}
+          basePrice={customizingItem.price}
+          currency={currency}
+          isOpen={isCustomizationOpen}
+          onClose={handleCustomizationClose}
+        />
+      )}
+
+      {/* AI Extraction Preview Dialog */}
       {extractionJobId && restaurantId && (
         <ExtractionPreview
           jobId={extractionJobId}

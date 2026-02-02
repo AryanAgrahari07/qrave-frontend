@@ -12,7 +12,7 @@ import { useExtractionJob, useConfirmExtraction } from "@/hooks/api";
 interface ExtractionPreviewProps {
   jobId: string;
   restaurantId: string;
-  restaurantSlug: string; // Add slug for cache invalidation
+  restaurantSlug: string | null; // Add slug for cache invalidation
   onConfirmed: () => void;
   onCancel: () => void;
 }

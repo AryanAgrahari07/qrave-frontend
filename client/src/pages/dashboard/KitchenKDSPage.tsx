@@ -10,6 +10,7 @@ import { useKitchenOrders, useKitchenStartOrder, useKitchenCompleteOrder, useRes
 import type { Order, OrderItem } from "@/types";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
 import { useLocation } from "wouter";
+import { CustomizedOrderItemDisplay, getCustomizationSummary } from "@/components/menu/Customizedorderitemdisplay";
 
 export default function KitchenKDSPage() {
   const [_, setLocation] = useLocation();
@@ -237,21 +238,80 @@ export default function KitchenKDSPage() {
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
                   <div className="space-y-2 min-h-[120px] max-h-[200px] overflow-y-auto">
-                    {order.items?.map((item: OrderItem, i: number) => (
-                      <div key={i} className="flex items-start gap-3 text-lg font-medium border-b border-slate-700/50 pb-2">
+                    {order.items?.map((item: OrderItem, i: number) => {
+                    // Check if item has customization
+                    const hasCustomization = !!(
+                      item.variantName ||
+                      (item.selectedModifiers && item.selectedModifiers.length > 0)
+                    );
+
+                    return (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "flex items-start gap-3 text-lg font-medium border-b border-slate-700/50 pb-2",
+                          hasCustomization && "bg-blue-900/20 p-2 rounded-lg border-blue-500/30"
+                        )}
+                      >
                         <span className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
                           {item.quantity}
                         </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate">{item.itemName}</p>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          {/* Item Name */}
+                          <p className="truncate font-bold">{item.itemName}</p>
+                          
+                          {/* Variant (Size/Portion) */}
+                          {item.variantName && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-bold">
+                                SIZE:
+                              </span>
+                              <span className="text-sm text-blue-200 font-semibold">
+                                {item.variantName}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Modifiers */}
+                          {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded font-bold">
+                                ADD-ONS:
+                              </span>
+                              <div className="pl-2 space-y-0.5">
+                                {item.selectedModifiers.map((mod, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 text-sm">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                                    <span className="text-yellow-200">{mod.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Special Notes */}
                           {item.notes && (
-                            <p className="text-sm text-yellow-400 mt-1">⚠️ {item.notes}</p>
+                            <p className="text-sm text-yellow-400 mt-1">
+                              <span className="bg-yellow-500/20 px-2 py-0.5 rounded font-bold text-xs">
+                                ⚠️ NOTE:
+                              </span>
+                              {" "}{item.notes}
+                            </p>
                           )}
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
-                  
+
+                  {order.items?.some((item: OrderItem) => 
+                    item.variantName || (item.selectedModifiers && item.selectedModifiers.length > 0)
+                  ) && (
+                    <Badge className="bg-blue-500/20 text-blue-300 border-blue-400/30">
+                      Customized
+                    </Badge>
+                  )}
+                
                   {order.notes && (
                     <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-200">
                       <strong>Note:</strong> {order.notes}

@@ -26,6 +26,9 @@ import type {
   ScanActivity,
   TableStats,
   DashboardSummary,
+  Modifier,
+  ModifierGroup,
+  Variant,
 } from "@/types";
 
 // === Extraction Types ===
@@ -104,14 +107,6 @@ const queryKeys = {
 };
 
 // === Restaurants ===
-// export function useRestaurants() {
-//   return useQuery({
-//     queryKey: queryKeys.restaurants,
-//     queryFn: () => api.get<{ restaurants: Restaurant[] }>("/api/restaurants").then((r) => r.restaurants),
-//     enabled: true,
-//   });
-// }
-
 export function useRestaurant(id: string | null) {
   return useQuery({
     queryKey: queryKeys.restaurant(id),
@@ -155,14 +150,13 @@ export function usePublicMenu(slug: string | null, dietaryFilter?: 'veg' | 'non-
       return api.get<MenuData>(url);
     },
     enabled: !!slug,
-    staleTime: 0, // Always consider stale for instant updates
-    refetchInterval: 5000, // Poll every 5 seconds for menu changes
+    staleTime: 0,
+    refetchInterval: 5000,
   });
 }
 
 // === Protected Menu ===
 export function useMenuCategories(restaurantId: string | null, slug: string | null) {
-  // Uses public endpoint but organizes data for admin use
   return useQuery({
     queryKey: ["menu-categories", restaurantId, slug],
     queryFn: async () => {
@@ -174,10 +168,10 @@ export function useMenuCategories(restaurantId: string | null, slug: string | nu
       };
     },
     enabled: !!slug,
-    staleTime: 0, // Always consider stale for instant updates
-    refetchInterval: 5000, // Poll every 5 seconds for menu changes
-    refetchOnMount: true, // Always refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    staleTime: 0,
+    refetchInterval: 10000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -187,13 +181,10 @@ export function useCreateCategory(restaurantId: string | null) {
     mutationFn: (data: { name: string; sortOrder?: number }) =>
       api.post<{ category: MenuCategory }>(`/api/menu/${restaurantId}/categories`, data).then((r) => r.category),
     onSuccess: () => {
-      // Invalidate ALL menu-related queries more aggressively
       qc.invalidateQueries({ queryKey: ["menu-public"] });
       qc.invalidateQueries({ queryKey: ["menu-categories"] });
-      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
-
       toast.success("Category created successfully");
     },
     onError: (e: Error) => toast.error(e.message || "Failed to create category"),
@@ -206,10 +197,8 @@ export function useUpdateCategory(restaurantId: string | null) {
     mutationFn: ({ categoryId, data }: { categoryId: string; data: Partial<MenuCategory> }) =>
       api.put<{ category: MenuCategory }>(`/api/menu/${restaurantId}/categories/${categoryId}`, data).then((r) => r.category),
     onSuccess: () => {
-      // Invalidate ALL menu-related queries more aggressively
       qc.invalidateQueries({ queryKey: ["menu-public"] });
       qc.invalidateQueries({ queryKey: ["menu-categories"] });
-      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
       toast.success("Category updated successfully");
@@ -226,7 +215,6 @@ export function useDeleteCategory(restaurantId: string | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["menu-public"] });
       qc.invalidateQueries({ queryKey: ["menu-categories"] });
-      // Force immediate refetch
       qc.refetchQueries({ queryKey: ["menu-public"], type: "active" });
       qc.refetchQueries({ queryKey: ["menu-categories"], type: "active" });
       toast.success("Category deleted successfully");
@@ -291,7 +279,7 @@ export function useUpdateMenuItemAvailability(restaurantId: string | null) {
   });
 }
 
-// === Orders ===
+// === Orders (with customization support) ===
 export function useOrders(restaurantId: string | null, opts?: { status?: string; orderType?: string; tableId?: string; limit?: number; offset?: number }) {
   const params = new URLSearchParams();
   if (opts?.status) params.set("status", opts.status);
@@ -306,7 +294,7 @@ export function useOrders(restaurantId: string | null, opts?: { status?: string;
     queryFn: () =>
       api.get<{ orders: Order[] }>(`/api/restaurants/${restaurantId}/orders${q ? `?${q}` : ""}`).then((r) => r.orders),
     enabled: !!restaurantId,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchInterval: 3000,
   });
 }
 
@@ -316,7 +304,7 @@ export function useKitchenOrders(restaurantId: string | null) {
     queryFn: () =>
       api.get<{ orders: Order[] }>(`/api/restaurants/${restaurantId}/orders/kitchen/active`).then((r) => r.orders),
     enabled: !!restaurantId,
-    refetchInterval: 2000, // Poll every 2 seconds for kitchen - fastest updates
+    refetchInterval: 2000,
   });
 }
 
@@ -326,7 +314,7 @@ export function useOrderStats(restaurantId: string | null) {
     queryFn: () =>
       api.get<{ stats: OrderStats }>(`/api/restaurants/${restaurantId}/orders/stats/summary`).then((r) => r.stats),
     enabled: !!restaurantId,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 }
 
@@ -399,7 +387,16 @@ export function useCancelOrder(restaurantId: string | null) {
 export function useAddOrderItems(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, items }: { orderId: string; items: { menuItemId: string; quantity: number; notes?: string }[] }) =>
+    mutationFn: ({ orderId, items }: { 
+      orderId: string; 
+      items: Array<{ 
+        menuItemId: string; 
+        quantity: number; 
+        notes?: string;
+        variantId?: string;
+        modifierIds?: string[];
+      }>
+    }) =>
       api.post<{ order: Order; newItems: unknown[] }>(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, { items }).then((r) => r.order),
     onSuccess: () => {
       if (restaurantId) {
@@ -428,14 +425,13 @@ export function useRemoveOrderItem(restaurantId: string | null) {
   });
 }
 
-// Get a single order by ID
 export function useOrder(restaurantId: string | null, orderId: string | null) {
   return useQuery({
     queryKey: ["order", restaurantId, orderId],
     queryFn: () =>
       api.get<{ order: Order }>(`/api/restaurants/${restaurantId}/orders/${orderId}`).then((r) => r.order),
     enabled: !!restaurantId && !!orderId,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchInterval: 3000,
   });
 }
 
@@ -478,7 +474,7 @@ export function useTables(restaurantId: string | null) {
     queryFn: () =>
       api.get<{ tables: Table[] }>(`/api/restaurants/${restaurantId}/tables`).then((r) => r.tables),
     enabled: !!restaurantId,
-    refetchInterval: 15000, // Poll every 15 seconds
+    refetchInterval: 15000,
   });
 }
 
@@ -735,7 +731,7 @@ export function useTransactions(restaurantId: string | null, opts?: { limit?: nu
     queryFn: () =>
       api.get<{ transactions: any[] }>(`/api/restaurants/${restaurantId}/transactions${q ? `?${q}` : ""}`).then((r) => r.transactions ?? []),
     enabled: !!restaurantId,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 5000,
   });
 }
 
@@ -759,7 +755,6 @@ export function useDashboardStats(restaurantId: string | null) {
   const { data: orderStats } = useOrderStats(restaurantId);
   const { data: queueStats } = useQueueStats(restaurantId);
 
-  // Combine stats from different sources
   const stats: DashboardStats | null = restaurantId
     ? {
         totalTables: tables?.length ?? 0,
@@ -800,7 +795,7 @@ export function useInventory(restaurantId: string | null) {
   });
 }
 
-// === Meta: Locations & Currencies (server-side search) ===
+// === Meta: Locations & Currencies ===
 export function useCountries(search: string) {
   return useQuery({
     queryKey: queryKeys.countries(search),
@@ -863,17 +858,17 @@ export function useAnalytics(restaurantId: string | null, timeframe: string = "d
       return response.analytics;
     },
     enabled: !!restaurantId,
-    staleTime: 60000, // 1 minute
-    refetchInterval: 60000, // Refetch every minute
+    staleTime: 60000,
+    refetchInterval: 60000,
   });
 }
 
-// Dashboard hooks
+// === Dashboard hooks ===
 export function useDashboardSummary(restaurantId: string | null) {
   return useQuery({
     queryKey: queryKeys.dashboard.summary(),
     queryFn: () => api.get<DashboardSummary>(`/api/dashboard/${restaurantId}/summary`),
-    staleTime: 30000, // 30 seconds
+    staleTime: 30000,
     refetchInterval: 30000,
   });
 }
@@ -923,11 +918,11 @@ export function useRecentOrders(restaurantId: string | null, limit: number = 5) 
   });
 }
 
-// === Menu Extraction ===
+// ============================================================================
+// MENU EXTRACTION
+// ============================================================================
 
-/**
- * Get extraction job status (with automatic polling)
- */export function useExtractionJob(
+export function useExtractionJob(
   restaurantId: string | null,
   jobId: string | null
 ) {
@@ -939,25 +934,16 @@ export function useRecentOrders(restaurantId: string | null, limit: number = 5) 
           `/api/menu/${restaurantId}/extract/${jobId}`
         )
         .then(r => r.job),
-
     enabled: !!restaurantId && !!jobId,
-
     refetchInterval: (query) => {
       const data = query.state.data;
-
       if (!data) return 2000;
-
       return data.status === 'PROCESSING' ? 2000 : false;
     },
-
     staleTime: 0,
   });
 }
 
-
-/**
- * Get extraction history for a restaurant
- */
 export function useExtractionJobs(restaurantId: string | null, limit?: number) {
   return useQuery({
     queryKey: queryKeys.extraction.jobs(restaurantId),
@@ -973,9 +959,6 @@ export function useExtractionJobs(restaurantId: string | null, limit?: number) {
   });
 }
 
-/**
- * Create extraction job
- */
 export function useCreateExtractionJob(restaurantId: string | null) {
   const qc = useQueryClient();
   
@@ -983,9 +966,7 @@ export function useCreateExtractionJob(restaurantId: string | null) {
     mutationFn: (data: { imageUrl: string; imageS3Key: string; imageSizeBytes: number }) =>
       api.post<{ job: ExtractionJob }>(`/api/menu/${restaurantId}/extract`, data).then(r => r.job),
     onSuccess: (job) => {
-      // Invalidate extraction jobs list
       qc.invalidateQueries({ queryKey: queryKeys.extraction.jobs(restaurantId) });
-      // Set the initial job data
       qc.setQueryData(queryKeys.extraction.job(restaurantId, job.id), { job });
       toast.success("Extraction started");
     },
@@ -993,9 +974,6 @@ export function useCreateExtractionJob(restaurantId: string | null) {
   });
 }
 
-/**
- * Confirm extraction and add items to menu
- */
 export function useConfirmExtraction(restaurantId: string | null, jobId: string | null, slug: string | null) {
   const qc = useQueryClient();
   
@@ -1016,10 +994,8 @@ export function useConfirmExtraction(restaurantId: string | null, jobId: string 
     onSuccess: async (data) => {
       toast.success(`🎉 Added ${data.itemsCreated} items to your menu!`);
       
-      // Wait for backend cache invalidation to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-       // Invalidate and refetch ALL menu-related queries
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["menu-public"] }),
         qc.invalidateQueries({ queryKey: ["menu-categories"] }),
@@ -1029,7 +1005,6 @@ export function useConfirmExtraction(restaurantId: string | null, jobId: string 
         qc.invalidateQueries({ queryKey: queryKeys.restaurantBySlug(slug) }),
       ]);
       
-      // Force immediate refetch
       await Promise.all([
         qc.refetchQueries({ queryKey: ["menu-public", slug], type: "active" }),
         qc.refetchQueries({ queryKey: ["menu-categories", restaurantId], type: "active" }),
@@ -1044,9 +1019,172 @@ export function useConfirmExtraction(restaurantId: string | null, jobId: string 
   });
 }
 
-/**
- * Get presigned URL for menu card upload
- */
+// ============================================================================
+// MENU CUSTOMIZATION - VARIANTS
+// ============================================================================
+
+export function useCreateVariant(restaurantId: string | null, menuItemId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { variantName: string; price: number; isDefault: boolean }) =>
+      api.post<{ variant: Variant }>(`/api/menu/${restaurantId}/items/${menuItemId}/variants`, data).then((r) => r.variant),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["variants", restaurantId, menuItemId] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      toast.success("Variant created successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to create variant"),
+  });
+}
+
+export function useUpdateVariant(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ variantId, data }: { variantId: string; data: { variantName: string; price: number; isDefault: boolean } }) =>
+      api.put<{ variant: Variant }>(`/api/menu/${restaurantId}/variants/${variantId}`, data).then((r) => r.variant),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["variants"] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      toast.success("Variant updated successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update variant"),
+  });
+}
+
+export function useDeleteVariant(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (variantId: string) =>
+      api.delete<{ deleted: boolean }>(`/api/menu/${restaurantId}/variants/${variantId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["variants"] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      toast.success("Variant deleted successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to delete variant"),
+  });
+}
+
+export function useVariantsForMenuItem(restaurantId: string | null, menuItemId: string | null) {
+  return useQuery({
+    queryKey: ["variants", restaurantId, menuItemId],
+    queryFn: () =>
+      api
+        .get<{ variants: Variant[] }>(
+          `/api/menu/${restaurantId}/items/${menuItemId}/variants`
+        )
+        .then((r) => r.variants),
+    enabled: !!restaurantId && !!menuItemId,
+  });
+}
+
+// ============================================================================
+// MENU CUSTOMIZATION - MODIFIER GROUPS
+// ============================================================================
+
+export function useCreateModifierGroup(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      name: string;
+      description?: string;
+      selectionType: 'SINGLE' | 'MULTIPLE';
+      minSelections: number;
+      maxSelections?: number;
+      isRequired: boolean;
+    }) =>
+      api.post<{ modifierGroup: ModifierGroup }>(`/api/menu/${restaurantId}/modifier-groups`, data).then((r) => r.modifierGroup),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["modifier-groups-for-item"] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      toast.success("Modifier group created successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to create modifier group"),
+  });
+}
+
+export function useLinkModifierGroup(restaurantId: string | null, menuItemId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      api.post<Record<string, unknown>>(`/api/menu/${restaurantId}/items/${menuItemId}/modifier-groups/${groupId}`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["modifier-groups-for-item", restaurantId, menuItemId] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      toast.success("Modifier group linked successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to link modifier group"),
+  });
+}
+
+export function useUnlinkModifierGroup(restaurantId: string | null, menuItemId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      api.delete<Record<string, unknown>>(`/api/menu/${restaurantId}/items/${menuItemId}/modifier-groups/${groupId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["modifier-groups-for-item", restaurantId, menuItemId] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      qc.invalidateQueries({ queryKey: ["menu-categories"] });
+      toast.success("Modifier group unlinked successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to unlink modifier group"),
+  });
+}
+
+export function useModifierGroupsForMenuItem(restaurantId: string | null, menuItemId: string | null) {
+  return useQuery({
+    queryKey: ["modifier-groups-for-item", restaurantId, menuItemId],
+    queryFn: () =>
+      api
+        .get<{ modifierGroups: ModifierGroup[] }>(
+          `/api/menu/${restaurantId}/items/${menuItemId}/modifier-groups`
+        )
+        .then((r) => r.modifierGroups),
+    enabled: !!restaurantId && !!menuItemId,
+  });
+}
+
+// ============================================================================
+// MENU CUSTOMIZATION - MODIFIERS
+// ============================================================================
+
+export function useCreateModifier(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, data }: { groupId: string; data: { name: string; price: number; isDefault: boolean } }) =>
+      api.post<{ modifier: Modifier }>(`/api/menu/${restaurantId}/modifier-groups/${groupId}/modifiers`, data).then((r) => r.modifier),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["modifier-groups-for-item"] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      toast.success("Modifier created successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to create modifier"),
+  });
+}
+
+export function useDeleteModifier(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (modifierId: string) =>
+      api.delete<{ deleted: boolean }>(`/api/menu/${restaurantId}/modifiers/${modifierId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["modifier-groups-for-item"] });
+      qc.invalidateQueries({ queryKey: ["menu-public"] });
+      toast.success("Modifier deleted successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to delete modifier"),
+  });
+}
+
+// ============================================================================
+// MENU CARD UPLOAD
+// ============================================================================
+
 export function useMenuCardUploadUrl(restaurantId: string | null) {
   return useMutation({
     mutationFn: (data?: { contentType?: string }) =>

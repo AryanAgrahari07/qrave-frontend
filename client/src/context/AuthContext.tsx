@@ -17,7 +17,7 @@ type AuthContextValue = AuthState & {
   login: (email: string, password: string) => Promise<{ user: User }>;
   staffLogin: (email: string, passcode: string) => Promise<{ user: User }>;
   logout: () => Promise<void>;
-  setRestaurantId: (id: string | null) => void;
+  setRestaurantId: (id: string | null ) => void;
   onboardingComplete: (data: { user: User; token: string; restaurant: { id: string } }) => void;
 };
 

@@ -79,6 +79,11 @@ export interface MenuItem {
   dietaryTags?: string[];
   sortOrder: number;
   createdAt: string;
+  updatedAt: string;
+  
+  // Customization options (loaded when needed)
+  variants?: Variant[];
+  modifierGroups?: ModifierGroup[];
 }
 
 export interface MenuData {
@@ -117,6 +122,7 @@ export type OrderType = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
 
 export interface OrderItem {
   id: string;
+  restaurantId: string;
   orderId: string;
   menuItemId: string;
   itemName: string;
@@ -125,6 +131,17 @@ export interface OrderItem {
   totalPrice: string;
   notes?: string;
   createdAt: string;
+  selectedVariantId?: string | null;
+  variantName?: string | null;
+  variantPrice?: string | null;
+  selectedModifiers?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    groupId?: string;
+    groupName?: string;
+  }>;
+  customizationAmount?: string | null;
 }
 
 export interface Order {
@@ -174,11 +191,14 @@ export interface CreateOrderInput {
   guestName?: string;
   guestPhone?: string;
   orderType?: OrderType;
-  items: {
+  items: Array<{
     menuItemId: string;
     quantity: number;
     notes?: string;
-  }[];
+    // Customization fields
+    variantId?: string;
+    modifierIds?: string[];
+  }>;
   notes?: string;
   assignedWaiterId?: string; // Optional waiter assignment when admin places order manually
 }
@@ -363,4 +383,47 @@ export interface DashboardSummary {
   queueStats: QueueStats;
   scanActivity: ScanActivity[];
   recentOrders: RecentOrder[];
+}
+
+
+
+export interface Variant {
+  id: string;
+  menuItemId: string;
+  restaurantId: string;
+  variantName: string;
+  price: number ;
+  isDefault: boolean;
+  isAvailable: boolean;
+  sortOrder?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Modifier {
+  id: string;
+  modifierGroupId: string;
+  restaurantId: string;
+  name: string;
+  price: number;
+  isDefault: boolean;
+  isAvailable: boolean;
+  sortOrder?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModifierGroup {
+  id: string;
+  restaurantId: string;
+  name: string;
+  description?: string;
+  selectionType: 'SINGLE' | 'MULTIPLE';
+  minSelections: number;
+  maxSelections?: number;
+  isRequired: boolean;
+  sortOrder?: number;
+  createdAt: string;
+  updatedAt: string;
+  modifiers: Modifier[];
 }

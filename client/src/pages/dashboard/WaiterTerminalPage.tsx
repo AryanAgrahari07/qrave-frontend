@@ -37,6 +37,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
+import { ItemCustomizationDialog } from "@/components/menu/Itemcustomizationdialog";
+import { CustomizedOrderItemDisplay } from "@/components/menu/Customizedorderitemdisplay";
+import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 
 export default function WaiterTerminalPage() {
   const [_, setLocation] = useLocation();
@@ -57,7 +60,13 @@ export default function WaiterTerminalPage() {
 
   const [language, setLanguage] = useState<"en" | "es" | "hi">("en");
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
-  const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
+  const [cart, setCart] = useState<Array<{
+     item: MenuItem; 
+     quantity: number
+     variantId?: string; 
+      modifierIds?: string[];
+  }>>([]);
+
   const [selectedGuestForSeating, setSelectedGuestForSeating] = useState<QueueEntry | null>(null);
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState<"floor" | "orders">("floor");
@@ -66,6 +75,9 @@ export default function WaiterTerminalPage() {
   // Track served orders for notifications
   const servedOrdersRef = useRef<Set<string>>(new Set());
   const [notifications, setNotifications] = useState<{ id: string; message: string; time: Date }[]>([]);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [isCustomizing, setIsCustomizing] = useState(false);
+
 
   // Check for newly ready orders and notify
   useEffect(() => {
@@ -189,7 +201,18 @@ export default function WaiterTerminalPage() {
     updateTableStatus.mutate({ tableId: table.id, status: newStatus });
   };
 
-  const addToCart = (item: MenuItem) => {
+ const addToCart = (item: MenuItem) => {
+  // Check if item has customization options
+  const hasCustomization = 
+    (item.variants && item.variants.length > 0) ||
+    (item.modifierGroups && item.modifierGroups.length > 0);
+
+  if (hasCustomization) {
+    // Open customization dialog
+    setIsCustomizing(true);
+    setCustomizingItem(item);
+  } else {
+    // Add directly to cart (existing behavior)
     setCart(prev => {
       const existing = prev.find(i => i.item.id === item.id);
       if (existing) {
@@ -197,40 +220,68 @@ export default function WaiterTerminalPage() {
       }
       return [...prev, { item, quantity: 1 }];
     });
+  }
+};
+
+const handleAddCustomizedItem = (selection: {
+  menuItemId: string;
+  quantity: number;
+  variantId?: string;
+  modifierIds?: string[];
+}) => {
+  if (!customizingItem) return;
+
+  setCart(prev => [
+    ...prev,
+    {
+      item: customizingItem,
+      quantity: selection.quantity,
+      variantId: selection.variantId,
+      modifierIds: selection.modifierIds,
+    }
+  ]);
+
+  setCustomizingItem(null);
+  setIsCustomizing(false);
+
+};
+
+  const removeFromCart = (index: number) => {
+   setCart(prev => prev.filter((_, i) => i !== index));
   };
 
-  const removeFromCart = (itemId: string) => {
-    setCart(prev => prev.filter(i => i.item.id !== itemId));
-  };
 
-  const updateQuantity = (itemId: string, delta: number) => {
-    setCart(prev => prev.map(i => {
-      if (i.item.id === itemId) {
-        const newQty = Math.max(1, i.quantity + delta);
-        return { ...i, quantity: newQty };
+  const updateQuantity = (index: number, delta: number) => {
+    setCart(prev => prev.map((item, i) => {
+      if (i === index) {
+        const newQty = Math.max(1, item.quantity + delta);
+        return { ...item, quantity: newQty };
       }
-      return i;
+      return item;
     }));
   };
 
-  const submitOrder = async () => {
-    if (!selectedTableForOrder || cart.length === 0) return;
-    
-    try {
-      await createOrder.mutateAsync({
-        tableId: selectedTableForOrder.id,
-        orderType: "DINE_IN",
-        items: cart.map(c => ({
-          menuItemId: c.item.id,
-          quantity: c.quantity,
-        })),
-      });
-      setSelectedTableForOrder(null);
-      setCart([]);
-    } catch {
-      // Error handled by mutation
-    }
-  };
+
+const submitOrder = async () => {
+  if (!selectedTableForOrder || cart.length === 0) return;
+  
+  try {
+    await createOrder.mutateAsync({
+      tableId: selectedTableForOrder.id,
+      orderType: "DINE_IN",
+      items: cart.map(c => ({
+        menuItemId: c.item.id,
+        quantity: c.quantity,
+        variantId: c.variantId,        // Include variant
+        modifierIds: c.modifierIds,    // Include modifiers
+      })),
+    });
+    setSelectedTableForOrder(null);
+    setCart([]);
+  } catch {
+    // Error handled by mutation
+  }
+};
 
   const handleAddItemsToOrder = async () => {
     if (!selectedOrderForEdit || cart.length === 0) return;
@@ -241,13 +292,13 @@ export default function WaiterTerminalPage() {
         items: cart.map(c => ({
           menuItemId: c.item.id,
           quantity: c.quantity,
+          variantId: c.variantId,
+          modifierIds: c.modifierIds,
         })),
       });
       setCart([]);
-      // Refresh the order
       refetchOrders();
     } catch {
-      // Error handled by mutation
     }
   };
 
@@ -304,7 +355,30 @@ export default function WaiterTerminalPage() {
     }
   };
 
-  const cartTotal = cart.reduce((sum, c) => sum + (c.item.price * c.quantity), 0);
+  const cartTotal = cart.reduce((sum, cartItem) => {
+    const { item, quantity, variantId, modifierIds } = cartItem;
+    
+    let itemPrice = parseFloat(item.price as any);
+    if (variantId) {
+      const variant = item.variants?.find(v => v.id === variantId);
+      if (variant) {
+        itemPrice = parseFloat(variant.price as any);
+      }
+    }
+    
+    let modifiersTotal = 0;
+    if (modifierIds && modifierIds.length > 0) {
+      item.modifierGroups?.forEach(group => {
+        group.modifiers?.forEach(mod => {
+          if (modifierIds.includes(mod.id)) {
+            modifiersTotal += parseFloat(mod.price as any);
+          }
+        });
+      });
+    }
+    
+    return sum + ((itemPrice + modifiersTotal) * quantity);
+  }, 0);
   const currency = restaurant?.currency || "₹";
 
   // Organize menu items by category and apply dietary filter
@@ -597,22 +671,14 @@ export default function WaiterTerminalPage() {
                     <CardContent className="p-4 space-y-3">
                       {/* Order Items */}
                       <div className="space-y-1 max-h-32 overflow-y-auto">
-                        {order.items?.map((item: OrderItem) => (
-                          <div key={item.id} className="flex justify-between items-center text-sm group">
-                            <span>{item.quantity}x {item.itemName}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-500">{currency}{parseFloat(item.totalPrice).toFixed(0)}</span>
-                              {order.status === "PENDING" && (
-                                <button 
-                                  onClick={() => handleRemoveItem(order.id, item.id)}
-                                  className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                        {order.items?.map((item) => (
+                            <CustomizedOrderItemDisplay
+                                key={item.id}
+                                item={item as any}
+                                currency={currency}
+                                compact={true}
+                              />
+                            ))}
                       </div>
 
                       {/* Total */}
@@ -663,19 +729,30 @@ export default function WaiterTerminalPage() {
 
       {/* New Order Dialog */}
       <Dialog open={!!selectedTableForOrder} onOpenChange={() => { setSelectedTableForOrder(null); setCart([]); setDietaryFilter('any'); }}>
-        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0">
-          <DialogHeader className="p-4 border-b bg-slate-50">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+
+          {customizingItem ? (
+             <ItemCustomizationContent
+               menuItem={customizingItem}
+               currency={currency}
+               onClose={() => setCustomizingItem(null)}
+               onAddToCart={handleAddCustomizedItem}
+              />
+            ) : (
+            <>
+          <DialogHeader className="p-2 border-b bg-slate-50">
             <DialogTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-primary" />
+              <ShoppingCart className="w-3 h-3 text-primary" />
               {t.order} - Table {selectedTableForOrder?.tableNumber}
             </DialogTitle>
           </DialogHeader>
+           </> )}
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Menu Section */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-white">
               {/* Dietary Filter Buttons */}
-              <div className="flex gap-2 mb-4 sticky top-0 bg-white pb-2 z-10 border-b">
+              <div className="flex gap-2 mb-1 sticky top-0 bg-white pb-2 z-10 border-b">
                 <button
                   onClick={() => setDietaryFilter('any')}
                   className={cn(
@@ -727,6 +804,14 @@ export default function WaiterTerminalPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 mb-0.5">
                               <p className="font-bold text-sm truncate">{item.name}</p>
+
+                               {/* Show customization badge */}
+                              {((item.variants?.length || 0) > 0 || (item.modifierGroups?.length || 0) > 0) && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px] px-1 py-0 h-3.5">
+                                  Customize
+                                </Badge>
+                              )}
+
                               {vegTag && (
                                 <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1 py-0 h-3.5 flex-shrink-0">
                                   V
@@ -762,26 +847,77 @@ export default function WaiterTerminalPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {cart.map(({ item, quantity }) => (
-                      <div key={item.id} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-xs truncate">{item.name}</p>
-                          <p className="text-xs text-slate-500">{currency}{item.price}</p>
+                    {cart.map((cartItem, index) => {
+                      const { item, quantity, variantId, modifierIds } = cartItem;
+                      
+                      const selectedVariant = item.variants?.find(v => v.id === variantId);
+                      const selectedModifiers = item.modifierGroups?.flatMap(g => 
+                        g.modifiers?.filter(m => modifierIds?.includes(m.id)) || []
+                      ) || [];
+
+                      let displayPrice = parseFloat(item.price as any);
+                      if (selectedVariant) {
+                        displayPrice = parseFloat(selectedVariant.price as any);
+                      }
+                      let modifiersPrice = 0;
+                      selectedModifiers.forEach(mod => {
+                        modifiersPrice += parseFloat(mod.price as any);
+                      });
+                      const totalItemPrice = displayPrice + modifiersPrice;
+
+                      return (
+                        <div key={index} className="flex items-center justify-between group p-2 rounded-lg hover:bg-muted/40 transition-colors">
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-sm font-bold truncate">{item.name}</span>
+                            
+                            {selectedVariant && (
+                              <span className="text-[10px] text-blue-600 font-medium">
+                                {selectedVariant.variantName}
+                              </span>
+                            )}
+                            
+                            {selectedModifiers.length > 0 && (
+                              <span className="text-[10px] text-amber-600">
+                                + {selectedModifiers.map(m => m.name).join(", ")}
+                              </span>
+                            )}
+                            
+                            <span className="text-xs text-muted-foreground">
+                              {currency}{totalItemPrice.toFixed(2)} x {quantity} = {currency}{(totalItemPrice * quantity).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
+                              onClick={() => updateQuantity(index, -1)}
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="text-sm font-bold min-w-[24px] text-center bg-primary/10 px-2 py-1 rounded">
+                              {quantity}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
+                              onClick={() => updateQuantity(index, 1)}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive text-destructive"
+                              onClick={() => removeFromCart(index)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, -1)}>
-                            <Minus className="w-3 h-3" />
-                          </Button>
-                          <span className="w-5 text-center text-xs font-bold">{quantity}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, 1)}>
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeFromCart(item.id)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
@@ -807,6 +943,16 @@ export default function WaiterTerminalPage() {
       {/* Add Items to Existing Order Dialog */}
       <Dialog open={!!selectedOrderForEdit} onOpenChange={() => { setSelectedOrderForEdit(null); setCart([]); setDietaryFilter('any'); }}>
         <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0">
+
+          {customizingItem ? (
+             <ItemCustomizationContent
+               menuItem={customizingItem}
+               currency={currency}
+               onClose={() => setCustomizingItem(null)}
+               onAddToCart={handleAddCustomizedItem}
+              />
+            ) : (
+            <>
           <DialogHeader className="p-4 border-b bg-slate-50">
             <DialogTitle className="flex items-center gap-2">
               <Edit2 className="w-5 h-5 text-primary" />
@@ -816,6 +962,7 @@ export default function WaiterTerminalPage() {
               Current items: {selectedOrderForEdit?.items?.map(i => `${i.quantity}x ${i.itemName}`).join(", ")}
             </DialogDescription>
           </DialogHeader>
+           </> )}
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Menu Section */}
@@ -903,31 +1050,82 @@ export default function WaiterTerminalPage() {
               <ScrollArea className="flex-1 p-3">
                 {cart.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
-                    <Plus className="w-6 h-6 mx-auto mb-1 opacity-20" />
-                    <p>Select items to add</p>
+                    <ShoppingCart className="w-6 h-6 mx-auto mb-1 opacity-20" />
+                    <p>No items added</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {cart.map(({ item, quantity }) => (
-                      <div key={item.id} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-xs truncate">{item.name}</p>
-                          <p className="text-xs text-slate-500">{currency}{item.price}</p>
+                    {cart.map((cartItem, index) => {
+                      const { item, quantity, variantId, modifierIds } = cartItem;
+                      
+                      const selectedVariant = item.variants?.find(v => v.id === variantId);
+                      const selectedModifiers = item.modifierGroups?.flatMap(g => 
+                        g.modifiers?.filter(m => modifierIds?.includes(m.id)) || []
+                      ) || [];
+
+                      let displayPrice = parseFloat(item.price as any);
+                      if (selectedVariant) {
+                        displayPrice = parseFloat(selectedVariant.price as any);
+                      }
+                      let modifiersPrice = 0;
+                      selectedModifiers.forEach(mod => {
+                        modifiersPrice += parseFloat(mod.price as any);
+                      });
+                      const totalItemPrice = displayPrice + modifiersPrice;
+
+                      return (
+                        <div key={index} className="flex items-center justify-between group p-2 rounded-lg hover:bg-muted/40 transition-colors">
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-sm font-bold truncate">{item.name}</span>
+                            
+                            {selectedVariant && (
+                              <span className="text-[10px] text-blue-600 font-medium">
+                                {selectedVariant.variantName}
+                              </span>
+                            )}
+                            
+                            {selectedModifiers.length > 0 && (
+                              <span className="text-[10px] text-amber-600">
+                                + {selectedModifiers.map(m => m.name).join(", ")}
+                              </span>
+                            )}
+                            
+                            <span className="text-xs text-muted-foreground">
+                              {currency}{totalItemPrice.toFixed(2)} x {quantity} = {currency}{(totalItemPrice * quantity).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
+                              onClick={() => updateQuantity(index, -1)}
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="text-sm font-bold min-w-[24px] text-center bg-primary/10 px-2 py-1 rounded">
+                              {quantity}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
+                              onClick={() => updateQuantity(index, 1)}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive text-destructive"
+                              onClick={() => removeFromCart(index)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, -1)}>
-                            <Minus className="w-3 h-3" />
-                          </Button>
-                          <span className="w-5 text-center text-xs font-bold">{quantity}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, 1)}>
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeFromCart(item.id)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
