@@ -56,8 +56,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-muted/20 font-sans flex">
-      {/* Desktop Sidebar */}
-      <aside className="w-64 bg-background border-r border-border fixed h-full z-40 hidden md:flex flex-col">
+      {/* Desktop Sidebar - Only visible on large screens (1024px+) */}
+      <aside className="w-64 bg-background border-r border-border fixed h-full z-40 hidden lg:flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-border">
           <Link href="/dashboard">
             <div className="text-xl font-heading font-bold tracking-tight flex items-center gap-2 cursor-pointer">
@@ -111,18 +111,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Mobile Menu Overlay */}
+      {/* Mobile/Tablet Menu Overlay - visible below 1024px */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
-      {/* Mobile Sidebar */}
+      {/* Mobile/Tablet Sidebar - visible below 1024px */}
       <aside 
         className={cn(
-          "w-64 bg-background border-r border-border fixed h-full z-50 flex flex-col md:hidden transition-transform duration-300 ease-in-out",
+          "w-64 bg-background border-r border-border fixed h-full z-50 flex flex-col lg:hidden transition-transform duration-300 ease-in-out",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -139,7 +139,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             variant="ghost" 
             size="icon"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -195,14 +194,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 min-h-screen flex flex-col">
+      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col">
         <header className="h-16 bg-background border-b border-border sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button 
               variant="ghost" 
               size="icon"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden"
+              className="lg:hidden"
             >
               <Menu className="w-5 h-5" />
             </Button>

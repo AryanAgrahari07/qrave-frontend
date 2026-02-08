@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Search, Globe, Loader2, ChevronRight, Plus, X } from "lucide-react";
+import { Search, Globe, Loader2, ChevronRight, Plus, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useParams } from "wouter";
 import { usePublicMenu } from "@/hooks/api";
@@ -113,7 +113,7 @@ function ItemCustomizationDialog({
                 {t.variants}
               </h3>
               <div className="space-y-2">
-                {item.variants.map((variant) => (
+                {item.variants?.map((variant) => (
                   <div 
                     key={variant.id} 
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors border border-border/50"
@@ -140,7 +140,7 @@ function ItemCustomizationDialog({
           {/* Modifiers Section */}
           {hasModifiers && (
             <div className="space-y-4">
-              {item.modifierGroups.map((group) => (
+              {item.modifierGroups?.map((group) => (
                 <div key={group.id}>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide flex items-center gap-1">
@@ -158,7 +158,7 @@ function ItemCustomizationDialog({
                     )}
                   </div>
                   <div className="space-y-2">
-                    {group.modifiers.map((modifier) => (
+                    {group.modifiers?.map((modifier) => (
                       <div
                         key={modifier.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors border border-border/50"
@@ -288,6 +288,8 @@ export default function PublicMenuPage() {
   const [dietaryFilter, setDietaryFilter] = useState<'veg' | 'non-veg' | 'any'>('any');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [customizationDialogOpen, setCustomizationDialogOpen] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const hasInitializedExpansion = useRef(false);
 
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   const { data: menuData, isLoading, error } = usePublicMenu(slug ?? null, dietaryFilter);
@@ -303,6 +305,14 @@ export default function PublicMenuPage() {
       }))
       .filter(cat => cat.items.length > 0); // Only show categories with items
   }, [menuData]);
+
+  // Initialize all categories as expanded by default (only once on mount)
+  useEffect(() => {
+    if (categoriesWithItems.length > 0 && !hasInitializedExpansion.current) {
+      setExpandedCategories(new Set(categoriesWithItems.map(cat => cat.id)));
+      hasInitializedExpansion.current = true;
+    }
+  }, [categoriesWithItems]);
 
   // Filter by search
   const filteredCategories = useMemo(() => {
@@ -329,6 +339,18 @@ export default function PublicMenuPage() {
   const handleOpenCustomization = (item: MenuItem) => {
     setSelectedItem(item);
     setCustomizationDialogOpen(true);
+  };
+
+  const toggleCategoryExpand = (categoryId: string) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
   };
 
   const restaurant = menuData?.restaurant;
@@ -459,35 +481,52 @@ export default function PublicMenuPage() {
             <p className="text-sm text-muted-foreground">No items found</p>
           </div>
         ) : (
-          filteredCategories.map((category, index) => (
-            <div key={category.id}>
-              {/* Category header - NO GAP, sticks right below filter buttons */}
-              <div className={cn(
-                "flex items-center justify-between sticky z-30 -mx-4 px-4 py-3",
-                "bg-background border-b border-border/40",
-                scrolled ? "top-[85px]" : "top-[97px]"
-              )}>
-                <h2 className="text-base sm:text-lg font-semibold">
-                  {category.name}
-                </h2>
-                <span className="text-[10px] sm:text-xs text-muted-foreground font-medium">
-                  {category.items.length} items
-                </span>
+          filteredCategories.map((category, index) => {
+            const isExpanded = expandedCategories.has(category.id);
+            
+            return (
+              <div key={category.id}>
+                {/* Category header - Collapsible */}
+                <button
+                  onClick={() => toggleCategoryExpand(category.id)}
+                  className={cn(
+                    "w-[calc(100%+2rem)] flex items-center justify-between sticky z-30 -mx-4 px-4 py-3",
+                    "bg-background border-b border-border/40 hover:bg-muted/20 transition-colors",
+                    scrolled ? "top-[85px]" : "top-[97px]"
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground transition-transform flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground transition-transform flex-shrink-0" />
+                    )}
+                    <h2 className="text-sm sm:text-base font-bold truncate">
+                      {category.name}
+                    </h2>
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground font-medium whitespace-nowrap ml-2">
+                    {category.items.length} items
+                  </span>
+                </button>
+                
+                {/* Items - Only shown when expanded */}
+                {isExpanded && (
+                  <div className="py-4 space-y-5 sm:space-y-6">
+                    {category.items.map((item: MenuItem) => (
+                      <MenuItemCard
+                        key={item.id}
+                        item={item}
+                        currency={currency}
+                        t={t}
+                        onOpenCustomization={handleOpenCustomization}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              
-              <div className="py-4 space-y-5 sm:space-y-6">
-                {category.items.map((item: MenuItem) => (
-                  <MenuItemCard
-                    key={item.id}
-                    item={item}
-                    currency={currency}
-                    t={t}
-                    onOpenCustomization={handleOpenCustomization}
-                  />
-                ))}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </main>
 

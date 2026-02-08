@@ -2,8 +2,25 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2, X, Upload, Search, Sparkles, Loader2, Settings } from "lucide-react";
+import { Plus, GripVertical, Image as ImageIcon, Pencil, Trash2, X, Upload, Search, Sparkles, Loader2, Settings, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { toast } from "sonner";
 import {
   Dialog,
@@ -22,6 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
 import { useRestaurant, useMenuCategories, useCreateCategory, useUpdateCategory, useCreateMenuItem, useUpdateMenuItem, useUpdateMenuItemAvailability, useDeleteMenuItem, useDeleteCategory, useVariantsForMenuItem, useModifierGroupsForMenuItem } from "@/hooks/api";
+import { api } from "@/lib/api";
 import type { MenuCategory, MenuItem } from "@/types";
 import { MenuCardUploader } from "@/components/menu/MenuCardUploader";
 import { ExtractionPreview } from "@/components/menu/ExtractionPreview";
@@ -394,6 +412,153 @@ function MenuItemRowWithCustomizations({
   );
 }
 
+// Sortable Category Component
+function SortableCategory({
+  category,
+  currency,
+  isExpanded,
+  onToggleExpand,
+  onEdit,
+  onDelete,
+  onAddItem,
+  onToggleAvailability,
+  onEditItem,
+  onDeleteItem,
+  onCustomizeItem,
+  updateAvailabilityPending,
+  restaurantId,
+  customizingItemId,
+  dietaryFilter,
+}: {
+  category: MenuCategory & { items: MenuItem[] };
+  currency: string;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAddItem: () => void;
+  onToggleAvailability: (item: MenuItem) => void;
+  onEditItem: (item: MenuItem) => void;
+  onDeleteItem: (itemId: string) => void;
+  onCustomizeItem: (item: MenuItem) => void;
+  updateAvailabilityPending: boolean;
+  restaurantId: string | null;
+  customizingItemId: string | null;
+  dietaryFilter: 'any' | 'veg' | 'non-veg';
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-background border border-border rounded-lg sm:rounded-xl shadow-sm overflow-hidden"
+    >
+      {/* Category Header - Responsive */}
+      <div className="p-2.5 sm:p-3 md:p-4 border-b bg-muted/30 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 min-w-0 flex-1">
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground flex-shrink-0" />
+          </div>
+          <button
+            onClick={onToggleExpand}
+            className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 hover:opacity-70 transition-opacity"
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground flex-shrink-0" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground flex-shrink-0" />
+            )}
+            <h3 className="font-heading font-bold text-sm sm:text-base md:text-lg truncate">
+              {category.name}
+            </h3>
+            <span className="bg-primary/10 text-primary text-[10px] sm:text-xs px-1 sm:px-1.5 md:px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+              {category.items.length}
+            </span>
+          </button>
+        </div>
+        <div className="flex gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 hover:bg-primary/10"
+            onClick={onEdit}
+          >
+            <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-destructive hover:bg-destructive/10"
+            onClick={onDelete}
+          >
+            <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Items List - Only shown when expanded */}
+      {isExpanded && (
+        <div className="divide-y divide-border">
+          {category.items.length === 0 ? (
+            <div className="p-6 sm:p-8 text-center">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
+                {dietaryFilter !== 'any'
+                  ? `No ${dietaryFilter === 'veg' ? 'Veg' : 'Non-Veg'} items`
+                  : 'No items yet'}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={onAddItem}
+              >
+                <Plus className="w-3 h-3 mr-1.5" /> Add Item
+              </Button>
+            </div>
+          ) : (
+            <>
+              {category.items.map((item: MenuItem) => (
+                <MenuItemRowWithCustomizations
+                  key={item.id}
+                  item={item}
+                  currency={currency}
+                  onToggleAvailability={() => onToggleAvailability(item)}
+                  onEdit={() => onEditItem(item)}
+                  onDelete={() => onDeleteItem(item.id)}
+                  onCustomize={() => onCustomizeItem(item)}
+                  updateAvailabilityPending={updateAvailabilityPending}
+                  restaurantId={restaurantId}
+                  isDialogOpen={customizingItemId === item.id}
+                />
+              ))}
+              <div
+                className="p-2 sm:p-2.5 md:p-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer text-center text-xs sm:text-sm font-medium text-primary border-t border-dashed"
+                onClick={onAddItem}
+              >
+                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 inline mr-1 sm:mr-2" /> Add Item
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MenuPage() {
   const { restaurantId } = useAuth();
   const { data: restaurant } = useRestaurant(restaurantId);
@@ -435,6 +600,16 @@ export default function MenuPage() {
   const [extractionJobId, setExtractionJobId] = useState<string | null>(null);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [orderedCategoryIds, setOrderedCategoryIds] = useState<string[]>([]);
+
+  // Setup drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const categoriesWithItems = useMemo(() => {
     if (!menuData) return [];
@@ -473,6 +648,22 @@ export default function MenuPage() {
 
     return mappedCategories;
   }, [menuData, dietaryFilter]);
+
+  // Initialize ordered category IDs when data loads
+  useEffect(() => {
+    if (categoriesWithItems.length > 0 && orderedCategoryIds.length === 0) {
+      setOrderedCategoryIds(categoriesWithItems.map(cat => cat.id));
+    }
+  }, [categoriesWithItems, orderedCategoryIds.length]);
+
+  // Get categories in display order
+  const orderedCategories = useMemo(() => {
+    if (orderedCategoryIds.length === 0) return categoriesWithItems;
+    
+    return orderedCategoryIds
+      .map(id => categoriesWithItems.find(cat => cat.id === id))
+      .filter((cat): cat is MenuCategory & { items: MenuItem[] } => cat !== undefined);
+  }, [orderedCategoryIds, categoriesWithItems]);
 
   const filteredPrefilled = PREFILLED_ITEMS.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -604,6 +795,57 @@ export default function MenuPage() {
     setCustomizingItem(null);
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setOrderedCategoryIds((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        
+        // Update sort order in the backend (silently, without individual toasts)
+        updateCategoryOrder(newOrder);
+        
+        return newOrder;
+      });
+    }
+  };
+
+  const updateCategoryOrder = async (orderedIds: string[]) => {
+    if (!restaurantId) return;
+    
+    try {
+      // Update each category with its new sort order
+      const updatePromises = orderedIds.map((categoryId, index) => {
+        // Use the API directly to avoid multiple toast notifications
+        return api.put(`/api/menu/${restaurantId}/categories/${categoryId}`, { 
+          sortOrder: index 
+        });
+      });
+      
+      await Promise.all(updatePromises);
+      
+      // Show single success toast after all updates complete
+      toast.success("Category order saved");
+    } catch (error) {
+      console.error("Failed to update category order:", error);
+      toast.error("Failed to save category order");
+    }
+  };
+
+  const toggleCategoryExpand = (categoryId: string) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
   const currency = restaurant?.currency || "₹";
 
   if (isLoading) {
@@ -632,7 +874,7 @@ export default function MenuPage() {
       )}
 
       {/* Header - Responsive */}
-      <div className="flex flex-col gap-3 mb-4 sm:mb-6 md:mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6 md:mb-8">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold">Menu Builder</h2>
           <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-0.5">
@@ -640,8 +882,8 @@ export default function MenuPage() {
           </p>
         </div>
 
-        {/* Action Buttons - Stack on mobile */}
-        <div className="flex flex-col xs:flex-row gap-2">
+        {/* Action Buttons - Right aligned on desktop */}
+        <div className="flex gap-2 flex-shrink-0">
           <MenuCardUploader
             restaurantId={restaurantId}
             onExtractionComplete={(jobId) => setExtractionJobId(jobId)}
@@ -652,8 +894,8 @@ export default function MenuPage() {
             if (!open) setNewCategoryName("");
           }}>
             <DialogTrigger asChild>
-              <Button className="shadow-lg shadow-primary/20 w-full xs:w-auto text-sm">
-                <Plus className="w-4 h-4 mr-1.5" /> Add Category
+              <Button size="sm" className="shadow-lg shadow-primary/20 text-xs sm:text-sm h-8 sm:h-9">
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5" /> Add Category
               </Button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100vw-2rem)] max-w-md mx-4">
@@ -758,257 +1000,212 @@ export default function MenuPage() {
       </div>
 
       {/* Categories List */}
-      <div className="space-y-4 sm:space-y-6">
-        {!menuData || menuData.categories.length === 0 ? (
-          <div className="text-center py-12 sm:py-16 md:py-20 border-2 border-dashed rounded-xl">
-            <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground/30" />
-            <p className="text-sm sm:text-base md:text-lg font-medium text-muted-foreground">No menu categories yet</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">Start by adding your first category</p>
-            <Button onClick={() => setIsCategoryDialogOpen(true)} size="sm" className="text-xs sm:text-sm">
-              <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" /> Add Category
-            </Button>
-          </div>
-        ) : categoriesWithItems.length === 0 && dietaryFilter === 'any' ? (
-          <div className="text-center py-12 sm:py-16 md:py-20 border-2 border-dashed rounded-xl">
-            <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground/30" />
-            <p className="text-sm sm:text-base md:text-lg font-medium text-muted-foreground">No items in any category</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">Add items to your categories to get started</p>
-          </div>
-        ) : (
-          categoriesWithItems.map((category) => (
-            <div key={category.id} className="bg-background border border-border rounded-lg sm:rounded-xl shadow-sm overflow-hidden">
-              {/* Category Header - Responsive */}
-              <div className="p-2.5 sm:p-3 md:p-4 border-b bg-muted/30 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 min-w-0 flex-1">
-                  <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground cursor-move flex-shrink-0" />
-                  <h3 className="font-heading font-bold text-sm sm:text-base md:text-lg truncate">{category.name}</h3>
-                  <span className="bg-primary/10 text-primary text-[10px] sm:text-xs px-1 sm:px-1.5 md:px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-                    {category.items.length}
-                  </span>
-                </div>
-                <div className="flex gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 hover:bg-primary/10"
-                    onClick={() => handleOpenEditCategory(category)}
-                  >
-                    <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDeleteCategory(category.id)}
-                  >
-                    <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Items List */}
-              <div className="divide-y divide-border">
-                {category.items.length === 0 ? (
-                  <div className="p-6 sm:p-8 text-center">
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
-                      {dietaryFilter !== 'any' 
-                        ? `No ${dietaryFilter === 'veg' ? 'Veg' : 'Non-Veg'} items`
-                        : 'No items yet'}
-                    </p>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => {
-                        setSelectedCategoryId(category.id);
-                        setIsItemDialogOpen(true);
-                      }}
-                    >
-                      <Plus className="w-3 h-3 mr-1.5" /> Add Item
-                    </Button>
-                  </div>
-                ) : (
-                  category.items.map((item: MenuItem) => (
-                    <MenuItemRowWithCustomizations
-                      key={item.id}
-                      item={item}
-                      currency={currency}
-                      onToggleAvailability={() => handleToggleAvailability(item)}
-                      onEdit={() => handleOpenEditItem(item)}
-                      onDelete={() => handleDeleteItem(item.id)}
-                      onCustomize={() => {
-                        setCustomizingItem(item);
-                        setIsCustomizationOpen(true);
-                      }}
-                      updateAvailabilityPending={updateAvailability.isPending}
-                      restaurantId={restaurantId}
-                      isDialogOpen={isCustomizationOpen && customizingItem?.id === item.id}
-                    />
-                  ))
-                )}
-                
-                {/* Add Item Trigger */}
-                <Dialog open={isItemDialogOpen && selectedCategoryId === category.id} onOpenChange={(open) => {
-                  setIsItemDialogOpen(open);
-                  if (!open) {
-                    setSelectedCategoryId(null);
-                    setNewItem({ name: "", price: "", description: "", image: "", dietaryType: "" });
-                  }
-                }}>
-                  <DialogTrigger asChild>
-                    <div 
-                      className="p-2 sm:p-2.5 md:p-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer text-center text-xs sm:text-sm font-medium text-primary border-t border-dashed"
-                      onClick={() => setSelectedCategoryId(category.id)}
-                    >
-                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 inline mr-1 sm:mr-2" /> Add Item
-                    </div>
-                  </DialogTrigger>
-                  
-                  {/* Add Item Dialog Content */}
-                  <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl mx-2 max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle className="text-base sm:text-lg">Add New Item</DialogTitle>
-                      <DialogDescription className="text-xs sm:text-sm">Add a new dish to {category.name}.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid md:grid-cols-2 gap-3 sm:gap-4 md:gap-6 py-2 sm:py-4">
-                      {/* Suggestions Column */}
-                      <div className="space-y-3 sm:space-y-4 md:border-r md:pr-4 md:pr-6">
-                        <div className="relative">
-                          <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
-                          <Input 
-                            placeholder="Search suggestions..." 
-                            className="pl-7 sm:pl-9 text-xs sm:text-sm h-8 sm:h-10"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                          />
-                        </div>
-                        <ScrollArea className="h-[150px] sm:h-[200px] md:h-[300px] pr-2 sm:pr-4">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <p className="text-[8px] sm:text-[9px] md:text-[10px] uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-1.5 sm:gap-2">
-                              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-primary" /> Suggestions
-                            </p>
-                            {filteredPrefilled.map((item, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => selectPrefilled(item)}
-                                className="w-full flex items-center gap-1.5 sm:gap-2 md:gap-3 p-1.5 sm:p-2 rounded-md sm:rounded-lg border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all text-left"
-                              >
-                                <img src={item.image} className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md object-cover flex-shrink-0" alt="" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] sm:text-xs font-bold truncate">{item.name}</p>
-                                  <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate">{currency}{item.price}</p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-
-                      {/* Form Column */}
-                      <form onSubmit={handleAddItem} className="space-y-3 sm:space-y-4">
-                        <div className="grid gap-2 sm:gap-3 md:gap-4">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <Label htmlFor="item-name" className="text-xs sm:text-sm">Item Name</Label>
-                            <Input 
-                              id="item-name" 
-                              placeholder="e.g. Classic Margherita" 
-                              className="text-xs sm:text-sm h-8 sm:h-10"
-                              value={newItem.name}
-                              onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-                              required 
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
-                            <div className="space-y-1.5 sm:space-y-2">
-                              <Label htmlFor="item-price" className="text-xs sm:text-sm">Price ({currency})</Label>
-                              <Input 
-                                id="item-price" 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00" 
-                                className="text-xs sm:text-sm h-8 sm:h-10"
-                                value={newItem.price}
-                                onChange={(e) => setNewItem({...newItem, price: e.target.value})}
-                                required 
-                              />
-                            </div>
-                            <div className="space-y-1.5 sm:space-y-2">
-                              <Label className="text-xs sm:text-sm">Image</Label>
-                              {newItem.image ? (
-                                <div className="relative group w-full h-8 sm:h-10 rounded-md border overflow-hidden">
-                                  <img src={newItem.image} className="w-full h-full object-cover" alt="" />
-                                  <button 
-                                    type="button"
-                                    onClick={() => setNewItem({...newItem, image: ""})}
-                                    className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
-                                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="relative h-8 sm:h-10 overflow-hidden">
-                                  <input
-                                    type="file"
-                                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                    accept="image/*"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) {
-                                        handleImageUpload(file, false);
-                                      }
-                                    }}
-                                  />
-                                  <Button type="button" variant="outline" className="w-full gap-1.5 text-[10px] sm:text-xs h-full">
-                                    <Upload className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Upload
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <Label htmlFor="item-desc" className="text-xs sm:text-sm">Description</Label>
-                            <Textarea 
-                              id="item-desc" 
-                              placeholder="Briefly describe the dish..." 
-                              value={newItem.description}
-                              onChange={(e) => setNewItem({...newItem, description: e.target.value})}
-                              className="h-16 sm:h-20 md:h-24 text-xs sm:text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <Label className="text-xs sm:text-sm">Dietary Type</Label>
-                            <RadioGroup 
-                              value={newItem.dietaryType} 
-                              onValueChange={(value) => setNewItem({...newItem, dietaryType: value as "" | "Veg" | "Non-Veg"})}
-                              className="flex gap-3 sm:gap-4 md:gap-6"
-                            >
-                              <div className="flex items-center space-x-1.5 sm:space-x-2">
-                                <RadioGroupItem value="Veg" id="add-veg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                <Label htmlFor="add-veg" className="cursor-pointer font-normal text-xs sm:text-sm">Veg</Label>
-                              </div>
-                              <div className="flex items-center space-x-1.5 sm:space-x-2">
-                                <RadioGroupItem value="Non-Veg" id="add-non-veg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                <Label htmlFor="add-non-veg" className="cursor-pointer font-normal text-xs sm:text-sm">Non-Veg</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button type="submit" className="w-full text-xs sm:text-sm h-8 sm:h-10" disabled={createMenuItem.isPending}>
-                            {createMenuItem.isPending ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin mr-2" /> : null}
-                            Add Item
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="space-y-4 sm:space-y-6">
+          {!menuData || menuData.categories.length === 0 ? (
+            <div className="text-center py-12 sm:py-16 md:py-20 border-2 border-dashed rounded-xl">
+              <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground/30" />
+              <p className="text-sm sm:text-base md:text-lg font-medium text-muted-foreground">No menu categories yet</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">Start by adding your first category</p>
+              <Button onClick={() => setIsCategoryDialogOpen(true)} size="sm" className="text-xs sm:text-sm">
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" /> Add Category
+              </Button>
             </div>
-          ))
-        )}
-      </div>
+          ) : categoriesWithItems.length === 0 && dietaryFilter === 'any' ? (
+            <div className="text-center py-12 sm:py-16 md:py-20 border-2 border-dashed rounded-xl">
+              <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground/30" />
+              <p className="text-sm sm:text-base md:text-lg font-medium text-muted-foreground">No items in any category</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">Add items to your categories to get started</p>
+            </div>
+          ) : (
+            <SortableContext
+              items={orderedCategoryIds}
+              strategy={verticalListSortingStrategy}
+            >
+              {orderedCategories.map((category) => (
+                <SortableCategory
+                  key={category.id}
+                  category={category}
+                  currency={currency}
+                  isExpanded={expandedCategories.has(category.id)}
+                  onToggleExpand={() => toggleCategoryExpand(category.id)}
+                  onEdit={() => handleOpenEditCategory(category)}
+                  onDelete={() => handleDeleteCategory(category.id)}
+                  onAddItem={() => {
+                    setSelectedCategoryId(category.id);
+                    setIsItemDialogOpen(true);
+                  }}
+                  onToggleAvailability={handleToggleAvailability}
+                  onEditItem={handleOpenEditItem}
+                  onDeleteItem={handleDeleteItem}
+                  onCustomizeItem={(item) => {
+                    setCustomizingItem(item);
+                    setIsCustomizationOpen(true);
+                  }}
+                  updateAvailabilityPending={updateAvailability.isPending}
+                  restaurantId={restaurantId}
+                  customizingItemId={customizingItem?.id ?? null}
+                  dietaryFilter={dietaryFilter}
+                />
+              ))}
+            </SortableContext>
+          )}
+        </div>
+      </DndContext>
+
+      {/* Add Item Dialog */}
+      <Dialog open={isItemDialogOpen} onOpenChange={(open) => {
+        setIsItemDialogOpen(open);
+        if (!open) {
+          setSelectedCategoryId(null);
+          setNewItem({ name: "", price: "", description: "", image: "", dietaryType: "" });
+        }
+      }}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl mx-2 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Add New Item</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Add a new dish to {categoriesWithItems.find(c => c.id === selectedCategoryId)?.name || 'category'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid md:grid-cols-2 gap-3 sm:gap-4 md:gap-6 py-2 sm:py-4">
+            {/* Suggestions Column */}
+            <div className="space-y-3 sm:space-y-4 md:border-r md:pr-4 md:pr-6">
+              <div className="relative">
+                <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search suggestions..." 
+                  className="pl-7 sm:pl-9 text-xs sm:text-sm h-8 sm:h-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <ScrollArea className="h-[150px] sm:h-[200px] md:h-[300px] pr-2 sm:pr-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <p className="text-[8px] sm:text-[9px] md:text-[10px] uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-1.5 sm:gap-2">
+                    <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-primary" /> Suggestions
+                  </p>
+                  {filteredPrefilled.map((item, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => selectPrefilled(item)}
+                      className="w-full flex items-center gap-1.5 sm:gap-2 md:gap-3 p-1.5 sm:p-2 rounded-md sm:rounded-lg border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all text-left"
+                    >
+                      <img src={item.image} className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md object-cover flex-shrink-0" alt="" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] sm:text-xs font-bold truncate">{item.name}</p>
+                        <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate">{currency}{item.price}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* Form Column */}
+            <form onSubmit={handleAddItem} className="space-y-3 sm:space-y-4">
+              <div className="grid gap-2 sm:gap-3 md:gap-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="item-name" className="text-xs sm:text-sm">Item Name</Label>
+                  <Input 
+                    id="item-name" 
+                    placeholder="e.g. Classic Margherita" 
+                    className="text-xs sm:text-sm h-8 sm:h-10"
+                    value={newItem.name}
+                    onChange={(e) => setNewItem({...newItem, name: e.target.value})}
+                    required 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="item-price" className="text-xs sm:text-sm">Price ({currency})</Label>
+                    <Input 
+                      id="item-price" 
+                      type="number" 
+                      step="0.01" 
+                      placeholder="0.00" 
+                      className="text-xs sm:text-sm h-8 sm:h-10"
+                      value={newItem.price}
+                      onChange={(e) => setNewItem({...newItem, price: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">Image</Label>
+                    {newItem.image ? (
+                      <div className="relative group w-full h-8 sm:h-10 rounded-md border overflow-hidden">
+                        <img src={newItem.image} className="w-full h-full object-cover" alt="" />
+                        <button 
+                          type="button"
+                          onClick={() => setNewItem({...newItem, image: ""})}
+                          className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative h-8 sm:h-10 overflow-hidden">
+                        <input
+                          type="file"
+                          className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleImageUpload(file, false);
+                            }
+                          }}
+                        />
+                        <Button type="button" variant="outline" className="w-full gap-1.5 text-[10px] sm:text-xs h-full">
+                          <Upload className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Upload
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="item-desc" className="text-xs sm:text-sm">Description</Label>
+                  <Textarea 
+                    id="item-desc" 
+                    placeholder="Briefly describe the dish..." 
+                    value={newItem.description}
+                    onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                    className="h-16 sm:h-20 md:h-24 text-xs sm:text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">Dietary Type</Label>
+                  <RadioGroup 
+                    value={newItem.dietaryType} 
+                    onValueChange={(value) => setNewItem({...newItem, dietaryType: value as "" | "Veg" | "Non-Veg"})}
+                    className="flex gap-3 sm:gap-4 md:gap-6"
+                  >
+                    <div className="flex items-center space-x-1.5 sm:space-x-2">
+                      <RadioGroupItem value="Veg" id="add-veg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <Label htmlFor="add-veg" className="cursor-pointer font-normal text-xs sm:text-sm">Veg</Label>
+                    </div>
+                    <div className="flex items-center space-x-1.5 sm:space-x-2">
+                      <RadioGroupItem value="Non-Veg" id="add-non-veg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <Label htmlFor="add-non-veg" className="cursor-pointer font-normal text-xs sm:text-sm">Non-Veg</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" className="w-full text-xs sm:text-sm h-8 sm:h-10" disabled={createMenuItem.isPending}>
+                  {createMenuItem.isPending ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin mr-2" /> : null}
+                  Add Item
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* EDIT ITEM DIALOG */}
       <Dialog open={isEditItemDialogOpen} onOpenChange={(open) => {

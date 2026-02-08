@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { UserPlus, Users, UserCircle, ChefHat, Trash2, Loader2, RefreshCw, ShieldCheck, Eye, Mail, Phone, Calendar, Shield } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -88,6 +88,7 @@ export default function StaffManagementPage() {
 
   const [selectedStaff, setSelectedStaff] = useState<StaffRow | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
 
   const handleSubmit = async () => {
     if (!formData.displayName || !formData.email) return;
@@ -101,6 +102,7 @@ export default function StaffManagementPage() {
         passcode: formData.passcode || undefined,
       });
       setFormData({ displayName: "", email: "", phoneNumber: "", role: "WAITER", passcode: "" });
+      setIsAddStaffOpen(false);
     } catch {
       // Error handled by mutation
     }
@@ -164,161 +166,190 @@ export default function StaffManagementPage() {
             <h2 className="text-2xl sm:text-3xl font-bold">Staff Management</h2>
             <p className="text-sm sm:text-base text-gray-600">Manage your team members and their access.</p>
           </div>
-          <Button variant="outline" size="icon" onClick={() => refetch()} className="shrink-0">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={() => refetch()} className="shrink-0">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button onClick={() => setIsAddStaffOpen(true)} className="gap-2">
+              <UserPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Staff</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-          {/* Add Staff Form */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                Add Staff Member
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Create credentials for team members.</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6">
-              <div className="space-y-3 sm:space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Full Name</Label>
-                  <Input 
-                    placeholder="John Doe" 
-                    value={formData.displayName}
-                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                    className="h-9 sm:h-10 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Email</Label>
-                  <Input 
-                    type="email"
-                    placeholder="john@restaurant.com" 
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="h-9 sm:h-10 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Phone Number (Optional)</Label>
-                  <Input 
-                    type="tel"
-                    placeholder="+1 234 567 8900" 
-                    value={formData.phoneNumber}
-                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    className="h-9 sm:h-10 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Role</Label>
-                  <select 
-                    className="flex h-9 sm:h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as "admin" | "WAITER" | "KITCHEN" })}
-                  >
-                    <option value="WAITER">Waiter</option>
-                    <option value="KITCHEN">Kitchen Staff</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Passcode (Optional)</Label>
-                  <Input 
-                    type="password" 
-                    placeholder="4-digit PIN" 
-                    maxLength={4} 
-                    value={formData.passcode}
-                    onChange={(e) => setFormData({ ...formData, passcode: e.target.value })}
-                    className="h-9 sm:h-10 text-sm"
-                  />
-                  <p className="text-[10px] sm:text-xs text-gray-500">Used for quick terminal login</p>
-                </div>
-                <Button 
-                  onClick={handleSubmit} 
-                  className="w-full h-9 sm:h-10 text-sm" 
-                  disabled={createStaff.isPending || !formData.displayName || !formData.email}
-                >
-                  {createStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        {/* Staff List */}
+        <Card>
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+              Team Members ({staff?.length || 0})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-6">
+            {staff && staff.length > 0 ? (
+              <div className="divide-y divide-border">
+                {staff.map((s) => (
+                  <div key={s.id} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                      <div className={cn(
+                        "w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0",
+                        s.role === "KITCHEN" ? "bg-orange-100 text-orange-600" :
+                        s.role === "ADMIN" ? "bg-blue-100 text-blue-600" :
+                        "bg-green-100 text-green-600"
+                      )}>
+                        {getRoleIcon(s.role)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm sm:text-base truncate">{s.fullName}</p>
+                        {s.email ? (
+                          <p className="text-[10px] sm:text-xs text-gray-500 truncate">{s.email}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                      <Badge variant={getRoleBadgeVariant(s.role) as any} className="text-xs">
+                        {s.role}
+                      </Badge>
+                      <Badge variant={s.isActive ? "outline" : "destructive"} className="text-xs">
+                        {s.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      <div className="flex gap-1 sm:gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 sm:h-9 sm:w-9 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleViewDetails(s)}
+                        >
+                          <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 sm:h-9 sm:w-9 text-destructive sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDelete(s.id)}
+                          disabled={deleteStaff.isPending}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 sm:py-12">
+                <Users className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm sm:text-base text-gray-500">No staff members yet</p>
+                <p className="text-xs sm:text-sm text-gray-400 mb-4">Add your first team member to get started.</p>
+                <Button onClick={() => setIsAddStaffOpen(true)} variant="outline" className="gap-2">
+                  <UserPlus className="w-4 h-4" />
                   Add Staff Member
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Staff List */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                Team Members ({staff?.length || 0})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6">
-              {staff && staff.length > 0 ? (
-                <div className="divide-y divide-border">
-                  {staff.map((s) => (
-                    <div key={s.id} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
-                      <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div className={cn(
-                          "w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0",
-                          s.role === "KITCHEN" ? "bg-orange-100 text-orange-600" :
-                          s.role === "ADMIN" ? "bg-blue-100 text-blue-600" :
-                          "bg-green-100 text-green-600"
-                        )}>
-                          {getRoleIcon(s.role)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm sm:text-base truncate">{s.fullName}</p>
-                          {s.email ? (
-                            <p className="text-[10px] sm:text-xs text-gray-500 truncate">{s.email}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                        <Badge variant={getRoleBadgeVariant(s.role) as any} className="text-xs">
-                          {s.role}
-                        </Badge>
-                        <Badge variant={s.isActive ? "outline" : "destructive"} className="text-xs">
-                          {s.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <div className="flex gap-1 sm:gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 sm:h-9 sm:w-9 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleViewDetails(s)}
-                          >
-                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 sm:h-9 sm:w-9 text-destructive sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleDelete(s.id)}
-                            disabled={deleteStaff.isPending}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 sm:py-12">
-                  <Users className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm sm:text-base text-gray-500">No staff members yet</p>
-                  <p className="text-xs sm:text-sm text-gray-400">Add your first team member using the form.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Add Staff Dialog */}
+        <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <UserPlus className="w-5 h-5 text-primary" />
+                Add Staff Member
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm">
+                Create credentials for a new team member.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-3 sm:space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Full Name</Label>
+                <Input 
+                  placeholder="John Doe" 
+                  value={formData.displayName}
+                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  className="h-9 sm:h-10 text-sm"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Email</Label>
+                <Input 
+                  type="email"
+                  placeholder="john@restaurant.com" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="h-9 sm:h-10 text-sm"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Phone Number (Optional)</Label>
+                <Input 
+                  type="tel"
+                  placeholder="+1 234 567 8900" 
+                  value={formData.phoneNumber}
+                  onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                  className="h-9 sm:h-10 text-sm"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Role</Label>
+                <select 
+                  className="flex h-9 sm:h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as "admin" | "WAITER" | "KITCHEN" })}
+                >
+                  <option value="WAITER">Waiter</option>
+                  <option value="KITCHEN">Kitchen Staff</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Passcode (Optional)</Label>
+                <Input 
+                  type="password" 
+                  placeholder="4-digit PIN" 
+                  maxLength={4} 
+                  value={formData.passcode}
+                  onChange={(e) => setFormData({ ...formData, passcode: e.target.value })}
+                  className="h-9 sm:h-10 text-sm"
+                />
+                <p className="text-[10px] sm:text-xs text-gray-500">Used for quick terminal login</p>
+              </div>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsAddStaffOpen(false);
+                  setFormData({ displayName: "", email: "", phoneNumber: "", role: "WAITER", passcode: "" });
+                }}
+                className="w-full sm:w-auto h-9 sm:h-10 text-sm"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSubmit} 
+                className="w-full sm:w-auto h-9 sm:h-10 text-sm" 
+                disabled={createStaff.isPending || !formData.displayName || !formData.email}
+              >
+                {createStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Add Staff Member
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Staff Details Dialog */}
         <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 sm:gap-3">
                 <div className={cn(
@@ -425,14 +456,14 @@ export default function StaffManagementPage() {
 
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t">
-                  <Button variant="outline" onClick={() => setIsDetailsOpen(false)} className="h-9 sm:h-10 text-sm">
+                  <Button variant="outline" onClick={() => setIsDetailsOpen(false)} className="w-full sm:w-auto h-9 sm:h-10 text-sm">
                     Close
                   </Button>
                   <Button 
                     variant="destructive" 
                     onClick={() => handleDelete(selectedStaff.id)}
                     disabled={deleteStaff.isPending}
-                    className="h-9 sm:h-10 text-sm"
+                    className="w-full sm:w-auto h-9 sm:h-10 text-sm"
                   >
                     {deleteStaff.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />

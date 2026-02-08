@@ -74,6 +74,7 @@ const queryKeys = {
   orders: (restaurantId: string | null, opts?: Record<string, unknown>) => ["orders", restaurantId, opts] as const,
   ordersKitchen: (restaurantId: string | null) => ["orders-kitchen", restaurantId] as const,
   ordersStats: (restaurantId: string | null) => ["orders-stats", restaurantId] as const,
+  transactions: (restaurantId: string | null, opts?: Record<string, unknown>) => ["transactions", restaurantId, opts] as const,
   ordersHistory: (restaurantId: string | null) => ["orders-history", restaurantId] as const,
   tables: (restaurantId: string | null) => ["tables", restaurantId] as const,
   queue: (restaurantId: string | null) => ["queue", restaurantId] as const,
@@ -292,7 +293,17 @@ export function useOrders(restaurantId: string | null, opts?: { status?: string;
   return useQuery({
     queryKey: queryKeys.orders(restaurantId, opts),
     queryFn: () =>
-      api.get<{ orders: Order[] }>(`/api/restaurants/${restaurantId}/orders${q ? `?${q}` : ""}`).then((r) => r.orders),
+      api.get<{ 
+        orders: Order[];
+        pagination?: {
+          total: number;
+          limit: number;
+          offset: number;
+          hasMore: boolean;
+          totalPages: number;
+          currentPage: number;
+        }
+      }>(`/api/restaurants/${restaurantId}/orders${q ? `?${q}` : ""}`),
     enabled: !!restaurantId,
     refetchInterval: 3000,
   });
@@ -717,21 +728,159 @@ export function useQRStats(restaurantId: string | null) {
 }
 
 // === Transactions ===
-export function useTransactions(restaurantId: string | null, opts?: { limit?: number; offset?: number; fromDate?: string; toDate?: string; paymentMethod?: string }) {
+// OPTIMIZED TRANSACTION HOOKS
+// Key changes:
+// 1. List view fetches minimal fields only
+// 2. Detail view (modal) fetches full data on-demand
+// 3. Removed unnecessary refetch intervals for static data
+
+export function useTransactions(
+  restaurantId: string | null, 
+  opts?: { 
+    limit?: number; 
+    offset?: number; 
+    fromDate?: string; 
+    toDate?: string; 
+    paymentMethod?: string;
+    search?: string;
+  }
+) {
   const params = new URLSearchParams();
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.offset) params.set("offset", String(opts.offset));
   if (opts?.fromDate) params.set("fromDate", opts.fromDate);
   if (opts?.toDate) params.set("toDate", opts.toDate);
   if (opts?.paymentMethod) params.set("paymentMethod", opts.paymentMethod);
+  if (opts?.search) params.set("search", opts.search);
   const q = params.toString();
 
   return useQuery({
-    queryKey: ["transactions", restaurantId, opts],
+    queryKey: queryKeys.transactions(restaurantId, opts),
     queryFn: () =>
-      api.get<{ transactions: any[] }>(`/api/restaurants/${restaurantId}/transactions${q ? `?${q}` : ""}`).then((r) => r.transactions ?? []),
+      api.get<{ 
+        transactions: Array<{
+          id: string;
+          billNumber: string;
+          paidAt: string;
+          paymentMethod: string;
+          grandTotal: string;
+          subtotal: string;
+          gstAmount: string;
+          serviceTaxAmount: string;
+          order: {
+            id: string;
+            orderType: string;
+            guestName?: string;
+            table?: {
+              tableNumber: string;
+            } | null;
+          } | null;
+        }>; 
+        pagination: { 
+          total: number; 
+          limit: number; 
+          offset: number; 
+          hasMore: boolean;
+          totalPages: number;
+          currentPage: number;
+        } 
+      }>(`/api/restaurants/${restaurantId}/transactions${q ? `?${q}` : ""}`),
     enabled: !!restaurantId,
-    refetchInterval: 5000,
+    // OPTIMIZATION: Remove aggressive refetch for historical data
+    // Only refetch on window focus or manual invalidation
+    refetchInterval: false,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+  });
+}
+
+// NEW: Separate hook for transaction details (used in modal)
+export function useTransactionDetail(restaurantId: string | null, transactionId: string | null) {
+  return useQuery({
+    queryKey: ["transaction-detail", restaurantId, transactionId],
+    queryFn: () =>
+      api.get<{ 
+        transaction: {
+          id: string;
+          billNumber: string;
+          paidAt: string;
+          paymentMethod: string;
+          grandTotal: string;
+          subtotal: string;
+          gstAmount: string;
+          serviceTaxAmount: string;
+          discountAmount: string;
+          order: {
+            id: string;
+            orderType: string;
+            guestName?: string;
+            items: Array<{
+              id: string;
+              itemName: string;
+              quantity: number;
+              totalPrice: string;
+            }>;
+            table?: {
+              id: string;
+              tableNumber: string;
+              floorSection?: string;
+            } | null;
+            placedByStaff?: {
+              id: string;
+              fullName: string;
+              role: string;
+            } | null;
+          } | null;
+        }
+      }>(`/api/restaurants/${restaurantId}/transactions/${transactionId}`).then(r => r.transaction),
+    enabled: !!restaurantId && !!transactionId,
+    // This is only fetched when modal opens, no need for refetch
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useExportTransactionsCSV(restaurantId: string | null) {
+  return useMutation({
+    mutationFn: async (opts?: { 
+      fromDate?: string; 
+      toDate?: string; 
+      paymentMethod?: string;
+    }) => {
+      const params = new URLSearchParams();
+      if (opts?.fromDate) params.set("fromDate", opts.fromDate);
+      if (opts?.toDate) params.set("toDate", opts.toDate);
+      if (opts?.paymentMethod) params.set("paymentMethod", opts.paymentMethod);
+      const q = params.toString();
+
+      const response = await fetch(
+        `/api/restaurants/${restaurantId}/transactions/export/csv${q ? `?${q}` : ""}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to export CSV");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+    onSuccess: () => {
+      toast.success("CSV downloaded successfully");
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || "Failed to export CSV");
+    },
   });
 }
 
@@ -746,6 +895,41 @@ export function useCreateTransaction(restaurantId: string | null) {
       }
     },
     onError: (e: Error) => toast.error(e.message || "Failed to create transaction"),
+  });
+}
+
+
+// Add this new hook to your api.ts file
+
+/**
+ * Optimized hook for fetching recent transactions (for widgets/sidebar)
+ * Fetches minimal data - much lighter than full useTransactions hook
+ */
+export function useRecentTransactions(restaurantId: string | null, limit: number = 5) {
+  return useQuery({
+    queryKey: ["transactions-recent", restaurantId, limit],
+    queryFn: () =>
+      api.get<{ 
+        transactions: Array<{
+          id: string;
+          billNumber: string;
+          paidAt: string;
+          paymentMethod: string;
+          grandTotal: string;
+          orderType?: string;
+          guestName?: string;
+          tableNumber?: string;
+          staffName?: string;
+        }>
+      }>(`/api/restaurants/${restaurantId}/transactions/recent?limit=${limit}`)
+      .then(r => r.transactions),
+    enabled: !!restaurantId,
+    // OPTIMIZATION: Cache for 30 seconds - recent bills don't change that often
+    staleTime: 30000,
+    // No aggressive refetching for historical data
+    refetchInterval: false,
+    // Refetch on window focus to stay reasonably fresh
+    refetchOnWindowFocus: true,
   });
 }
 

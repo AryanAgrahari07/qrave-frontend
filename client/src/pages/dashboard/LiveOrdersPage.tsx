@@ -1,26 +1,31 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  CheckCircle2,
   Clock,
   Utensils,
-  ArrowRight,
   UserPlus,
-  Users as UsersIcon,
-  Check,
   Receipt,
   CreditCard,
   QrCode,
   Plus,
   Minus,
-  Trash2,
   Loader2,
   RefreshCw,
+  Save,
   Printer,
-  Share2,
+  ChefHat,
+  UtensilsCrossed,
+  Users,
+  Search,
+  X,
+  ShoppingCart,
+  Grid3x3,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,14 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, Fragment, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -45,7 +48,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ShoppingBag, Utensils as DineInIcon, Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   useOrders,
@@ -58,6 +60,7 @@ import {
   useTransactions,
   useAddOrderItems,
   useStaff,
+  useRecentTransactions,
 } from "@/hooks/api";
 import { api } from "@/lib/api";
 import type { Order, MenuItem, Table, OrderStatus } from "@/types";
@@ -66,35 +69,482 @@ import {
   CustomizedOrderItemDisplay,
   getCustomizationSummary,
 } from "@/components/menu/Customizedorderitemdisplay";
-import { ItemCustomizationDialog } from "@/components/menu/Itemcustomizationdialog";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
+
+// Mobile POS Component
+function MobilePOS({
+  categories,
+  menuItems,
+  activeCategory,
+  orderItems,
+  tableNumber,
+  waiterName,
+  diningType,
+  paymentMethod,
+  onCategoryChange,
+  onAddItem,
+  onRemoveItem,
+  onIncrement,
+  onTableChange,
+  onWaiterChange,
+  onDiningTypeChange,
+  onPaymentMethodChange,
+  onSendToKitchen,
+  onSave,
+  onSaveAndPrint,
+  onClose,
+  currency,
+  gstRate,
+  tables,
+  staff,
+  isLoading,
+}: any) {
+  const [activeView, setActiveView] = useState<"items" | "order">("items");
+
+  const filteredItems = menuItems.filter((item: any) => item.categoryId === activeCategory && item.isAvailable);
+  const totalItems = Object.values(orderItems).reduce((sum: number, qty: any) => sum + qty, 0);
+
+  // Calculate totals
+  const subtotal = Object.entries(orderItems).reduce((total, [itemId, quantity]: any) => {
+    const item = menuItems.find((m: any) => m.id === itemId);
+    return total + (item?.price || 0) * quantity;
+  }, 0);
+
+  const cgst = subtotal * (gstRate / 2);
+  const sgst = subtotal * (gstRate / 2);
+  const total = subtotal + cgst + sgst;
+
+  const orderedMenuItems = Object.entries(orderItems)
+    .map(([itemId, quantity]: any) => ({
+      item: menuItems.find((m: any) => m.id === itemId)!,
+      quantity,
+    }))
+    .filter((o) => o.item);
+
+  const hasItems = orderedMenuItems.length > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col">
+      {/* Header */}
+      <div className="bg-primary text-white px-1 py-1 shadow-md flex-shrink-0 flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="text-white hover:bg-primary-foreground/20 h-9 w-9"
+        >
+          <ArrowLeft className="size-5" />
+        </Button>
+        <div className="flex-1">
+          <p className="text-primary-foreground font-semibold text-base">New Order</p>
+        </div>
+      </div>
+
+      {/* View Toggle Tabs */}
+      <div className="bg-white border-b border-gray-200 flex flex-shrink-0">
+        <button
+          onClick={() => setActiveView("items")}
+          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors ${
+            activeView === "items"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-gray-600"
+          }`}
+        >
+          <Grid3x3 className="size-5" />
+          Items
+        </button>
+        <button
+          onClick={() => setActiveView("order")}
+          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors relative ${
+            activeView === "order"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-gray-600"
+          }`}
+        >
+          <ShoppingCart className="size-5" />
+          Order
+          {totalItems > 0 && (
+            <Badge className="bg-primary text-white absolute -top-1 right-8 h-5 min-w-[20px] flex items-center justify-center">
+              {totalItems}
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden min-h-0">
+        {activeView === "items" ? (
+          <div className="h-full flex flex-col">
+            {/* Category Bar */}
+            <div className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                {categories.map((category: any) => (
+                  <button
+                    key={category.id}
+                    onClick={() => onCategoryChange(category.id)}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium text-sm ${
+                      activeCategory === category.id
+                        ? "bg-primary text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Items Grid */}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredItems.map((item: any) => {
+                    const quantity = orderItems[item.id] || 0;
+                    const isAdded = quantity > 0;
+                    const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-white border border-gray-200 rounded-lg p-2.5 hover:shadow-md transition-shadow flex flex-col"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-medium text-gray-900 flex-1 text-xs leading-tight line-clamp-2 min-h-[2rem]">
+                            {item.name}
+                          </h3>
+                          <div
+                            className={`size-2.5 rounded-full flex-shrink-0 mt-0.5 ml-1.5 ${
+                              isVeg ? "bg-green-500" : "bg-red-500"
+                            }`}
+                            title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-sm font-semibold text-gray-900">
+                            {currency}{item.price}
+                          </span>
+                          {!isAdded ? (
+                            <Button
+                              onClick={() => onAddItem(item)}
+                              size="sm"
+                              className="bg-primary hover:bg-primary/90 text-white h-7 w-7 p-0"
+                            >
+                              <Plus className="size-3.5" />
+                            </Button>
+                          ) : (
+                            <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                              <Button
+                                onClick={() => onRemoveItem(item.id)}
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 hover:bg-gray-200"
+                              >
+                                <Minus className="size-3" />
+                              </Button>
+                              <span className="font-semibold text-gray-900 min-w-[1rem] text-center text-xs px-0.5">
+                                {quantity}
+                              </span>
+                              <Button
+                                onClick={() => onIncrement(item.id)}
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 hover:bg-gray-200"
+                              >
+                                <Plus className="size-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </ScrollArea>
+
+            {/* View Order Button */}
+            {totalItems > 0 && (
+              <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
+                <Button
+                  onClick={() => setActiveView("order")}
+                  className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-base font-semibold"
+                >
+                  View Order ({totalItems} items)
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="h-full flex flex-col bg-gray-50">
+            {/* Order Items List - Fixed 50% height with scroll */}
+            <div className="h-[50%] flex-shrink-0">
+              <ScrollArea className="h-full">
+                <div className="p-3">
+                  <h3 className="font-semibold text-gray-900 mb-2 text-sm">
+                    Selected Items ({orderedMenuItems.length})
+                  </h3>
+                  {orderedMenuItems.length === 0 ? (
+                    <p className="text-gray-500 text-xs text-center py-6">
+                      No items added
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {orderedMenuItems.map(({ item, quantity }: any) => {
+                        const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white rounded-lg border border-gray-200 p-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <div
+                                  className={`size-2.5 rounded-full flex-shrink-0 ${
+                                    isVeg ? "bg-green-500" : "bg-red-500"
+                                  }`}
+                                />
+                                <span className="font-medium text-gray-900 text-xs truncate">
+                                  {item.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                                  <Button
+                                    onClick={() => onRemoveItem(item.id)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 hover:bg-gray-200"
+                                  >
+                                    <Minus className="size-3" />
+                                  </Button>
+                                  <span className="font-semibold text-xs min-w-[1rem] text-center px-0.5">
+                                    {quantity}
+                                  </span>
+                                  <Button
+                                    onClick={() => onIncrement(item.id)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 hover:bg-gray-200"
+                                  >
+                                    <Plus className="size-3" />
+                                  </Button>
+                                </div>
+                                <span className="font-semibold text-gray-900 text-xs min-w-[3rem] text-right">
+                                  {currency}{(item.price * quantity).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* Bottom Section - Settings & Actions - 50% */}
+            <div className="flex-1 flex flex-col bg-white border-t border-gray-200">
+              {/* Tax Breakdown */}
+              <div className="px-2 py-1.5 border-b border-gray-200">
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="text-gray-900 font-medium">{currency}{subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                    <span className="text-gray-900 font-medium">{currency}{cgst.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                    <span className="text-gray-900 font-medium">{currency}{sgst.toFixed(2)}</span>
+                  </div>
+                  <Separator className="my-0.5" />
+                  <div className="flex justify-between items-center pt-0.5">
+                    <span className="font-semibold text-gray-900 text-[11px]">Total</span>
+                    <span className="font-bold text-sm text-primary">
+                      {currency}{total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Three Dropdowns */}
+              <div className="px-2 py-1.5 border-b border-gray-200">
+                <div className="grid grid-cols-3 gap-1">
+                  <div>
+                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Table</Label>
+                    <Select value={tableNumber} onValueChange={onTableChange}>
+                      <SelectTrigger className="text-[10px] h-6 px-1.5">
+                        <SelectValue placeholder="Table" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tables?.filter((t: Table) => 
+                          t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
+                        ).map((table: Table) => (
+                          <SelectItem key={table.id} value={table.id}>
+                            T{table.tableNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Waiter</Label>
+                    <Select value={waiterName || "none"} onValueChange={onWaiterChange}>
+                      <SelectTrigger className="text-[10px] h-6 px-1.5">
+                        <SelectValue placeholder="Waiter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {staff
+                          ?.filter((s: any) => s.role === "WAITER" && s.isActive)
+                          .map((waiter: any) => (
+                            <SelectItem key={waiter.id} value={waiter.id}>
+                              {waiter.fullName.split(' ')[0]}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Type</Label>
+                    <Select
+                      value={diningType}
+                      onValueChange={onDiningTypeChange}
+                    >
+                      <SelectTrigger className="text-[10px] h-6 px-1.5">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dine-in">Dine-in</SelectItem>
+                        <SelectItem value="takeaway">Takeaway</SelectItem>
+                        <SelectItem value="delivery">Delivery</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div className="px-2 py-1.5 border-b border-gray-200">
+                <Label className="text-[9px] text-gray-600 mb-0.5 block font-medium">
+                  Payment
+                </Label>
+                <div className="grid grid-cols-3 gap-1">
+                  <Button
+                    onClick={() => onPaymentMethodChange("cash")}
+                    variant={paymentMethod === "cash" ? "default" : "outline"}
+                    className={`h-7 text-[10px] font-semibold ${
+                      paymentMethod === "cash"
+                        ? "bg-primary hover:bg-primary/90"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    Cash
+                  </Button>
+                  <Button
+                    onClick={() => onPaymentMethodChange("card")}
+                    variant={paymentMethod === "card" ? "default" : "outline"}
+                    className={`h-7 text-[10px] font-semibold ${
+                      paymentMethod === "card"
+                        ? "bg-primary hover:bg-primary/90"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    Card
+                  </Button>
+                  <Button
+                    onClick={() => onPaymentMethodChange("upi")}
+                    variant={paymentMethod === "upi" ? "default" : "outline"}
+                    className={`h-7 text-[10px] font-semibold ${
+                      paymentMethod === "upi"
+                        ? "bg-primary hover:bg-primary/90"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    UPI
+                  </Button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="px-2 py-1.5">
+                <div className="grid grid-cols-3 gap-1">
+                  <Button
+                    onClick={onSave}
+                    variant="outline"
+                    disabled={!hasItems}
+                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
+                  >
+                    <Save className="size-3" />
+                    <span className="text-[8px] font-semibold mt-0.5">Save</span>
+                  </Button>
+                  <Button
+                    onClick={onSaveAndPrint}
+                    variant="outline"
+                    disabled={!hasItems}
+                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
+                  >
+                    <Printer className="size-3" />
+                    <span className="text-[8px] font-semibold mt-0.5">Print</span>
+                  </Button>
+                  <Button
+                    onClick={onSendToKitchen}
+                    disabled={!hasItems || isLoading}
+                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 bg-primary hover:bg-primary/90 text-white"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <ChefHat className="size-3" />
+                    )}
+                    <span className="text-[8px] font-semibold mt-0.5">Kitchen</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function LiveOrdersPage() {
   const { restaurantId } = useAuth();
   const { data: restaurant } = useRestaurant(restaurantId);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10); // Items per page
+  const offset = (currentPage - 1) * pageSize;
+
   const {
-    data: orders,
+    data: ordersData,
     isLoading,
     refetch,
-  } = useOrders(restaurantId, { limit: 100 });
+  } = useOrders(restaurantId, { limit: pageSize, offset });
+  
   const { data: menuData } = useMenuCategories(
     restaurantId,
     restaurant?.slug ?? null,
   );
   const { data: tables } = useTables(restaurantId);
-  const { data: transactions } = useTransactions(restaurantId, { limit: 10 });
   const { data: staff } = useStaff(restaurantId);
 
+  const transactions = useRecentTransactions(restaurantId, 5);
   const updateStatus = useUpdateOrderStatus(restaurantId);
   const cancelOrder = useCancelOrder(restaurantId);
   const createOrder = useCreateOrder(restaurantId);
   const addOrderItems = useAddOrderItems(restaurantId);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [orderMethod, setOrderMethod] = useState<string>("DINE_IN");
   const [isBillingOpen, setIsBillingOpen] = useState(false);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
-  const [isQuickBillOpen, setIsQuickBillOpen] = useState(false);
   const [isAddItemsOpen, setIsAddItemsOpen] = useState(false);
   const [manualCart, setManualCart] = useState<
     {
@@ -104,6 +554,7 @@ export default function LiveOrdersPage() {
       quantity: number;
       variantId?: string;
       modifierIds?: string[];
+      isVeg?: boolean;
     }[]
   >([]);
   const [addItemsCart, setAddItemsCart] = useState<
@@ -116,21 +567,41 @@ export default function LiveOrdersPage() {
       modifierIds?: string[];
     }[]
   >([]);
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string>("1");
   const [selectedWaiterId, setSelectedWaiterId] = useState<string | null>(null);
-  const [dietaryFilter, setDietaryFilter] = useState<"any" | "veg" | "non-veg">(
-    "any",
-  );
+  const [activeCategory, setActiveCategory] = useState<string>("");
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [customizationTarget, setCustomizationTarget] = useState<
     "manual" | "addItems"
   >("manual");
-  const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
+  const [orderMethod, setOrderMethod] = useState<"dine-in" | "takeaway" | "delivery">("dine-in");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">("cash");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobilePOS, setShowMobilePOS] = useState(false);
 
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Extract orders and pagination info
+  const orders = ordersData?.orders ?? [];
+  const pagination = ordersData?.pagination;
+  const totalPages = pagination?.totalPages ?? 1;
+  const hasNextPage = pagination?.hasMore ?? false;
+  const hasPrevPage = currentPage > 1;
 
   // Filter active orders (not paid/cancelled)
   const activeOrders = useMemo(() => {
-    return (orders || []).filter(
+    return orders.filter(
       (o: Order) =>
         o.status === "PENDING" ||
         o.status === "PREPARING" ||
@@ -143,22 +614,35 @@ export default function LiveOrdersPage() {
   const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
   const serviceRate = parseFloat(restaurant?.taxRateService || "10") / 100;
 
-  // Filter menu items by dietary type
+  // Set initial active category
+  useMemo(() => {
+    if (!activeCategory && menuData?.categories && menuData.categories.length > 0) {
+      setActiveCategory(menuData.categories[0].id);
+    }
+  }, [menuData, activeCategory]);
+
+  // Filter menu items by active category and search query
   const filteredMenuItems = useMemo(() => {
     if (!menuData?.items) return [];
-    if (dietaryFilter === "any") return menuData.items;
-    if (dietaryFilter === "veg") {
-      return menuData.items.filter((item: MenuItem) =>
-        item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg"),
+    
+    let items = menuData.items;
+    
+    // Filter by category if not searching
+    if (!searchQuery && activeCategory) {
+      items = items.filter(
+        (item: MenuItem) => item.categoryId === activeCategory && item.isAvailable
+      );
+    } else if (searchQuery) {
+      // Filter by search query across all categories
+      items = items.filter(
+        (item: MenuItem) => 
+          item.isAvailable && 
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    if (dietaryFilter === "non-veg") {
-      return menuData.items.filter((item: MenuItem) =>
-        item.dietaryTags?.some((tag) => tag.toLowerCase() === "non-veg"),
-      );
-    }
-    return menuData.items;
-  }, [menuData, dietaryFilter]);
+    
+    return items;
+  }, [menuData, activeCategory, searchQuery]);
 
   const addToManualCart = (item: MenuItem) => {
     const hasCustomizationOptions =
@@ -169,6 +653,58 @@ export default function LiveOrdersPage() {
       setCustomizingItem(item);
     } else {
       setManualCart((prev) => {
+        const existing = prev.find((i) => i.id === item.id);
+        if (existing) {
+          return prev.map((i) =>
+            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
+          );
+        }
+        const isVeg = item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+        return [
+          ...prev,
+          {
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: 1,
+            isVeg,
+          },
+        ];
+      });
+    }
+  };
+
+  const removeFromManualCart = (itemId: string) => {
+    setManualCart((prev) => {
+      const item = prev.find((i) => i.id === itemId);
+      if (!item) return prev;
+      
+      if (item.quantity === 1) {
+        return prev.filter((i) => i.id !== itemId);
+      }
+      return prev.map((i) =>
+        i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i,
+      );
+    });
+  };
+
+  const incrementManualCart = (itemId: string) => {
+    setManualCart((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, quantity: i.quantity + 1 } : i,
+      ),
+    );
+  };
+
+  const addToAddItemsCart = (item: MenuItem) => {
+    const hasCustomizationOptions =
+      (item.variants && item.variants.length > 0) ||
+      (item.modifierGroups && item.modifierGroups.length > 0);
+
+    if (hasCustomizationOptions) {
+      setCustomizingItem(item);
+    } else {
+      setAddItemsCart((prev) => {
         const existing = prev.find((i) => i.id === item.id);
         if (existing) {
           return prev.map((i) =>
@@ -188,33 +724,6 @@ export default function LiveOrdersPage() {
     }
   };
 
-  const removeFromManualCart = (index: number) => {
-    setManualCart((prev) => {
-      const item = prev[index];
-      if (item.quantity > 1) {
-        return prev.map((i, idx) =>
-          idx === index ? { ...i, quantity: i.quantity - 1 } : i,
-        );
-      }
-      return prev.filter((_, idx) => idx !== index);
-    });
-  };
-
-  const addToAddItemsCart = (item: MenuItem) => {
-    setAddItemsCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
-        );
-      }
-      return [
-        ...prev,
-        { id: item.id, name: item.name, price: item.price, quantity: 1 },
-      ];
-    });
-  };
-
   const removeFromAddItemsCart = (index: number) => {
     setAddItemsCart((prev) => {
       const item = prev[index];
@@ -227,30 +736,6 @@ export default function LiveOrdersPage() {
     });
   };
 
-  const handleAddItemsToOrder = async (orderId: string) => {
-    if (addItemsCart.length === 0) {
-      toast.error("Please add items to the order");
-      return;
-    }
-
-    try {
-      await addOrderItems.mutateAsync({
-        orderId,
-        items: addItemsCart.map((item) => ({
-          menuItemId: item.id,
-          quantity: item.quantity,
-        })),
-      });
-
-      setAddItemsCart([]);
-      setIsAddItemsOpen(false);
-      setSelectedOrder(null);
-      toast.success("Items added to order! Kitchen will prepare them.");
-    } catch (error) {
-      // Error handled by mutation
-    }
-  };
-
   const manualCartTotal = useMemo(() => {
     return manualCart.reduce(
       (acc, item) => acc + item.price * item.quantity,
@@ -259,80 +744,15 @@ export default function LiveOrdersPage() {
   }, [manualCart]);
 
   const calculateBill = (subtotal: number) => {
-    const gst = subtotal * gstRate;
-    const serviceTax = subtotal * serviceRate;
-    const total = subtotal + gst + serviceTax;
-    return { subtotal, gst, serviceTax, total };
+    const cgst = subtotal * (gstRate / 2);
+    const sgst = subtotal * (gstRate / 2);
+    const total = subtotal + cgst + sgst;
+    return { subtotal, cgst, sgst, total };
   };
 
-  const handlePayment = async (order: Order, method: string) => {
-    try {
-      // Group all SERVED orders for the same table
-      let ordersToBill: Order[] = [order];
-
-      if (order.tableId) {
-        // Find all other SERVED orders for the same table
-        const tableOrders = (orders || []).filter(
-          (o: Order) =>
-            o.tableId === order.tableId &&
-            o.status === "SERVED" &&
-            o.id !== order.id,
-        );
-        ordersToBill = [order, ...tableOrders];
-      }
-
-      // Calculate combined totals
-      const combinedSubtotal = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.subtotalAmount),
-        0,
-      );
-      const combinedGst = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.gstAmount),
-        0,
-      );
-      const combinedService = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.serviceTaxAmount),
-        0,
-      );
-      const combinedTotal = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.totalAmount),
-        0,
-      );
-
-      // Mark all orders as PAID
-      for (const ord of ordersToBill) {
-        await updateStatus.mutateAsync({ orderId: ord.id, status: "PAID" });
-      }
-
-      // Create a single transaction for all orders (using combined totals)
-      const billNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // Create transaction with combined totals (using primary order ID)
-      await api.post(`/api/restaurants/${restaurantId}/transactions`, {
-        orderId: order.id, // Primary order ID
-        billNumber,
-        paymentMethod: method,
-        combinedSubtotal: combinedSubtotal,
-        combinedGst: combinedGst,
-        combinedService: combinedService,
-        combinedTotal: combinedTotal,
-      });
-
-      toast.success(
-        ordersToBill.length > 1
-          ? `Payment of ${currency}${combinedTotal.toFixed(2)} received for ${ordersToBill.length} orders via ${method}`
-          : `Payment of ${currency}${combinedTotal.toFixed(2)} received via ${method}`,
-      );
-
-      // Refetch orders to update the list
-      refetch();
-
-      setSelectedOrder(null);
-      setIsBillingOpen(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to process payment");
-    }
-  };
+  const billBreakdown = useMemo(() => {
+    return calculateBill(manualCartTotal);
+  }, [manualCartTotal, gstRate]);
 
   const handleAddCustomizedToCart = (selection: {
     menuItemId: string;
@@ -342,7 +762,6 @@ export default function LiveOrdersPage() {
   }) => {
     if (!customizingItem) return;
 
-    // Calculate price with customization
     let price = parseFloat(customizingItem.price as any);
 
     if (selection.variantId) {
@@ -362,6 +781,8 @@ export default function LiveOrdersPage() {
       });
     }
 
+    const isVeg = customizingItem.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+
     const cartItem = {
       id: customizingItem.id,
       name: customizingItem.name,
@@ -369,9 +790,9 @@ export default function LiveOrdersPage() {
       quantity: selection.quantity,
       variantId: selection.variantId,
       modifierIds: selection.modifierIds,
+      isVeg,
     };
 
-    // Add to the appropriate cart based on target
     if (customizationTarget === "addItems") {
       setAddItemsCart((prev) => [...prev, cartItem]);
     } else {
@@ -381,80 +802,146 @@ export default function LiveOrdersPage() {
     setCustomizingItem(null);
   };
 
-  const handleCreateNewOrder = async () => {
+  const handleSave = () => {
+    if (manualCart.length === 0) {
+      toast.error("Please add items to the order");
+      return;
+    }
+    toast.success("Order saved!");
+  };
+
+  const handleSaveAndPrint = () => {
+    if (manualCart.length === 0) {
+      toast.error("Please add items to the order");
+      return;
+    }
+    toast.success("Order saved and sent to printer!");
+  };
+
+  const handleSendToKitchen = async () => {
     if (manualCart.length === 0) {
       toast.error("Please add items to the order");
       return;
     }
 
     try {
+      const orderTypeMap = {
+        "dine-in": "DINE_IN",
+        "takeaway": "TAKEAWAY",
+        "delivery": "DELIVERY",
+      };
+
       const order = await createOrder.mutateAsync({
-        tableId: selectedTableId || undefined,
-        orderType: orderMethod as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
+        tableId: orderMethod === "dine-in" ? selectedTableId : undefined,
+        orderType: orderTypeMap[orderMethod] as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
         items: manualCart.map((item) => ({
           menuItemId: item.id,
           quantity: item.quantity,
-          variantId: item.variantId, // Include customization
-          modifierIds: item.modifierIds, // Include customization
+          variantId: item.variantId,
+          modifierIds: item.modifierIds,
         })),
         assignedWaiterId: selectedWaiterId || undefined,
       });
 
       toast.success(
-        `New order created! It will appear in the kitchen display.`,
+        `Order sent to kitchen! Table ${selectedTableId} - ${manualCart.length} items`,
       );
 
       setManualCart([]);
-      setSelectedTableId(null);
+      setSelectedTableId("1");
       setSelectedWaiterId(null);
       setIsNewOrderOpen(false);
+      setShowMobilePOS(false);
+      refetch();
     } catch (error) {
       // Error handled by mutation
     }
   };
 
-  const handleCreateQuickBill = async (paymentMethod: string) => {
-    if (manualCart.length === 0) {
-      toast.error("Please add items to the bill");
+  const handleAddItemsToOrder = async (orderId: string) => {
+    if (addItemsCart.length === 0) {
+      toast.error("Please add items to the order");
       return;
     }
 
     try {
-      const order = await createOrder.mutateAsync({
-        tableId: selectedTableId || undefined,
-        orderType: orderMethod as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
-        items: manualCart.map((item) => ({
+      await addOrderItems.mutateAsync({
+        orderId,
+        items: addItemsCart.map((item) => ({
           menuItemId: item.id,
           quantity: item.quantity,
+          variantId: item.variantId,
+          modifierIds: item.modifierIds,
         })),
-        assignedWaiterId: selectedWaiterId || undefined,
       });
 
-      // Immediately mark as paid and create transaction
-      await updateStatus.mutateAsync({ orderId: order.id, status: "PAID" });
+      setAddItemsCart([]);
+      setIsAddItemsOpen(false);
+      setSelectedOrder(null);
+      toast.success("Items added to order! Kitchen will prepare them.");
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
 
-      // Create transaction
+  const handlePayment = async (order: Order, method: string) => {
+    try {
+      let ordersToBill: Order[] = [order];
+
+      if (order.tableId) {
+        const tableOrders = (orders || []).filter(
+          (o: Order) =>
+            o.tableId === order.tableId &&
+            o.status === "SERVED" &&
+            o.id !== order.id,
+        );
+        ordersToBill = [order, ...tableOrders];
+      }
+
+      const combinedSubtotal = ordersToBill.reduce(
+        (sum, o) => sum + parseFloat(o.subtotalAmount),
+        0,
+      );
+      const combinedGst = ordersToBill.reduce(
+        (sum, o) => sum + parseFloat(o.gstAmount),
+        0,
+      );
+      const combinedService = ordersToBill.reduce(
+        (sum, o) => sum + parseFloat(o.serviceTaxAmount),
+        0,
+      );
+      const combinedTotal = ordersToBill.reduce(
+        (sum, o) => sum + parseFloat(o.totalAmount),
+        0,
+      );
+
+      for (const ord of ordersToBill) {
+        await updateStatus.mutateAsync({ orderId: ord.id, status: "PAID" });
+      }
+
       const billNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+
       await api.post(`/api/restaurants/${restaurantId}/transactions`, {
         orderId: order.id,
         billNumber,
-        paymentMethod,
+        paymentMethod: method,
+        combinedSubtotal: combinedSubtotal,
+        combinedGst: combinedGst,
+        combinedService: combinedService,
+        combinedTotal: combinedTotal,
       });
 
-      const billDetails = calculateBill(manualCartTotal);
       toast.success(
-        `Quick bill created and paid: ${currency}${billDetails.total.toFixed(2)} via ${paymentMethod}`,
+        ordersToBill.length > 1
+          ? `Payment of ${currency}${combinedTotal.toFixed(2)} received for ${ordersToBill.length} orders via ${method}`
+          : `Payment of ${currency}${combinedTotal.toFixed(2)} received via ${method}`,
       );
 
-      // Refetch orders and transactions
       refetch();
-
-      setManualCart([]);
-      setSelectedTableId(null);
-      setSelectedWaiterId(null);
-      setIsQuickBillOpen(false);
-    } catch (error) {
-      // Error handled by mutation
+      setSelectedOrder(null);
+      setIsBillingOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to process payment");
     }
   };
 
@@ -481,6 +968,41 @@ export default function LiveOrdersPage() {
     }
   };
 
+  const handleCloseMobilePOS = () => {
+    setShowMobilePOS(false);
+    setManualCart([]);
+    setSelectedWaiterId(null);
+    setSelectedTableId("1");
+    setSearchQuery("");
+    setIsSearchOpen(false);
+    setActiveCategory(menuData?.categories?.[0]?.id || "");
+  };
+
+  const handleNewOrderClick = () => {
+    if (isMobile) {
+      setShowMobilePOS(true);
+    } else {
+      setIsNewOrderOpen(true);
+    }
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (hasNextPage) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (hasPrevPage) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -488,6 +1010,41 @@ export default function LiveOrdersPage() {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       </DashboardLayout>
+    );
+  }
+
+  // Render mobile POS overlay when active
+  if (showMobilePOS && isMobile) {
+    return (
+      <MobilePOS
+        categories={menuData?.categories || []}
+        menuItems={menuData?.items || []}
+        activeCategory={activeCategory}
+        orderItems={Object.fromEntries(
+          manualCart.map((item) => [item.id, item.quantity])
+        )}
+        tableNumber={selectedTableId}
+        waiterName={selectedWaiterId}
+        diningType={orderMethod}
+        paymentMethod={paymentMethod}
+        onCategoryChange={setActiveCategory}
+        onAddItem={addToManualCart}
+        onRemoveItem={removeFromManualCart}
+        onIncrement={incrementManualCart}
+        onTableChange={setSelectedTableId}
+        onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
+        onDiningTypeChange={setOrderMethod}
+        onPaymentMethodChange={setPaymentMethod}
+        onSendToKitchen={handleSendToKitchen}
+        onSave={handleSave}
+        onSaveAndPrint={handleSaveAndPrint}
+        onClose={handleCloseMobilePOS}
+        currency={currency}
+        gstRate={gstRate}
+        tables={tables}
+        staff={staff}
+        isLoading={createOrder.isPending}
+      />
     );
   }
 
@@ -511,978 +1068,579 @@ export default function LiveOrdersPage() {
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Dialog
-            open={isNewOrderOpen}
-            onOpenChange={(open) => {
-              if (!open && customizingItem) return;
-
-              setIsNewOrderOpen(open);
-              if (!open) {
-                setSelectedWaiterId(null);
-                setSelectedTableId(null);
-                setManualCart([]);
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="shadow-lg flex-1 sm:flex-none"
-              >
-                <Utensils className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">New Order</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
-            onInteractOutside={(e) => {
-              if (customizingItem) e.preventDefault();
-            }}
-            onEscapeKeyDown={(e) => {
-              if (customizingItem) e.preventDefault();
-            }}
+          {isMobile ? (
+            <Button 
+              onClick={handleNewOrderClick}
+              className="shadow-lg flex-1 sm:flex-none bg-primary hover:bg-primary/90"
             >
-              {customizingItem ? (
-                <ItemCustomizationContent
-                  menuItem={customizingItem}
-                  currency={currency}
-                  onClose={() => setCustomizingItem(null)}
-                  onAddToCart={handleAddCustomizedToCart}
-                />
-              ) : (
-                <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-                  <Utensils className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                  New Order (Kitchen)
-                </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm">
-                  Create a new order that will be sent to the kitchen for
-                  preparation.
-                </DialogDescription>
-              </DialogHeader>
-                </>
-              )}
-
-              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 py-4">
-                {/* Left: Menu Selection */}
-                <div className="flex flex-col gap-3 sm:gap-4 overflow-hidden md:border-r md:pr-6">
-                  <div className="space-y-2 sm:space-y-3">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">
-                      1. Select Food Items
-                    </Label>
-                    {/* Dietary Filter */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setDietaryFilter("any")}
-                        className={cn(
-                          "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "any"
-                            ? "bg-primary text-white shadow-md shadow-primary/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setDietaryFilter("veg")}
-                        className={cn(
-                          "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "veg"
-                            ? "bg-green-500 text-white shadow-md shadow-green-500/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        Veg
-                      </button>
-                      <button
-                        onClick={() => setDietaryFilter("non-veg")}
-                        className={cn(
-                          "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "non-veg"
-                            ? "bg-red-500 text-white shadow-md shadow-red-500/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        Non-Veg
-                      </button>
-                    </div>
-                  </div>
-                  <ScrollArea className="flex-1 max-h-[calc(100vh-32rem)]">
-                    <div className="space-y-4 sm:space-y-6 pr-2">
-                      {menuData?.categories?.map((category) => {
-                        const items =
-                          filteredMenuItems.filter(
-                            (i: MenuItem) =>
-                              i.categoryId === category.id && i.isAvailable,
-                          ) || [];
-                        if (items.length === 0) return null;
-
-                        return (
-                          <div key={category.id} className="space-y-2">
-                            <h4 className="text-sm font-bold border-b pb-1">
-                              {category.name}
-                            </h4>
-                            <div className="grid grid-cols-1 gap-2">
-                              {items.map((item: MenuItem) => {
-                                const hasCustomizationOptions =
-                                  (item.variants && item.variants.length > 0) ||
-                                  (item.modifierGroups &&
-                                    item.modifierGroups.length > 0);
-                                const vegTag = item.dietaryTags?.some(
-                                  (tag) => tag.toLowerCase() === "veg",
-                                );
-                                const nonVegTag = item.dietaryTags?.some(
-                                  (tag) => tag.toLowerCase() === "non-veg",
-                                );
-
-                                return (
-                                  <Button
-                                    key={item.id}
-                                    variant="outline"
-                                    className="justify-between h-auto py-2 px-2 sm:px-3 text-left hover:border-primary hover:bg-primary/5 group"
-                                    onClick={() => {
-                                      setCustomizationTarget("manual");
-                                      addToManualCart(item);
-                                    }}
-                                  >
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-bold text-xs sm:text-sm">
-                                          {item.name}
-                                        </span>
-
-                                        {/* Customization indicator */}
-                                        {hasCustomizationOptions && (
-                                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] px-1.5 py-0 h-4">
-                                            Customize
-                                          </Badge>
-                                        )}
-
-                                        {/* Dietary badges */}
-                                        {vegTag && (
-                                          <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] px-1.5 py-0 h-4">
-                                            Veg
-                                          </Badge>
-                                        )}
-                                        {nonVegTag && (
-                                          <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] px-1.5 py-0 h-4">
-                                            Non-Veg
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground">
-                                        {currency}
-                                        {item.price}
-                                      </span>
-                                    </div>
-                                    <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {(!filteredMenuItems ||
-                        filteredMenuItems.length === 0) && (
-                        <div className="text-center py-10 text-muted-foreground">
-                          <p className="text-sm">No menu items available</p>
-                          <p className="text-xs">Add items in Menu Builder</p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                {/* Right: Cart & Submit */}
-                <div className="flex flex-col gap-4 sm:gap-6 overflow-hidden">
-                  <div className="flex flex-col gap-3 flex-1 overflow-hidden">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">
-                      2. Order Details
-                    </Label>
-
-                    {/* Table Selection */}
-                    {orderMethod === "DINE_IN" &&
-                      tables &&
-                      tables.length > 0 && (
-                        <div className="flex gap-2 flex-wrap">
-                          {tables
-                            .filter(
-                              (t: Table) =>
-                                t.currentStatus === "OCCUPIED" ||
-                                t.currentStatus === "AVAILABLE",
-                            )
-                            .slice(0, 8)
-                            .map((table: Table) => (
-                              <Button
-                                key={table.id}
-                                variant={
-                                  selectedTableId === table.id
-                                    ? "default"
-                                    : "outline"
-                                }
-                                size="sm"
-                                className="text-xs"
-                                onClick={() =>
-                                  setSelectedTableId(
-                                    selectedTableId === table.id
-                                      ? null
-                                      : table.id,
-                                  )
-                                }
-                              >
-                                T{table.tableNumber}
-                              </Button>
-                            ))}
-                        </div>
-                      )}
-
-                    {/* Waiter Selection */}
-                    {staff &&
-                      staff.filter(
-                        (s: any) => s.role === "WAITER" && s.isActive,
-                      ).length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">
-                            Assign to Waiter (Optional)
-                          </Label>
-                          <Select
-                            value={selectedWaiterId || "none"}
-                            onValueChange={(value) =>
-                              setSelectedWaiterId(
-                                value === "none" ? null : value,
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-full text-xs sm:text-sm">
-                              <SelectValue placeholder="Select a waiter (optional)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">
-                                None (Unassigned)
-                              </SelectItem>
-                              {staff
-                                .filter(
-                                  (s: any) => s.role === "WAITER" && s.isActive,
-                                )
-                                .map((waiter: any) => (
-                                  <SelectItem key={waiter.id} value={waiter.id}>
-                                    {waiter.fullName}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                    {/* Cart Items */}
-                    <ScrollArea className="flex-1 border rounded-lg p-2 sm:p-3 bg-muted/20 max-h-[calc(100vh-40rem)]">
-                      <div className="space-y-2 sm:space-y-3">
-                        {manualCart.length === 0 ? (
-                          <div className="text-center py-10 text-muted-foreground text-xs sm:text-sm italic">
-                            No items added to order
-                          </div>
-                        ) : (
-                          <>
-                            {manualCart.map((item, idx) => {
-                              // Find the original menu item for customization details
-                              const menuItem = menuData?.items?.find(
-                                (mi) => mi.id === item.id,
-                              );
-                              const selectedVariant = menuItem?.variants?.find(
-                                (v) => v.id === item.variantId,
-                              );
-                              const selectedModifiers =
-                                menuItem?.modifierGroups?.flatMap(
-                                  (g) =>
-                                    g.modifiers?.filter((m) =>
-                                      item.modifierIds?.includes(m.id),
-                                    ) || [],
-                                ) || [];
-
-                              return (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between group p-1.5 sm:p-2 rounded-lg hover:bg-muted/40 transition-colors"
-                                >
-                                  <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="text-xs sm:text-sm font-bold truncate">
-                                      {item.name}
-                                    </span>
-
-                                    {selectedVariant && (
-                                      <span className="text-[10px] text-blue-600 font-medium">
-                                        {selectedVariant.variantName}
-                                      </span>
-                                    )}
-
-                                    {selectedModifiers.length > 0 && (
-                                      <span className="text-[10px] text-amber-600">
-                                        +{" "}
-                                        {selectedModifiers
-                                          .map((m) => m.name)
-                                          .join(", ")}
-                                      </span>
-                                    )}
-
-                                    <span className="text-[10px] sm:text-xs text-muted-foreground">
-                                      {currency}
-                                      {item.price} x {item.quantity} ={" "}
-                                      {currency}
-                                      {(item.price * item.quantity).toFixed(2)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 sm:h-7 sm:w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
-                                      onClick={() => removeFromManualCart(idx)}
-                                    >
-                                      <Minus className="w-3 h-3" />
-                                    </Button>
-                                    <span className="text-xs sm:text-sm font-bold min-w-[20px] sm:min-w-[24px] text-center bg-primary/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded">
-                                      {item.quantity}
-                                    </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 sm:h-7 sm:w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
-                                      onClick={() =>
-                                        setManualCart((prev) =>
-                                          prev.map((i, index) =>
-                                            index === idx
-                                              ? {
-                                                  ...i,
-                                                  quantity: i.quantity + 1,
-                                                }
-                                              : i,
-                                          ),
-                                        )
-                                      }
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    </ScrollArea>
-
-                    {/* Breakdown */}
-                    <div className="bg-muted/30 p-2 sm:p-3 rounded-lg space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>
-                          {currency}
-                          {manualCartTotal.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Taxes (GST {gstRate * 100}% + SC {serviceRate * 100}%)
-                        </span>
-                        <span>
-                          {currency}
-                          {(manualCartTotal * (gstRate + serviceRate)).toFixed(
-                            2,
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between font-bold border-t pt-1.5 sm:pt-2 mt-1.5 sm:mt-2">
-                        <span>Total</span>
-                        <span className="text-primary text-base sm:text-lg">
-                          {currency}
-                          {(
-                            manualCartTotal *
-                            (1 + gstRate + serviceRate)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 3: Method & Submit */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase font-bold text-muted-foreground">
-                        3. Select Type & Create
-                      </Label>
-                      <RadioGroup
-                        defaultValue="DINE_IN"
-                        onValueChange={setOrderMethod}
-                        className="grid grid-cols-3 gap-2"
-                      >
-                        <div>
-                          <RadioGroupItem
-                            value="DINE_IN"
-                            id="new-dine-in"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="new-dine-in"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <DineInIcon className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Dine-in
-                            </span>
-                          </Label>
-                        </div>
-                        <div>
-                          <RadioGroupItem
-                            value="TAKEAWAY"
-                            id="new-takeaway"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="new-takeaway"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <ShoppingBag className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Takeaway
-                            </span>
-                          </Label>
-                        </div>
-                        <div>
-                          <RadioGroupItem
-                            value="DELIVERY"
-                            id="new-delivery"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="new-delivery"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <Truck className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Delivery
-                            </span>
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-
-                    <Button
-                      className="w-full h-12 text-lg font-bold"
-                      onClick={handleCreateNewOrder}
-                      disabled={
-                        createOrder.isPending || manualCart.length === 0
-                      }
-                    >
-                      {createOrder.isPending ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Utensils className="w-4 h-4 mr-2" />
-                      )}
-                      Create Order (Send to Kitchen)
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={isQuickBillOpen}
-            onOpenChange={(open) => {
-              if (!open && customizingItem) return; 
-
-              setIsQuickBillOpen(open);
-              if (!open) {
-                setSelectedWaiterId(null);
-                setSelectedTableId(null);
-                setManualCart([]);
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="shadow-lg shadow-primary/20 flex-1 sm:flex-none">
-                <Receipt className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Quick Bill</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" 
+              <Utensils className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">New Order</span>
+            </Button>
+          ) : (
+            <Dialog
+              open={isNewOrderOpen}
+              onOpenChange={(open) => {
+                if (!open && customizingItem) return;
+                setIsNewOrderOpen(open);
+                if (!open) {
+                  setSelectedWaiterId(null);
+                  setSelectedTableId("1");
+                  setManualCart([]);
+                  setSearchQuery("");
+                  setIsSearchOpen(false);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button 
+                  className="shadow-lg flex-1 sm:flex-none bg-primary hover:bg-primary/90"
+                >
+                  <Utensils className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">New Order</span>
+                </Button>
+              </DialogTrigger>
+            <DialogContent
+              className="max-w-[90vw] w-[90vw] h-[90vh] max-h-[90vh] p-0 gap-0 rounded-lg"
               onInteractOutside={(e) => {
                 if (customizingItem) e.preventDefault();
               }}
               onEscapeKeyDown={(e) => {
                 if (customizingItem) e.preventDefault();
-            }}>
-
+              }}
+            >
               {customizingItem ? (
-                <ItemCustomizationContent
-                  menuItem={customizingItem}
-                  currency={currency}
-                  onClose={() => setCustomizingItem(null)}
-                  onAddToCart={handleAddCustomizedToCart}
-                />
-              ) : (
-                <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-                  <Receipt className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                  Quick Billing Terminal
-                </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm">
-                  Add items, select method, and settle payment.
-                </DialogDescription>
-              </DialogHeader>
-                </> )}
-              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 py-4">
-                {/* Left: Menu Selection */}
-                <div className="flex flex-col gap-3 sm:gap-4 overflow-hidden md:border-r md:pr-6">
-                  <div className="space-y-2 sm:space-y-3">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">
-                      1. Select Food Items
-                    </Label>
-                    {/* Dietary Filter */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setDietaryFilter("any")}
-                        className={cn(
-                          "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "any"
-                            ? "bg-primary text-white shadow-md shadow-primary/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setDietaryFilter("veg")}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "veg"
-                            ? "bg-green-500 text-white shadow-md shadow-green-500/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        Veg
-                      </button>
-                      <button
-                        onClick={() => setDietaryFilter("non-veg")}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                          dietaryFilter === "non-veg"
-                            ? "bg-red-500 text-white shadow-md shadow-red-500/30"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                        )}
-                      >
-                        Non-Veg
-                      </button>
-                    </div>
+                <div className="h-full flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+                  <div className="max-w-2xl w-full">
+                    <ItemCustomizationContent
+                      menuItem={customizingItem}
+                      currency={currency}
+                      onClose={() => setCustomizingItem(null)}
+                      onAddToCart={handleAddCustomizedToCart}
+                    />
                   </div>
-                  <ScrollArea className="flex-1">
-                    <div className="space-y-6">
-                      {menuData?.categories?.map((category) => {
-                        const items =
-                          filteredMenuItems.filter(
-                            (i: MenuItem) =>
-                              i.categoryId === category.id && i.isAvailable,
-                          ) || [];
-                        if (items.length === 0) return null;
-
-                        return (
-                          <div key={category.id} className="space-y-2">
-                            <h4 className="text-sm font-bold border-b pb-1">
-                              {category.name}
-                            </h4>
-                            <div className="grid grid-cols-1 gap-2">
-                              {items.map((item: MenuItem) => {
-                                const hasCustomizationOptions =
-                                  (item.variants && item.variants.length > 0) ||
-                                  (item.modifierGroups &&
-                                    item.modifierGroups.length > 0);
-                                const vegTag = item.dietaryTags?.some(
-                                  (tag) => tag.toLowerCase() === "veg",
-                                );
-                                const nonVegTag = item.dietaryTags?.some(
-                                  (tag) => tag.toLowerCase() === "non-veg",
-                                );
-                                return (
-                                  <Button
-                                    key={item.id}
-                                    variant="outline"
-                                    className="justify-between h-auto py-2 px-2 sm:px-3 text-left hover:border-primary hover:bg-primary/5 group"
-                                    onClick={() => addToManualCart(item)}
-                                  >
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-bold text-xs sm:text-sm">
-                                          {item.name}
-                                        </span>
-
-                                        {/* Customization indicator */}
-                                        {hasCustomizationOptions && (
-                                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] px-1.5 py-0 h-4">
-                                            Customize
-                                          </Badge>
-                                        )}
-
-                                        {/* Dietary badges */}
-                                        {vegTag && (
-                                          <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] px-1.5 py-0 h-4">
-                                            Veg
-                                          </Badge>
-                                        )}
-                                        {nonVegTag && (
-                                          <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] px-1.5 py-0 h-4">
-                                            Non-Veg
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground">
-                                        {currency}
-                                        {item.price}
-                                      </span>
-                                    </div>
-                                    <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  </Button>
-                                );
-                              })}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
+                  {/* Main Content Area */}
+                  <div className="flex flex-1 overflow-hidden min-h-0">
+                    {/* Left Side - Category & Items */}
+                    <div className="flex-[1_1_60%] flex flex-col overflow-hidden bg-white min-w-0 max-w-[60%]">
+                      {/* Category Bar with Search */}
+                      <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-min pb-1">
+                              {!isSearchOpen && menuData?.categories?.map((category) => (
+                                <button
+                                  key={category.id}
+                                  onClick={() => {
+                                    setActiveCategory(category.id);
+                                    setSearchQuery("");
+                                  }}
+                                  className={cn(
+                                    "px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-[11px] sm:text-xs whitespace-nowrap transition-all flex-shrink-0",
+                                    activeCategory === category.id && !searchQuery
+                                      ? "bg-primary text-white shadow-md"
+                                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                  )}
+                                >
+                                  {category.name}
+                                </button>
+                              ))}
                             </div>
                           </div>
-                        );
-                      })}
-                      {(!filteredMenuItems ||
-                        filteredMenuItems.length === 0) && (
-                        <div className="text-center py-10 text-muted-foreground">
-                          <p>No menu items available</p>
-                          <p className="text-sm">Add items in Menu Builder</p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                {/* Right: Cart & Payment */}
-                <div className="flex flex-col gap-6 overflow-hidden">
-                  <div className="flex flex-col gap-3 flex-1 overflow-hidden">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">
-                      2. Bill Details
-                    </Label>
-
-                    {/* Table Selection */}
-                    {orderMethod === "DINE_IN" &&
-                      tables &&
-                      tables.length > 0 && (
-                        <div className="flex gap-2 flex-wrap">
-                          {tables
-                            .filter(
-                              (t: Table) =>
-                                t.currentStatus === "OCCUPIED" ||
-                                t.currentStatus === "AVAILABLE",
-                            )
-                            .slice(0, 8)
-                            .map((table: Table) => (
+                          
+                          {!isSearchOpen ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setIsSearchOpen(true)}
+                              className="flex-shrink-0 h-8 sm:h-9 px-2 sm:px-3"
+                            >
+                              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            </Button>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-1 max-w-xs">
+                              <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <Input
+                                  type="text"
+                                  placeholder="Search items..."
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  className="h-8 sm:h-9 pl-8 pr-2 text-xs sm:text-sm"
+                                  autoFocus
+                                />
+                              </div>
                               <Button
-                                key={table.id}
-                                variant={
-                                  selectedTableId === table.id
-                                    ? "default"
-                                    : "outline"
-                                }
                                 size="sm"
-                                className="text-xs"
-                                onClick={() =>
-                                  setSelectedTableId(
-                                    selectedTableId === table.id
-                                      ? null
-                                      : table.id,
-                                  )
-                                }
+                                variant="ghost"
+                                onClick={() => {
+                                  setIsSearchOpen(false);
+                                  setSearchQuery("");
+                                }}
+                                className="flex-shrink-0 h-8 sm:h-9 px-2"
                               >
-                                T{table.tableNumber}
+                                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </Button>
-                            ))}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
 
-                    {/* Waiter Selection */}
-                    {staff &&
-                      staff.filter(
-                        (s: any) => s.role === "WAITER" && s.isActive,
-                      ).length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">
-                            Assign to Waiter (Optional)
-                          </Label>
-                          <Select
-                            value={selectedWaiterId || "none"}
-                            onValueChange={(value) =>
-                              setSelectedWaiterId(
-                                value === "none" ? null : value,
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select a waiter (optional)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">
-                                None (Unassigned)
-                              </SelectItem>
-                              {staff
-                                .filter(
-                                  (s: any) => s.role === "WAITER" && s.isActive,
-                                )
-                                .map((waiter: any) => (
-                                  <SelectItem key={waiter.id} value={waiter.id}>
-                                    {waiter.fullName}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                    {/* Cart Items */}
-                    <ScrollArea className="flex-1 border rounded-lg p-3 bg-muted/20">
-                      <div className="space-y-3">
-                        {manualCart.length === 0 ? (
-                          <div className="text-center py-10 text-muted-foreground text-xs sm:text-sm italic">
-                            No items added to order
-                          </div>
-                        ) : (
-                          <>
-                            {manualCart.map((item, idx) => {
-                              // Find the original menu item for customization details
-                              const menuItem = menuData?.items?.find(
-                                (mi) => mi.id === item.id,
+                      {/* Items Grid */}
+                      <ScrollArea className="flex-1 min-h-0">
+                        <div className="p-2 sm:p-3 md:p-4">
+                          {searchQuery && (
+                            <div className="mb-3 text-xs text-gray-600">
+                              Found {filteredMenuItems.length} item(s) for "{searchQuery}"
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                            {filteredMenuItems.map((item: MenuItem) => {
+                              const quantity = manualCart.find((i) => i.id === item.id)?.quantity || 0;
+                              const isAdded = quantity > 0;
+                              const isVeg = item.dietaryTags?.some(
+                                (tag) => tag.toLowerCase() === "veg"
                               );
-                              const selectedVariant = menuItem?.variants?.find(
-                                (v) => v.id === item.variantId,
-                              );
-                              const selectedModifiers =
-                                menuItem?.modifierGroups?.flatMap(
-                                  (g) =>
-                                    g.modifiers?.filter((m) =>
-                                      item.modifierIds?.includes(m.id),
-                                    ) || [],
-                                ) || [];
 
                               return (
                                 <div
-                                  key={idx}
-                                  className="flex items-center justify-between group p-1.5 sm:p-2 rounded-lg hover:bg-muted/40 transition-colors"
+                                  key={item.id}
+                                  className={cn(
+                                    "bg-white rounded-xl p-2.5 sm:p-3 hover:shadow-md transition-all flex flex-col",
+                                    isAdded 
+                                      ? "border-2 border-primary shadow-md ring-2 ring-primary/20" 
+                                      : "border-2 border-gray-200 hover:border-primary/30"
+                                  )}
                                 >
-                                  <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="text-xs sm:text-sm font-bold truncate">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <h3 className="font-semibold text-gray-900 flex-1 text-xs sm:text-sm line-clamp-2 leading-tight">
                                       {item.name}
-                                    </span>
-
-                                    {selectedVariant && (
-                                      <span className="text-[10px] text-blue-600 font-medium">
-                                        {selectedVariant.variantName}
-                                      </span>
-                                    )}
-
-                                    {selectedModifiers.length > 0 && (
-                                      <span className="text-[10px] text-amber-600">
-                                        +{" "}
-                                        {selectedModifiers
-                                          .map((m) => m.name)
-                                          .join(", ")}
-                                      </span>
-                                    )}
-
-                                    <span className="text-[10px] sm:text-xs text-muted-foreground">
-                                      {currency}
-                                      {item.price} x {item.quantity} ={" "}
-                                      {currency}
-                                      {(item.price * item.quantity).toFixed(2)}
-                                    </span>
+                                    </h3>
+                                    <div
+                                      className={cn(
+                                        "size-2.5 sm:size-3 rounded-sm border-2 flex-shrink-0 mt-0.5 ml-1.5",
+                                        isVeg 
+                                          ? "border-green-600 bg-white relative after:content-[''] after:absolute after:inset-[3px] after:bg-green-600 after:rounded-full" 
+                                          : "border-red-600 bg-white relative after:content-[''] after:absolute after:inset-[3px] after:bg-red-600 after:rounded-full"
+                                      )}
+                                    />
                                   </div>
-                                  <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 sm:h-7 sm:w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
-                                      onClick={() => removeFromManualCart(idx)}
-                                    >
-                                      <Minus className="w-3 h-3" />
-                                    </Button>
-                                    <span className="text-xs sm:text-sm font-bold min-w-[20px] sm:min-w-[24px] text-center bg-primary/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded">
-                                      {item.quantity}
+                                  
+                                  <div className="mt-auto space-y-2">
+                                    <span className="text-sm sm:text-base font-bold text-gray-900 block">
+                                      {currency}{item.price}
                                     </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 sm:h-7 sm:w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
-                                      onClick={() =>
-                                        setManualCart((prev) =>
-                                          prev.map((i, index) =>
-                                            index === idx
-                                              ? {
-                                                  ...i,
-                                                  quantity: i.quantity + 1,
-                                                }
-                                              : i,
-                                          ),
-                                        )
-                                      }
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </Button>
+                                    
+                                    {!isAdded ? (
+                                      <Button
+                                        onClick={() => {
+                                          setCustomizationTarget("manual");
+                                          addToManualCart(item);
+                                        }}
+                                        size="sm"
+                                        className="bg-primary hover:bg-primary/90 text-white h-8 w-full rounded-md font-semibold"
+                                      >
+                                        <Plus className="size-4 mr-1" />
+                                        Add
+                                      </Button>
+                                    ) : (
+                                      <div className="flex items-center justify-center gap-2 bg-primary/10 rounded-md border-2 border-primary/30 p-1">
+                                        <Button
+                                          onClick={() => removeFromManualCart(item.id)}
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
+                                        >
+                                          <Minus className="size-4 text-primary" />
+                                        </Button>
+                                        <span className="font-bold text-gray-900 min-w-[1.5rem] text-center text-sm">
+                                          {quantity}
+                                        </span>
+                                        <Button
+                                          onClick={() => incrementManualCart(item.id)}
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
+                                        >
+                                          <Plus className="size-4 text-primary" />
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
                             })}
-                          </>
-                        )}
-                      </div>
-                    </ScrollArea>
-
-                    {/* Breakdown */}
-                    <div className="bg-muted/30 p-3 rounded-lg space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>
-                          {currency}
-                          {manualCartTotal.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Taxes (GST {gstRate * 100}% + SC {serviceRate * 100}%)
-                        </span>
-                        <span>
-                          {currency}
-                          {(manualCartTotal * (gstRate + serviceRate)).toFixed(
-                            2,
+                          </div>
+                          {filteredMenuItems.length === 0 && (
+                            <div className="text-center py-12 text-gray-500">
+                              <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                              <p className="text-sm">No items found</p>
+                            </div>
                           )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between font-bold border-t pt-2 mt-2">
-                        <span>Total Payable</span>
-                        <span className="text-primary text-lg">
-                          {currency}
-                          {(
-                            manualCartTotal *
-                            (1 + gstRate + serviceRate)
-                          ).toFixed(2)}
-                        </span>
+                        </div>
+                      </ScrollArea>
+
+                      {/* Action Buttons */}
+                      <div className="bg-white border-t border-gray-200 p-2 sm:p-3 flex-shrink-0">
+                        <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                          <Button
+                            onClick={handleSave}
+                            variant="outline"
+                            disabled={manualCart.length === 0}
+                            size="sm"
+                            className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
+                          >
+                            <Save className="size-3 sm:size-3.5 sm:mr-1.5" />
+                            <span className="hidden sm:inline">Save</span>
+                          </Button>
+                          <Button
+                            onClick={handleSaveAndPrint}
+                            variant="outline"
+                            disabled={manualCart.length === 0}
+                            size="sm"
+                            className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
+                          >
+                            <Printer className="size-3 sm:size-3.5 sm:mr-1.5" />
+                            <span className="hidden sm:inline">Print</span>
+                          </Button>
+                          <Button
+                            onClick={handleSendToKitchen}
+                            disabled={manualCart.length === 0 || createOrder.isPending}
+                            size="sm"
+                            className="bg-primary hover:bg-primary/90 text-white px-3 sm:px-6 text-[11px] sm:text-xs h-8 sm:h-9"
+                          >
+                            {createOrder.isPending ? (
+                              <Loader2 className="size-3 sm:size-3.5 sm:mr-1.5 animate-spin" />
+                            ) : (
+                              <ChefHat className="size-3 sm:size-3.5 sm:mr-1.5" />
+                            )}
+                            <span className="hidden xs:inline">Kitchen</span>
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Step 3: Method & Payment */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase font-bold text-muted-foreground">
-                        3. Select Type & Settle
-                      </Label>
-                      <RadioGroup
-                        defaultValue="DINE_IN"
-                        onValueChange={setOrderMethod}
-                        className="grid grid-cols-3 gap-2"
-                      >
-                        <div>
-                          <RadioGroupItem
-                            value="DINE_IN"
-                            id="quick-dine-in"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="quick-dine-in"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <DineInIcon className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Dine-in
-                            </span>
-                          </Label>
-                        </div>
-                        <div>
-                          <RadioGroupItem
-                            value="TAKEAWAY"
-                            id="quick-takeaway"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="quick-takeaway"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <ShoppingBag className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Takeaway
-                            </span>
-                          </Label>
-                        </div>
-                        <div>
-                          <RadioGroupItem
-                            value="DELIVERY"
-                            id="quick-delivery"
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor="quick-delivery"
-                            className="flex flex-col items-center justify-between rounded-lg border bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary transition-all cursor-pointer"
-                          >
-                            <Truck className="h-4 w-4 mb-1" />
-                            <span className="text-[10px] font-bold">
-                              Delivery
-                            </span>
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
+                    {/* Right Side - Order Summary */}
+                    <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 border-l border-gray-200 flex flex-col h-full overflow-hidden">
+                      {/* Header */}
+                      <div className="bg-white border-b border-gray-200 p-3 sm:p-4 flex-shrink-0">
+                        <h2 className="text-sm sm:text-base font-bold text-gray-900 mb-3">
+                          Order Summary
+                        </h2>
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        variant="outline"
-                        className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
-                        onClick={() => handleCreateQuickBill("CASH")}
-                        disabled={
-                          createOrder.isPending || manualCart.length === 0
-                        }
-                      >
-                        <CreditCard className="w-4 h-4 text-green-600" />
-                        <div className="text-[10px] font-bold">CASH</div>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
-                        onClick={() => handleCreateQuickBill("UPI")}
-                        disabled={
-                          createOrder.isPending || manualCart.length === 0
-                        }
-                      >
-                        <QrCode className="w-4 h-4 text-blue-600" />
-                        <div className="text-[10px] font-bold">UPI</div>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-col h-16 gap-1 hover:border-primary hover:bg-primary/5 rounded-xl border-2"
-                        onClick={() => handleCreateQuickBill("CARD")}
-                        disabled={
-                          createOrder.isPending || manualCart.length === 0
-                        }
-                      >
-                        <CreditCard className="w-4 h-4 text-purple-600" />
-                        <div className="text-[10px] font-bold">CARD</div>
-                      </Button>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                              <UtensilsCrossed className="size-3" />
+                              Table
+                            </Label>
+                            <Select value={selectedTableId} onValueChange={setSelectedTableId}>
+                              <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tables?.filter((t: Table) => 
+                                  t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
+                                ).map((table: Table) => (
+                                  <SelectItem key={table.id} value={table.id}>
+                                    T{table.tableNumber}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                              <Users className="size-3" />
+                              Waiter
+                            </Label>
+                            <Select
+                              value={selectedWaiterId || "none"}
+                              onValueChange={(value) =>
+                                setSelectedWaiterId(value === "none" ? null : value)
+                              }
+                            >
+                              <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                                <SelectValue placeholder="None" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {staff
+                                  ?.filter((s: any) => s.role === "WAITER" && s.isActive)
+                                  .map((waiter: any) => (
+                                    <SelectItem key={waiter.id} value={waiter.id}>
+                                      {waiter.fullName.split(' ')[0]}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                              <Utensils className="size-3" />
+                              Type
+                            </Label>
+                            <Select
+                              value={orderMethod}
+                              onValueChange={(value: any) => setOrderMethod(value)}
+                            >
+                              <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="dine-in">Dine</SelectItem>
+                                <SelectItem value="takeaway">Take</SelectItem>
+                                <SelectItem value="delivery">Delv</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                     {/* Order Items */}
+                      <ScrollArea className="flex-1 min-h-0">
+                        <div className="p-2 md:p-3">
+                          <h3 className="font-semibold text-gray-900 mb-1.5 text-[11px] md:text-xs">
+                            Items ({manualCart.length})
+                          </h3>
+                          {manualCart.length === 0 ? (
+                            <p className="text-gray-500 text-[10px] text-center py-6">
+                              No items added
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {manualCart.map((item, idx) => {
+                                const menuItem = menuData?.items?.find(
+                                  (mi) => mi.id === item.id
+                                );
+                                const selectedVariant = menuItem?.variants?.find(
+                                  (v) => v.id === item.variantId
+                                );
+                                const selectedModifiers =
+                                  menuItem?.modifierGroups?.flatMap(
+                                    (g) =>
+                                      g.modifiers?.filter((m) =>
+                                        item.modifierIds?.includes(m.id)
+                                      ) || []
+                                  ) || [];
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="bg-white rounded-md border border-gray-200 p-1.5 md:p-2"
+                                  >
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                                        <div
+                                          className={cn(
+                                            "size-2 md:size-2.5 rounded-sm border flex-shrink-0",
+                                            item.isVeg 
+                                              ? "border-green-600 bg-white relative after:content-[''] after:absolute after:inset-[2px] after:bg-green-600 after:rounded-full" 
+                                              : "border-red-600 bg-white relative after:content-[''] after:absolute after:inset-[2px] after:bg-red-600 after:rounded-full"
+                                          )}
+                                        />
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="font-semibold text-gray-900 text-[10px] md:text-[11px] truncate leading-tight">
+                                            {item.name}
+                                          </span>
+                                          {selectedVariant && (
+                                            <span className="text-[8px] md:text-[9px] text-blue-600 truncate leading-tight">
+                                              {selectedVariant.variantName}
+                                            </span>
+                                          )}
+                                          {selectedModifiers.length > 0 && (
+                                            <span className="text-[8px] md:text-[9px] text-amber-600 truncate leading-tight">
+                                              + {selectedModifiers.map((m) => m.name).join(", ")}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                                          <Button
+                                            onClick={() => removeFromManualCart(item.id)}
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
+                                          >
+                                            <Minus className="size-2 md:size-2.5" />
+                                          </Button>
+                                          <span className="font-bold text-[9px] md:text-[10px] min-w-[0.75rem] text-center px-0.5">
+                                            {item.quantity}
+                                          </span>
+                                          <Button
+                                            onClick={() => incrementManualCart(item.id)}
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
+                                          >
+                                            <Plus className="size-2 md:size-2.5" />
+                                          </Button>
+                                        </div>
+                                        <span className="font-bold text-gray-900 min-w-[2.5rem] md:min-w-[3rem] text-right text-[9px] md:text-[10px]">
+                                          {currency}{(item.price * item.quantity).toFixed(2)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+
+                      {/* Bill Breakdown */}
+                      <div className="bg-white border-t border-gray-200 p-2 md:p-3 flex-shrink-0">
+                        <div className="space-y-1 mb-2 md:mb-3">
+                          <div className="flex justify-between text-[9px] md:text-[10px]">
+                            <span className="text-gray-600">Subtotal</span>
+                            <span className="text-gray-900 font-semibold">
+                              {currency}{billBreakdown.subtotal.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[9px] md:text-[10px]">
+                            <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                            <span className="text-gray-900 font-semibold">
+                              {currency}{billBreakdown.cgst.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[9px] md:text-[10px]">
+                            <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                            <span className="text-gray-900 font-semibold">
+                              {currency}{billBreakdown.sgst.toFixed(2)}
+                            </span>
+                          </div>
+                          <Separator className="my-1" />
+                          <div className="flex justify-between items-center pt-0.5">
+                            <span className="font-bold text-gray-900 text-[11px] md:text-xs">Total</span>
+                            <span className="font-bold text-base md:text-lg text-primary">
+                              {currency}{billBreakdown.total.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
+                          <div className="flex gap-1 md:gap-1.5">
+                            <Button
+                              onClick={() => setPaymentMethod("cash")}
+                              variant={paymentMethod === "cash" ? "default" : "outline"}
+                              size="sm"
+                              className={cn(
+                                "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                                paymentMethod === "cash"
+                                  ? "bg-primary hover:bg-primary/90"
+                                  : "hover:bg-gray-100 border-2"
+                              )}
+                            >
+                              Cash
+                            </Button>
+                            <Button
+                              onClick={() => setPaymentMethod("card")}
+                              variant={paymentMethod === "card" ? "default" : "outline"}
+                              size="sm"
+                              className={cn(
+                                "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                                paymentMethod === "card"
+                                  ? "bg-primary hover:bg-primary/90"
+                                  : "hover:bg-gray-100 border-2"
+                              )}
+                            >
+                              Card
+                            </Button>
+                            <Button
+                              onClick={() => setPaymentMethod("upi")}
+                              variant={paymentMethod === "upi" ? "default" : "outline"}
+                              size="sm"
+                              className={cn(
+                                "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                                paymentMethod === "upi"
+                                  ? "bg-primary hover:bg-primary/90"
+                                  : "hover:bg-gray-100 border-2"
+                              )}
+                            >
+                              UPI
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 space-y-6">
-          <h3 className="font-heading font-bold text-xl flex items-center gap-2">
-            <Utensils className="w-5 h-5 text-primary" /> Active Orders
-            <Badge variant="outline" className="ml-2">
-              {activeOrders.length}
-            </Badge>
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-heading font-bold text-xl flex items-center gap-2">
+              <Utensils className="w-5 h-5 text-primary" /> Active Orders
+              <Badge variant="outline" className="ml-2">
+                {pagination?.total ?? activeOrders.length}
+              </Badge>
+            </h3>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevPage}
+                  disabled={!hasPrevPage}
+                  className="h-8"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={!hasNextPage}
+                  className="h-8"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </div>
 
           {activeOrders.length === 0 ? (
             <div className="text-center py-20 border-2 border-dashed rounded-xl">
@@ -1497,7 +1655,6 @@ export default function LiveOrdersPage() {
           ) : (
             <div className="space-y-4">
               {activeOrders.map((order: Order) => {
-                // Get all SERVED orders for this table (for billing)
                 const tableOrdersForBilling = order.tableId
                   ? (orders || []).filter(
                       (o: Order) =>
@@ -1604,7 +1761,6 @@ export default function LiveOrdersPage() {
                             </p>
                           </div>
 
-                          {/* Status Actions */}
                           {order.status === "PENDING" && (
                             <Button
                               size="sm"
@@ -1645,328 +1801,6 @@ export default function LiveOrdersPage() {
                             <Fragment>
                               <Dialog
                                 open={
-                                  isAddItemsOpen &&
-                                  selectedOrder?.id === order.id
-                                }
-                                onOpenChange={(open) => {
-                                  setIsAddItemsOpen(open);
-                                  if (!open) {
-                                    setSelectedOrder(null);
-                                    setAddItemsCart([]);
-                                  }
-                                }}
-                              >
-                                <DialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedOrder(order);
-                                      setIsAddItemsOpen(true);
-                                    }}
-                                  >
-                                    <Plus className="w-4 h-4 mr-2" /> Add More
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                                  <DialogHeader>
-                                    <DialogTitle className="flex items-center gap-2 text-2xl">
-                                      <Plus className="w-6 h-6 text-primary" />
-                                      Add More Items -{" "}
-                                      {order.table?.tableNumber
-                                        ? `Table ${order.table.tableNumber}`
-                                        : order.guestName}
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                      Add more items to this order. They will
-                                      appear in kitchen as a new order but be
-                                      billed together.
-                                    </DialogDescription>
-                                  </DialogHeader>
-
-                                  <div className="flex-1 overflow-hidden grid md:grid-cols-2 gap-6 py-4">
-                                    {/* Left: Menu Selection */}
-                                    <div className="flex flex-col gap-4 overflow-hidden border-r pr-6">
-                                      <div className="space-y-3">
-                                        <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                          Select Items
-                                        </Label>
-                                        {/* Dietary Filter */}
-                                        <div className="flex gap-2">
-                                          <button
-                                            onClick={() =>
-                                              setDietaryFilter("any")
-                                            }
-                                            className={cn(
-                                              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                                              dietaryFilter === "any"
-                                                ? "bg-primary text-white shadow-md shadow-primary/30"
-                                                : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                                            )}
-                                          >
-                                            All
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              setDietaryFilter("veg")
-                                            }
-                                            className={cn(
-                                              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                                              dietaryFilter === "veg"
-                                                ? "bg-green-500 text-white shadow-md shadow-green-500/30"
-                                                : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                                            )}
-                                          >
-                                            Veg
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              setDietaryFilter("non-veg")
-                                            }
-                                            className={cn(
-                                              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-1",
-                                              dietaryFilter === "non-veg"
-                                                ? "bg-red-500 text-white shadow-md shadow-red-500/30"
-                                                : "bg-muted/50 text-muted-foreground hover:bg-muted",
-                                            )}
-                                          >
-                                            Non-Veg
-                                          </button>
-                                        </div>
-                                      </div>
-                                      <ScrollArea className="flex-1">
-                                        <div className="space-y-6">
-                                          {menuData?.categories?.map(
-                                            (category) => {
-                                              const items =
-                                                filteredMenuItems.filter(
-                                                  (i: MenuItem) =>
-                                                    i.categoryId ===
-                                                      category.id &&
-                                                    i.isAvailable,
-                                                ) || [];
-                                              if (items.length === 0)
-                                                return null;
-
-                                              return (
-                                                <div
-                                                  key={category.id}
-                                                  className="space-y-2"
-                                                >
-                                                  <h4 className="text-sm font-bold border-b pb-1">
-                                                    {category.name}
-                                                  </h4>
-                                                  <div className="grid grid-cols-1 gap-2">
-                                                    {items.map(
-                                                      (item: MenuItem) => {
-                                                        const hasCustomizationOptions =
-                                                          (item.variants &&
-                                                            item.variants
-                                                              .length > 0) ||
-                                                          (item.modifierGroups &&
-                                                            item.modifierGroups
-                                                              .length > 0);
-                                                        const vegTag =
-                                                          item.dietaryTags?.some(
-                                                            (tag) =>
-                                                              tag.toLowerCase() ===
-                                                              "veg",
-                                                          );
-                                                        const nonVegTag =
-                                                          item.dietaryTags?.some(
-                                                            (tag) =>
-                                                              tag.toLowerCase() ===
-                                                              "non-veg",
-                                                          );
-                                                        return (
-                                                          <Button
-                                                            key={item.id}
-                                                            variant="outline"
-                                                            className="justify-between h-auto py-2 px-2 sm:px-3 text-left hover:border-primary hover:bg-primary/5 group"
-                                                            onClick={() => {
-                                                              // Use the same logic as manual cart for customization
-                                                              setCustomizationTarget(
-                                                                "addItems",
-                                                              );
-                                                              const hasCustomizationOptions =
-                                                                (item.variants &&
-                                                                  item.variants
-                                                                    .length >
-                                                                    0) ||
-                                                                (item.modifierGroups &&
-                                                                  item
-                                                                    .modifierGroups
-                                                                    .length >
-                                                                    0);
-
-                                                              if (
-                                                                hasCustomizationOptions
-                                                              ) {
-                                                                setCustomizingItem(
-                                                                  item,
-                                                                );
-                                                              } else {
-                                                                addToAddItemsCart(
-                                                                  item,
-                                                                );
-                                                              }
-                                                            }}
-                                                          >
-                                                            <div className="flex flex-col gap-1">
-                                                              <div className="flex items-center gap-2">
-                                                                <span className="font-bold text-xs sm:text-sm">
-                                                                  {item.name}
-                                                                </span>
-
-                                                                {/* Customization indicator */}
-                                                                {hasCustomizationOptions && (
-                                                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] px-1.5 py-0 h-4">
-                                                                    Customize
-                                                                  </Badge>
-                                                                )}
-
-                                                                {/* Dietary badges */}
-                                                                {vegTag && (
-                                                                  <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] px-1.5 py-0 h-4">
-                                                                    Veg
-                                                                  </Badge>
-                                                                )}
-                                                                {nonVegTag && (
-                                                                  <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] px-1.5 py-0 h-4">
-                                                                    Non-Veg
-                                                                  </Badge>
-                                                                )}
-                                                              </div>
-                                                              <span className="text-xs text-muted-foreground">
-                                                                {currency}
-                                                                {item.price}
-                                                              </span>
-                                                            </div>
-                                                            <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                          </Button>
-                                                        );
-                                                      },
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              );
-                                            },
-                                          )}
-                                        </div>
-                                      </ScrollArea>
-                                    </div>
-
-                                    {/* Right: Cart */}
-                                    <div className="flex flex-col gap-6 overflow-hidden">
-                                      <div className="flex flex-col gap-3 flex-1 overflow-hidden">
-                                        <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                          Items to Add
-                                        </Label>
-
-                                        <ScrollArea className="flex-1 border rounded-lg p-3 bg-muted/20">
-                                          <div className="space-y-3">
-                                            {addItemsCart.length === 0 ? (
-                                              <div className="text-center py-10 text-muted-foreground text-sm italic">
-                                                No items selected
-                                              </div>
-                                            ) : (
-                                              addItemsCart.map((item, idx) => (
-                                                <div
-                                                  key={idx}
-                                                  className="flex items-center justify-between group p-2 rounded-lg hover:bg-muted/40 transition-colors"
-                                                >
-                                                  <div className="flex flex-col flex-1">
-                                                    <span className="text-sm font-bold">
-                                                      {item.name}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                      {currency}
-                                                      {item.price} x{" "}
-                                                      {item.quantity} ={" "}
-                                                      {currency}
-                                                      {(
-                                                        item.price *
-                                                        item.quantity
-                                                      ).toFixed(2)}
-                                                    </span>
-                                                  </div>
-                                                  <div className="flex items-center gap-2">
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
-                                                      onClick={() =>
-                                                        removeFromAddItemsCart(
-                                                          idx,
-                                                        )
-                                                      }
-                                                    >
-                                                      <Minus className="w-3 h-3" />
-                                                    </Button>
-                                                    <span className="text-sm font-bold min-w-[24px] text-center bg-primary/10 px-2 py-1 rounded">
-                                                      {item.quantity}
-                                                    </span>
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      className="h-7 w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
-                                                      onClick={() =>
-                                                        setAddItemsCart(
-                                                          (prev) =>
-                                                            prev.map(
-                                                              (i, index) =>
-                                                                index === idx
-                                                                  ? {
-                                                                      ...i,
-                                                                      quantity:
-                                                                        i.quantity +
-                                                                        1,
-                                                                    }
-                                                                  : i,
-                                                            ),
-                                                        )
-                                                      }
-                                                    >
-                                                      <Plus className="w-3 h-3" />
-                                                    </Button>
-                                                  </div>
-                                                </div>
-                                              ))
-                                            )}
-                                          </div>
-                                        </ScrollArea>
-
-                                        <div className="bg-muted/30 p-3 rounded-lg space-y-2 text-sm">
-                                          <div className="flex justify-between font-bold">
-                                            <span>Items to Add</span>
-                                            <span>{addItemsCart.length}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <Button
-                                        className="w-full h-12 text-lg font-bold"
-                                        onClick={() =>
-                                          handleAddItemsToOrder(order.id)
-                                        }
-                                        disabled={
-                                          addOrderItems.isPending ||
-                                          addItemsCart.length === 0
-                                        }
-                                      >
-                                        {addOrderItems.isPending ? (
-                                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        ) : (
-                                          <Plus className="w-4 h-4 mr-2" />
-                                        )}
-                                        Add Items to Order
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                              <Dialog
-                                open={
                                   isBillingOpen &&
                                   selectedOrder?.id === order.id
                                 }
@@ -1983,283 +1817,147 @@ export default function LiveOrdersPage() {
                                       setSelectedOrder(order);
                                       setIsBillingOpen(true);
                                     }}
+                                    className="bg-primary hover:bg-primary/90"
                                   >
                                     <Receipt className="w-4 h-4 mr-2" /> Bill
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-                                  <DialogHeader>
-                                    <DialogTitle className="flex items-center gap-2 text-2xl">
-                                      <Receipt className="w-6 h-6 text-primary" />
-                                      Billing -{" "}
-                                      {order.table?.tableNumber
-                                        ? `Table ${order.table.tableNumber}`
-                                        : order.guestName}
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                      {tableOrdersForBilling.length > 1
-                                        ? `Combined bill for ${tableOrdersForBilling.length} orders from this table`
-                                        : "Review order details and select payment method"}
-                                    </DialogDescription>
-                                  </DialogHeader>
-
-                                  <div className="flex-1 overflow-hidden grid md:grid-cols-2 gap-6 py-4">
-                                    {/* Left: Order Info, Table, Waiter */}
-                                    <div className="flex flex-col gap-4 overflow-hidden border-r pr-6">
-                                      <div className="space-y-4">
-                                        {/* Table & Waiter Info */}
-                                        {order.table?.tableNumber && (
-                                          <div className="space-y-2">
-                                            <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                              Table
-                                            </Label>
-                                            <div className="bg-muted/30 p-3 rounded-lg">
-                                              <div className="flex items-center gap-2">
-                                                <Utensils className="w-4 h-4 text-primary" />
-                                                <span className="font-bold text-lg">
-                                                  Table{" "}
-                                                  {order.table.tableNumber}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-
+                                <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+                                  {/* Header with Order Details in Top Right */}
+                                  <div className="px-5 pt-5 pb-3 border-b bg-white">
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className="bg-primary/10 p-2 rounded-lg">
+                                          <Receipt className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <div>
+                                          <DialogTitle className="text-lg font-bold">
+                                            Billing - {order.table?.tableNumber
+                                              ? `Table ${order.table.tableNumber}`
+                                              : order.guestName || `Order #${order.id.slice(-6)}`}
+                                          </DialogTitle>
+                                          <DialogDescription className="text-[10px] mt-0.5">
+                                            {tableOrdersForBilling.length > 1
+                                              ? `${tableOrdersForBilling.length} orders combined`
+                                              : "Review and process payment"}
+                                          </DialogDescription>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Order Details - Top Right */}
+                                      <div className="flex flex-col gap-1 text-right">
                                         {order.placedByStaff && (
-                                          <div className="space-y-2">
-                                            <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                              Waiter
-                                            </Label>
-                                            <div className="bg-muted/30 p-3 rounded-lg">
-                                              <div className="flex items-center gap-2">
-                                                <UserPlus className="w-4 h-4 text-primary" />
-                                                <span className="font-semibold">
-                                                  {order.placedByStaff.fullName}
+                                          <div className="text-[10px] text-muted-foreground">
+                                            Waiter: <span className="font-medium text-foreground">{order.placedByStaff.fullName}</span>
+                                          </div>
+                                        )}
+                                        <Badge variant="secondary" className="text-[10px] h-5 justify-end">
+                                          {order.orderType}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Order Items - Professional One-Line Format */}
+                                  <div className="flex-1 overflow-hidden px-5 py-4">
+                                    <div className="mb-2">
+                                      <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                                        Order Items
+                                      </h3>
+                                    </div>
+                                    <ScrollArea className="h-[280px]">
+                                      <div className="space-y-1">
+                                        {order.items?.map((item, i) => {
+                                          const customizationSummary = getCustomizationSummary(item);
+                                          return (
+                                            <div
+                                              key={i}
+                                              className="flex items-center justify-between py-2 px-3 hover:bg-muted/30 rounded-md transition-colors border-b border-dashed border-gray-200 last:border-0"
+                                            >
+                                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                <span className="text-[11px] font-bold text-muted-foreground min-w-[1.5rem]">
+                                                  {item.quantity}x
                                                 </span>
+                                                <div className="flex-1 min-w-0">
+                                                  <div className="text-xs font-semibold text-foreground truncate">
+                                                    {item.itemName}
+                                                  </div>
+                                                  {customizationSummary && (
+                                                    <div className="text-[10px] text-muted-foreground truncate">
+                                                      {customizationSummary}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="text-xs font-bold text-foreground ml-4">
+                                                {currency}{parseFloat(item.totalPrice).toFixed(2)}
                                               </div>
                                             </div>
-                                          </div>
-                                        )}
-
-                                        {/* Order Type */}
-                                        <div className="space-y-2">
-                                          <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                            Order Type
-                                          </Label>
-                                          <div className="bg-muted/30 p-3 rounded-lg">
-                                            <Badge
-                                              variant="outline"
-                                              className="text-sm"
-                                            >
-                                              {order.orderType}
-                                            </Badge>
-                                          </div>
-                                        </div>
-
-                                        {/* Show all orders if multiple */}
-                                        {tableOrdersForBilling.length > 1 && (
-                                          <div className="space-y-2">
-                                            <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                              Orders (
-                                              {tableOrdersForBilling.length})
-                                            </Label>
-                                            <ScrollArea className="max-h-48">
-                                              <div className="space-y-2">
-                                                {tableOrdersForBilling.map(
-                                                  (ord: Order, idx: number) => (
-                                                    <div
-                                                      key={ord.id}
-                                                      className="bg-muted/20 p-3 rounded-lg border border-border"
-                                                    >
-                                                      <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-xs font-bold">
-                                                          Order #{idx + 1}
-                                                        </span>
-                                                        <span className="text-xs font-semibold text-primary">
-                                                          {currency}
-                                                          {parseFloat(
-                                                            ord.totalAmount,
-                                                          ).toFixed(2)}
-                                                        </span>
-                                                      </div>
-                                                      <div className="text-xs space-y-1">
-                                                        {ord.items
-                                                          ?.slice(0, 3)
-                                                          .map((item, i) => (
-                                                            <div
-                                                              key={i}
-                                                              className="flex justify-between"
-                                                            >
-                                                              <span className="text-muted-foreground">
-                                                                {item.quantity}x{" "}
-                                                                {item.itemName}
-                                                              </span>
-                                                              <span>
-                                                                {currency}
-                                                                {parseFloat(
-                                                                  item.totalPrice,
-                                                                ).toFixed(2)}
-                                                              </span>
-                                                            </div>
-                                                          ))}
-                                                        {(ord.items?.length ??
-                                                          0) > 3 && (
-                                                          <div className="text-muted-foreground italic pt-1">
-                                                            +
-                                                            {(ord.items
-                                                              ?.length ?? 0) -
-                                                              3}{" "}
-                                                            more items
-                                                          </div>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  ),
-                                                )}
-                                              </div>
-                                            </ScrollArea>
-                                          </div>
-                                        )}
+                                          );
+                                        })}
                                       </div>
-                                    </div>
+                                    </ScrollArea>
+                                  </div>
 
-                                    {/* Right: Billed Items & Summary */}
-                                    <div className="flex flex-col gap-4 overflow-hidden">
-                                      <div className="space-y-2">
-                                        <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                          {tableOrdersForBilling.length > 1
-                                            ? "All Items"
-                                            : "Order Items"}
-                                        </Label>
-                                        <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/20 max-h-64">
-                                          {/* <div className="space-y-2">
-                                          {tableOrdersForBilling.flatMap((ord: Order) => 
-                                            ord.items?.map((item, i) => (
-                                              <div key={`${ord.id}-${i}`} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                                                <div className="flex flex-col">
-                                                  <span className="text-sm font-semibold">{item.quantity}x {item.itemName}</span>
-                                                  <span className="text-xs text-muted-foreground">Unit: {currency}{(parseFloat(item.totalPrice) / item.quantity).toFixed(2)}</span>
-                                                </div>
-                                                <span className="text-sm font-bold text-primary">{currency}{parseFloat(item.totalPrice).toFixed(2)}</span>
-                                              </div>
-                                            )) || []
-                                          )}
-                                        </div> */}
-
-                                          <div className="space-y-3">
-                                            {order.items?.map((item, i) => (
-                                              <CustomizedOrderItemDisplay
-                                                key={i}
-                                                item={item as any}
-                                                currency={currency}
-                                                showPriceBreakdown={true}
-                                                compact={false}
-                                              />
-                                            ))}
-                                          </div>
-                                        </ScrollArea>
+                                  {/* Bill Summary - Compact */}
+                                  <div className="px-5 py-3 bg-muted/30 border-t">
+                                    <div className="space-y-1 text-xs max-w-md ml-auto">
+                                      <div className="flex justify-between text-[11px]">
+                                        <span className="text-muted-foreground">Subtotal</span>
+                                        <span className="font-semibold">{currency}{combinedSubtotal.toFixed(2)}</span>
                                       </div>
-
-                                      <Separator />
-
-                                      {/* Bill Summary */}
-                                      <div className="space-y-2">
-                                        <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                          Bill Summary
-                                        </Label>
-                                        <div className="bg-gradient-to-br from-primary/5 to-primary/10 p-4 rounded-lg space-y-2 text-sm border border-primary/20">
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">
-                                              Subtotal
-                                            </span>
-                                            <span className="font-semibold">
-                                              {currency}
-                                              {combinedSubtotal.toFixed(2)}
-                                            </span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">
-                                              GST ({gstRate * 100}%)
-                                            </span>
-                                            <span className="font-semibold">
-                                              {currency}
-                                              {combinedGst.toFixed(2)}
-                                            </span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">
-                                              Service ({serviceRate * 100}%)
-                                            </span>
-                                            <span className="font-semibold">
-                                              {currency}
-                                              {combinedService.toFixed(2)}
-                                            </span>
-                                          </div>
-                                          <Separator className="my-2" />
-                                          <div className="flex justify-between items-center pt-2">
-                                            <span className="font-bold text-base">
-                                              Total Payable
-                                            </span>
-                                            <span className="text-primary text-2xl font-bold">
-                                              {currency}
-                                              {combinedTotal.toFixed(2)}
-                                            </span>
-                                          </div>
-                                        </div>
+                                      <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">GST ({(gstRate * 100).toFixed(1)}%)</span>
+                                        <span className="font-medium">{currency}{combinedGst.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">Service ({(serviceRate * 100).toFixed(1)}%)</span>
+                                        <span className="font-medium">{currency}{combinedService.toFixed(2)}</span>
+                                      </div>
+                                      <Separator className="my-1.5" />
+                                      <div className="flex justify-between items-center pt-1">
+                                        <span className="font-bold text-sm">Total</span>
+                                        <span className="text-primary text-xl font-bold">
+                                          {currency}{combinedTotal.toFixed(2)}
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
 
-                                  {/* Payment */}
-                                  <div className="space-y-3 pt-4 border-t">
-                                    <Label className="text-xs uppercase font-bold text-muted-foreground">
-                                      Payment Method
+                                  {/* Payment Methods - Smaller & Compact */}
+                                  <div className="px-5 py-3 border-t bg-white">
+                                    <Label className="text-[10px] font-semibold text-muted-foreground mb-2 block">
+                                      PAYMENT METHOD
                                     </Label>
-                                    <div className="grid grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-3 gap-2">
                                       <Button
                                         variant="outline"
-                                        className="flex-col h-20 gap-2 hover:border-green-500 hover:bg-green-50 hover:text-green-700 transition-all rounded-xl border-2"
-                                        onClick={() =>
-                                          handlePayment(order, "CASH")
-                                        }
+                                        className="flex-col h-12 gap-1 hover:border-green-500 hover:bg-green-50 transition-all rounded-lg border-2"
+                                        onClick={() => handlePayment(order, "CASH")}
                                         disabled={updateStatus.isPending}
                                       >
-                                        <CreditCard className="w-5 h-5 text-green-600" />
-                                        <div className="text-xs font-bold">
-                                          CASH
-                                        </div>
+                                        <CreditCard className="w-3.5 h-3.5 text-green-600" />
+                                        <span className="text-[10px] font-bold">CASH</span>
                                       </Button>
                                       <Button
                                         variant="outline"
-                                        className="flex-col h-20 gap-2 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-all rounded-xl border-2"
-                                        onClick={() =>
-                                          handlePayment(order, "UPI")
-                                        }
+                                        className="flex-col h-12 gap-1 hover:border-blue-500 hover:bg-blue-50 transition-all rounded-lg border-2"
+                                        onClick={() => handlePayment(order, "UPI")}
                                         disabled={updateStatus.isPending}
                                       >
-                                        <QrCode className="w-5 h-5 text-blue-600" />
-                                        <div className="text-xs font-bold">
-                                          UPI
-                                        </div>
+                                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                                        <span className="text-[10px] font-bold">UPI</span>
                                       </Button>
                                       <Button
                                         variant="outline"
-                                        className="flex-col h-20 gap-2 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 transition-all rounded-xl border-2"
-                                        onClick={() =>
-                                          handlePayment(order, "CARD")
-                                        }
+                                        className="flex-col h-12 gap-1 hover:border-purple-500 hover:bg-purple-50 transition-all rounded-lg border-2"
+                                        onClick={() => handlePayment(order, "CARD")}
                                         disabled={updateStatus.isPending}
                                       >
-                                        <CreditCard className="w-5 h-5 text-purple-600" />
-                                        <div className="text-xs font-bold">
-                                          CARD
-                                        </div>
+                                        <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                                        <span className="text-[10px] font-bold">CARD</span>
                                       </Button>
                                     </div>
-                                  </div>
-                                  <div className="text-xs text-muted-foreground italic text-center pt-2">
-                                    Print and share options available after
-                                    payment
                                   </div>
                                 </DialogContent>
                               </Dialog>
@@ -2273,6 +1971,37 @@ export default function LiveOrdersPage() {
               })}
             </div>
           )}
+
+          {/* Bottom Pagination - Duplicate for convenience */}
+          {totalPages > 1 && activeOrders.length > 0 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrevPage}
+                disabled={!hasPrevPage}
+                className="h-8"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              
+              <div className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={!hasNextPage}
+                className="h-8"
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="lg:col-span-1 space-y-6">
@@ -2280,24 +2009,24 @@ export default function LiveOrdersPage() {
             <h3 className="font-heading font-bold text-xl flex items-center gap-2">
               <Receipt className="w-5 h-5 text-primary" /> Recent Bills
             </h3>
-            <Badge variant="secondary">{transactions?.length || 0}</Badge>
+            <Badge variant="secondary">{transactions?.data?.length || 0}</Badge>
           </div>
 
           <div className="space-y-3">
-            {transactions && transactions.length > 0 ? (
-              transactions.slice(0, 5).map((transaction: any) => (
+            {transactions.data && transactions.data.length > 0 ? (
+              transactions.data.map((transaction) => (
                 <div
                   key={transaction.id}
-                  className="p-3 rounded-lg border border-border bg-white shadow-sm animate-in fade-in slide-in-from-right-2"
+                  className="p-3 rounded-lg border border-border bg-white shadow-sm"
                 >
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-bold text-sm">
                       {transaction.billNumber}
                     </p>
                     <div className="flex gap-1">
-                      {transaction.order?.orderType && (
+                      {transaction.orderType && (
                         <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200">
-                          {transaction.order.orderType}
+                          {transaction.orderType}
                         </Badge>
                       )}
                       <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200">
@@ -2308,16 +2037,16 @@ export default function LiveOrdersPage() {
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
-                        {transaction.order?.table?.tableNumber
-                          ? `Table ${transaction.order.table.tableNumber}`
-                          : transaction.order?.guestName || "Guest"}
+                        {transaction.tableNumber
+                          ? `Table ${transaction.tableNumber}`
+                          : transaction.guestName || "Guest"}
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(transaction.paidAt).toLocaleTimeString()}
                       </p>
-                      {transaction.order?.placedByStaff && (
+                      {transaction.staffName && (
                         <p className="text-[9px] text-blue-600 mt-0.5">
-                          👤 {transaction.order.placedByStaff.fullName}
+                          👤 {transaction.staffName}
                         </p>
                       )}
                     </div>
@@ -2330,22 +2059,16 @@ export default function LiveOrdersPage() {
               ))
             ) : (
               <div className="text-center py-6 text-muted-foreground text-sm italic border border-dashed rounded-lg">
-                No bills generated yet
+                {transactions.isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                ) : (
+                  "No bills generated yet"
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
-
-        {/* {customizingItem && (
-            <ItemCustomizationDialog
-                menuItem={customizingItem}
-                currency={currency}
-                isOpen={!!customizingItem}
-                onClose={() => setCustomizingItem(null)}
-                onAddToCart={handleAddCustomizedToCart}
-              />
-         )} */}
     </DashboardLayout>
   );
 }
