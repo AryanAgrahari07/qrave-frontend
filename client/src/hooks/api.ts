@@ -395,10 +395,16 @@ export function useCancelOrder(restaurantId: string | null) {
   });
 }
 
+
 export function useAddOrderItems(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, items }: { 
+    mutationFn: ({ 
+      orderId, 
+      items,
+      paymentMethod = "DUE",
+      paymentStatus = "DUE"
+    }: { 
       orderId: string; 
       items: Array<{ 
         menuItemId: string; 
@@ -406,9 +412,18 @@ export function useAddOrderItems(restaurantId: string | null) {
         notes?: string;
         variantId?: string;
         modifierIds?: string[];
-      }>
+      }>;
+      paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE";
+      paymentStatus?: "PAID" | "DUE";
     }) =>
-      api.post<{ order: Order; newItems: unknown[] }>(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, { items }).then((r) => r.order),
+      api.post<{ order: Order; newItems: unknown[] }>(
+        `/api/restaurants/${restaurantId}/orders/${orderId}/items`, 
+        { 
+          items,
+          paymentMethod,
+          paymentStatus
+        }
+      ).then((r) => r.order),
     onSuccess: () => {
       if (restaurantId) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
@@ -932,6 +947,94 @@ export function useRecentTransactions(restaurantId: string | null, limit: number
     refetchOnWindowFocus: true,
   });
 }
+
+export function useUpdatePaymentStatus(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ 
+      orderId, 
+      paymentStatus, 
+      paymentMethod 
+    }: { 
+      orderId: string; 
+      paymentStatus: "DUE" | "PAID" | "PARTIALLY_PAID";
+      paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE";
+    }) =>
+      api.patch<{ order: Order; message: string }>(
+        `/api/restaurants/${restaurantId}/orders/${orderId}/payment-status`, 
+        { paymentStatus, paymentMethod }
+      ).then((r) => r.order), // ✅ Return the order, not the whole response
+    onSuccess: async (updatedOrder) => { // ✅ Receive the updated order
+      if (restaurantId) {
+        // Invalidate all order-related queries
+        await qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        await qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+        await qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        await qc.invalidateQueries({ queryKey: ["transactions", restaurantId] });
+        await qc.invalidateQueries({ queryKey: ["transactions-recent", restaurantId] });
+        
+        // Also invalidate the specific order
+        await qc.invalidateQueries({ queryKey: ["order", restaurantId, updatedOrder.id] });
+        
+        console.log("✅ Caches invalidated after payment update");
+        console.log("  Updated order paidAmount:", updatedOrder.paidAmount);
+      }
+      toast.success("Payment status updated successfully");
+    },
+    onError: (e: Error) => {
+      console.error("❌ Payment status update error:", e);
+      toast.error(e.message || "Failed to update payment status");
+    },
+  });
+}
+
+
+// Add this new hook to api.ts
+export function useCloseOrder(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      api.post<{ order: Order; message: string }>(
+        `/api/restaurants/${restaurantId}/orders/${orderId}/close`
+      ).then((r) => r.order),
+    onSuccess: () => {
+      if (restaurantId) {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+      }
+      toast.success("Order closed successfully. Future orders will create a new session.");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to close order"),
+  });
+}
+
+
+/**
+ * Cancel order with reason
+ */
+export function useCancelOrderWithReason(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
+      api.post<{ order: Order; message: string }>(
+        `/api/restaurants/${restaurantId}/orders/${orderId}/cancel-with-reason`,
+        { reason }
+      ).then((r) => r.order),
+    onSuccess: () => {
+      if (restaurantId) {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+      }
+      toast.success("Order cancelled successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to cancel order"),
+  });
+}
+
 
 // === Dashboard Stats ===
 export function useDashboardStats(restaurantId: string | null) {

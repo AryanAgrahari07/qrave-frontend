@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,7 +37,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useState, useMemo, Fragment, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
@@ -52,24 +53,36 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useOrders,
   useUpdateOrderStatus,
-  useCancelOrder,
   useCreateOrder,
   useRestaurant,
   useMenuCategories,
   useTables,
-  useTransactions,
-  useAddOrderItems,
   useStaff,
   useRecentTransactions,
+  useUpdatePaymentStatus,
+  useCancelOrderWithReason,
+  useCloseOrder,
 } from "@/hooks/api";
-import { api } from "@/lib/api";
-import type { Order, MenuItem, Table, OrderStatus } from "@/types";
+import type { Order, MenuItem, Table, OrderStatus, PaymentMethod } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import {
   CustomizedOrderItemDisplay,
   getCustomizationSummary,
 } from "@/components/menu/Customizedorderitemdisplay";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { XCircle, DollarSign } from "lucide-react";
 
 // Mobile POS Component
 function MobilePOS({
@@ -431,42 +444,59 @@ function MobilePOS({
 
               {/* Payment Method */}
               <div className="px-2 py-1.5 border-b border-gray-200">
-                <Label className="text-[9px] text-gray-600 mb-0.5 block font-medium">
-                  Payment
-                </Label>
-                <div className="grid grid-cols-3 gap-1">
+                <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
+                <div className="grid grid-cols-4 gap-1">
                   <Button
                     onClick={() => onPaymentMethodChange("cash")}
                     variant={paymentMethod === "cash" ? "default" : "outline"}
-                    className={`h-7 text-[10px] font-semibold ${
+                    size="sm"
+                    className={cn(
+                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
                       paymentMethod === "cash"
                         ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100"
-                    }`}
+                        : "hover:bg-gray-100 border-2"
+                    )}
                   >
                     Cash
                   </Button>
                   <Button
                     onClick={() => onPaymentMethodChange("card")}
                     variant={paymentMethod === "card" ? "default" : "outline"}
-                    className={`h-7 text-[10px] font-semibold ${
+                    size="sm"
+                    className={cn(
+                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
                       paymentMethod === "card"
                         ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100"
-                    }`}
+                        : "hover:bg-gray-100 border-2"
+                    )}
                   >
                     Card
                   </Button>
                   <Button
                     onClick={() => onPaymentMethodChange("upi")}
                     variant={paymentMethod === "upi" ? "default" : "outline"}
-                    className={`h-7 text-[10px] font-semibold ${
+                    size="sm"
+                    className={cn(
+                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
                       paymentMethod === "upi"
                         ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100"
-                    }`}
+                        : "hover:bg-gray-100 border-2"
+                    )}
                   >
                     UPI
+                  </Button>
+                  <Button
+                    onClick={() => onPaymentMethodChange("due")}
+                    variant={paymentMethod === "due" ? "default" : "outline"}
+                    size="sm"
+                    className={cn(
+                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                      paymentMethod === "due"
+                        ? "bg-primary hover:bg-primary/90"
+                        : "hover:bg-gray-100 border-2"
+                    )}
+                  >
+                    Due
                   </Button>
                 </div>
               </div>
@@ -538,14 +568,13 @@ export default function LiveOrdersPage() {
 
   const transactions = useRecentTransactions(restaurantId, 5);
   const updateStatus = useUpdateOrderStatus(restaurantId);
-  const cancelOrder = useCancelOrder(restaurantId);
   const createOrder = useCreateOrder(restaurantId);
-  const addOrderItems = useAddOrderItems(restaurantId);
+  const updatePaymentStatus = useUpdatePaymentStatus(restaurantId);
+  const cancelWithReason = useCancelOrderWithReason(restaurantId);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isBillingOpen, setIsBillingOpen] = useState(false);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
-  const [isAddItemsOpen, setIsAddItemsOpen] = useState(false);
   const [manualCart, setManualCart] = useState<
     {
       id: string;
@@ -575,11 +604,14 @@ export default function LiveOrdersPage() {
     "manual" | "addItems"
   >("manual");
   const [orderMethod, setOrderMethod] = useState<"dine-in" | "takeaway" | "delivery">("dine-in");
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">("cash");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi" | "due">("due");  const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobilePOS, setShowMobilePOS] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const closeOrder = useCloseOrder(restaurantId);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -603,16 +635,13 @@ export default function LiveOrdersPage() {
   const activeOrders = useMemo(() => {
     return orders.filter(
       (o: Order) =>
-        o.status === "PENDING" ||
-        o.status === "PREPARING" ||
-        o.status === "READY" ||
-        o.status === "SERVED",
+        !(o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) && 
+        o.status !== "CANCELLED"
     );
   }, [orders]);
 
   const currency = restaurant?.currency || "₹";
   const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
-  const serviceRate = parseFloat(restaurant?.taxRateService || "10") / 100;
 
   // Set initial active category
   useMemo(() => {
@@ -694,46 +723,6 @@ export default function LiveOrdersPage() {
         i.id === itemId ? { ...i, quantity: i.quantity + 1 } : i,
       ),
     );
-  };
-
-  const addToAddItemsCart = (item: MenuItem) => {
-    const hasCustomizationOptions =
-      (item.variants && item.variants.length > 0) ||
-      (item.modifierGroups && item.modifierGroups.length > 0);
-
-    if (hasCustomizationOptions) {
-      setCustomizingItem(item);
-    } else {
-      setAddItemsCart((prev) => {
-        const existing = prev.find((i) => i.id === item.id);
-        if (existing) {
-          return prev.map((i) =>
-            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
-          );
-        }
-        return [
-          ...prev,
-          {
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            quantity: 1,
-          },
-        ];
-      });
-    }
-  };
-
-  const removeFromAddItemsCart = (index: number) => {
-    setAddItemsCart((prev) => {
-      const item = prev[index];
-      if (item.quantity > 1) {
-        return prev.map((i, idx) =>
-          idx === index ? { ...i, quantity: i.quantity - 1 } : i,
-        );
-      }
-      return prev.filter((_, idx) => idx !== index);
-    });
   };
 
   const manualCartTotal = useMemo(() => {
@@ -831,6 +820,13 @@ export default function LiveOrdersPage() {
         "delivery": "DELIVERY",
       };
 
+      const paymentStatusMap = {
+        "cash": "PAID",
+        "card": "PAID", 
+        "upi": "PAID",
+        "due": "DUE",
+      };
+
       const order = await createOrder.mutateAsync({
         tableId: orderMethod === "dine-in" ? selectedTableId : undefined,
         orderType: orderTypeMap[orderMethod] as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
@@ -841,15 +837,18 @@ export default function LiveOrdersPage() {
           modifierIds: item.modifierIds,
         })),
         assignedWaiterId: selectedWaiterId || undefined,
+        paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+        paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
       });
 
       toast.success(
-        `Order sent to kitchen! Table ${selectedTableId} - ${manualCart.length} items`,
+       `Order ${paymentMethod !== 'due' ? 'placed and paid' : 'sent to kitchen'}! ${orderMethod === 'dine-in' ? `Table ${selectedTableId}` : ''} - ${manualCart.length} items`,
       );
 
       setManualCart([]);
       setSelectedTableId("1");
       setSelectedWaiterId(null);
+      setPaymentMethod("due"); 
       setIsNewOrderOpen(false);
       setShowMobilePOS(false);
       refetch();
@@ -858,92 +857,109 @@ export default function LiveOrdersPage() {
     }
   };
 
-  const handleAddItemsToOrder = async (orderId: string) => {
-    if (addItemsCart.length === 0) {
-      toast.error("Please add items to the order");
-      return;
-    }
 
-    try {
-      await addOrderItems.mutateAsync({
-        orderId,
-        items: addItemsCart.map((item) => ({
-          menuItemId: item.id,
-          quantity: item.quantity,
-          variantId: item.variantId,
-          modifierIds: item.modifierIds,
-        })),
-      });
+  
+const handleCancelOrder = (order: Order) => {
+  setOrderToCancel(order);
+  setCancelReason("");
+  setCancelDialogOpen(true);
+};
 
-      setAddItemsCart([]);
-      setIsAddItemsOpen(false);
-      setSelectedOrder(null);
-      toast.success("Items added to order! Kitchen will prepare them.");
-    } catch (error) {
-      // Error handled by mutation
-    }
-  };
+const confirmCancelOrder = async () => {
+  if (!orderToCancel || !cancelReason.trim()) {
+    toast.error("Please provide a reason for cancellation");
+    return;
+  }
 
-  const handlePayment = async (order: Order, method: string) => {
-    try {
-      let ordersToBill: Order[] = [order];
+  try {
+    await cancelWithReason.mutateAsync({
+      orderId: orderToCancel.id,
+      reason: cancelReason.trim(),
+    });
+    
+    setCancelDialogOpen(false);
+    setOrderToCancel(null);
+    setCancelReason("");
+    refetch();
+  } catch (error) {
+    // Error handled by mutation
+  }
+};
 
-      if (order.tableId) {
-        const tableOrders = (orders || []).filter(
-          (o: Order) =>
-            o.tableId === order.tableId &&
-            o.status === "SERVED" &&
-            o.id !== order.id,
-        );
-        ordersToBill = [order, ...tableOrders];
-      }
+const getPaymentStatusColor = (paymentStatus?: string) => {
+  switch (paymentStatus) {
+    case "PAID":
+      return "bg-green-100 text-green-700 border-green-200";
+    case "PARTIALLY_PAID":
+      return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    case "DUE":
+    default:
+      return "bg-red-100 text-red-700 border-red-200";
+  }
+};
 
-      const combinedSubtotal = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.subtotalAmount),
-        0,
-      );
-      const combinedGst = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.gstAmount),
-        0,
-      );
-      const combinedService = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.serviceTaxAmount),
-        0,
-      );
-      const combinedTotal = ordersToBill.reduce(
-        (sum, o) => sum + parseFloat(o.totalAmount),
-        0,
-      );
+const getPaymentStatusIcon = (paymentStatus?: string) => {
+  switch (paymentStatus) {
+    case "PAID":
+      return <CheckCircle2 className="w-3 h-3" />;
+    case "PARTIALLY_PAID":
+      return <DollarSign className="w-3 h-3" />;
+    case "DUE":
+    default:
+      return <XCircle className="w-3 h-3" />;
+  }
+};
 
-      for (const ord of ordersToBill) {
-        await updateStatus.mutateAsync({ orderId: ord.id, status: "PAID" });
-      }
+const handlePayment = async (order: Order, method: PaymentMethod) => {
+  try {
+    const totalAmount = parseFloat(order.totalAmount);
+    const paid_amount = parseFloat(order.paid_amount || "0");
+    const outstandingAmount = totalAmount - paid_amount;
 
-      const billNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+    console.log("💳 Processing payment:");
+    console.log("  Order ID:", order.id);
+    console.log("  Total:", totalAmount.toFixed(2));
+    console.log("  Already Paid:", paid_amount.toFixed(2));
+    console.log("  Outstanding:", outstandingAmount.toFixed(2));
+    console.log("  Payment Method:", method);
 
-      await api.post(`/api/restaurants/${restaurantId}/transactions`, {
-        orderId: order.id,
-        billNumber,
-        paymentMethod: method,
-        combinedSubtotal: combinedSubtotal,
-        combinedGst: combinedGst,
-        combinedService: combinedService,
-        combinedTotal: combinedTotal,
-      });
+    // Update payment status - THIS RETURNS THE UPDATED ORDER
+    const updatedOrder = await updatePaymentStatus.mutateAsync({
+      orderId: order.id,
+      paymentStatus: "PAID",
+      paymentMethod: method,
+    });
 
-      toast.success(
-        ordersToBill.length > 1
-          ? `Payment of ${currency}${combinedTotal.toFixed(2)} received for ${ordersToBill.length} orders via ${method}`
-          : `Payment of ${currency}${combinedTotal.toFixed(2)} received via ${method}`,
-      );
+    console.log("✅ Payment updated!");
+    console.log("  New paid_amount:", updatedOrder.paid_amount);
+    console.log("  New paymentStatus:", updatedOrder.paymentStatus);
 
-      refetch();
-      setSelectedOrder(null);
+    // ✅ CRITICAL FIX: Update the selectedOrder state with fresh data
+    setSelectedOrder(updatedOrder);
+
+    toast.success(
+      order.paymentStatus === "PARTIALLY_PAID"
+        ? `Outstanding amount of ${currency}${outstandingAmount.toFixed(2)} paid via ${method}`
+        : `Payment of ${currency}${totalAmount.toFixed(2)} received via ${method}`
+    );
+
+    // Refetch the orders list in the background
+    refetch();
+    
+    // Don't close the dialog immediately - let user see the updated status
+    // They can close it manually or it will update in real-time
+    // If you want to close it:
+    setTimeout(() => {
       setIsBillingOpen(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to process payment");
-    }
-  };
+      setSelectedOrder(null);
+    }, 1500);
+    
+  } catch (error: any) {
+    console.error("❌ Payment error:", error);
+    toast.error(error.message || "Failed to process payment");
+  }
+};
+
 
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
@@ -1524,7 +1540,7 @@ export default function LiveOrdersPage() {
                           </div>
                         </div>
 
-                        <div>
+                        <div className="px-2 md:p-3 border-b border-gray-200">
                           <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
                           <div className="flex gap-1 md:gap-1.5">
                             <Button
@@ -1566,6 +1582,19 @@ export default function LiveOrdersPage() {
                             >
                               UPI
                             </Button>
+                            <Button
+                              onClick={() => setPaymentMethod("due")}
+                              variant={paymentMethod === "due" ? "default" : "outline"}
+                              size="sm"
+                              className={cn(
+                                "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                                paymentMethod === "due"
+                                  ? "bg-primary hover:bg-primary/90"
+                                  : "hover:bg-gray-100 border-2"
+                              )}
+                            >
+                              Due
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -1590,7 +1619,7 @@ export default function LiveOrdersPage() {
             </h3>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
+            {/* {totalPages > 1 && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -1639,7 +1668,7 @@ export default function LiveOrdersPage() {
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
-            )}
+            )} */}
           </div>
 
           {activeOrders.length === 0 ? (
@@ -1680,15 +1709,16 @@ export default function LiveOrdersPage() {
                 );
 
                 return (
-                  <Card
+                 <Card
                     key={order.id}
                     className="overflow-hidden border-l-4 border-l-primary shadow-md hover:shadow-lg transition-shadow"
                   >
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="text-xl font-bold font-heading">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col gap-4">
+                        {/* Header Section */}
+                        <div className="space-y-2">     
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-lg sm:text-xl font-bold font-heading">
                               {order.table?.tableNumber
                                 ? `Table ${order.table.tableNumber}`
                                 : order.guestName ||
@@ -1706,263 +1736,204 @@ export default function LiveOrdersPage() {
                             >
                               {order.orderType}
                             </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs px-2 py-1 flex items-center gap-1",
+                                getPaymentStatusColor(order.paymentStatus)
+                              )}
+                            >
+                              {getPaymentStatusIcon(order.paymentStatus)}
+                              {order.paymentStatus || "DUE"}
+                            </Badge>
                           </div>
                           <div className="flex items-center gap-4 flex-wrap">
-                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                              <Clock className="w-3.5 h-3.5" />{" "}
+                            <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{" "}
                               {getTimeSince(order.createdAt)}
                             </p>
                             {order.placedByStaff && (
-                              <p className="text-sm text-blue-600 flex items-center gap-1.5 font-medium">
-                                <UserPlus className="w-3.5 h-3.5" />{" "}
+                              <p className="text-xs sm:text-sm text-blue-600 flex items-center gap-1.5 font-medium">
+                                <UserPlus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{" "}
                                 {order.placedByStaff.fullName}
                               </p>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex-1 md:px-6">
-                          <div className="space-y-2">
-                            {order.items?.slice(0, 3).map((item, i) => {
-                              const customizationSummary =
-                                getCustomizationSummary(item);
-                              return (
-                                <div
-                                  key={i}
-                                  className="text-xs bg-muted/60 px-2.5 py-1.5 rounded-md border"
-                                >
-                                  <div className="font-medium">
-                                    {item.quantity}x {item.itemName}
-                                  </div>
-                                  {customizationSummary && (
-                                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                                      {customizationSummary}
-                                    </div>
-                                  )}
+                        {/* Items Section */}
+                        <div className="space-y-2">
+                          {order.items?.slice(0, 3).map((item, i) => {
+                            const customizationSummary = getCustomizationSummary(item);
+                            return (
+                              <div
+                                key={i}
+                                className="text-xs bg-muted/60 px-2.5 py-1.5 rounded-md border"
+                              >
+                                <div className="font-medium">
+                                  {item.quantity}x {item.itemName}
                                 </div>
-                              );
-                            })}
-                            {(order.items?.length ?? 0) > 3 && (
-                              <span className="text-xs bg-primary/10 text-primary px-2.5 py-1.5 rounded-md">
-                                +{(order.items?.length ?? 0) - 3} more
-                              </span>
-                            )}
-                          </div>
+                                {customizationSummary && (
+                                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                                    {customizationSummary}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {(order.items?.length ?? 0) > 3 && (
+                            <span className="text-xs bg-primary/10 text-primary px-2.5 py-1.5 rounded-md inline-block">
+                              +{(order.items?.length ?? 0) - 3} more
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-4">
-                          <div className="text-right mr-2">
-                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-tighter mb-1">
+                        {/* Footer Section - Total and Actions */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t">
+                          {/* Total */}
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-tight mb-0.5">
                               Total
                             </p>
-                            <p className="text-xl font-bold font-heading text-primary">
+                            <p className="text-xl sm:text-2xl font-bold font-heading text-primary">
                               {currency}
                               {parseFloat(order.totalAmount).toFixed(2)}
                             </p>
                           </div>
 
-                          {order.status === "PENDING" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                updateStatus.mutate({
-                                  orderId: order.id,
-                                  status: "PREPARING",
-                                })
-                              }
-                              disabled={updateStatus.isPending}
-                            >
-                              Start
-                            </Button>
-                          )}
-                          {order.status === "PREPARING" && (
-                            <Button size="sm" variant="outline" disabled>
-                              Preparing...
-                            </Button>
-                          )}
-                          {order.status === "READY" && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() =>
-                                updateStatus.mutate({
-                                  orderId: order.id,
-                                  status: "SERVED",
-                                })
-                              }
-                              disabled={updateStatus.isPending}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              Mark as Delivered
-                            </Button>
-                          )}
-                          {order.status === "SERVED" && (
-                            <Fragment>
-                              <Dialog
-                                open={
-                                  isBillingOpen &&
-                                  selectedOrder?.id === order.id
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-2">
+                            {order.status === "PENDING" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  updateStatus.mutate({
+                                    orderId: order.id,
+                                    status: "PREPARING",
+                                  })
                                 }
-                                onOpenChange={(open) => {
-                                  setIsBillingOpen(open);
-                                  if (!open) setSelectedOrder(null);
-                                }}
+                                disabled={updateStatus.isPending}
+                                className="flex-1 sm:flex-initial"
                               >
-                                <DialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => {
-                                      setSelectedOrder(order);
-                                      setIsBillingOpen(true);
-                                    }}
-                                    className="bg-primary hover:bg-primary/90"
-                                  >
-                                    <Receipt className="w-4 h-4 mr-2" /> Bill
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-                                  {/* Header with Order Details in Top Right */}
-                                  <div className="px-5 pt-5 pb-3 border-b bg-white">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <div className="bg-primary/10 p-2 rounded-lg">
-                                          <Receipt className="w-4 h-4 text-primary" />
-                                        </div>
-                                        <div>
-                                          <DialogTitle className="text-lg font-bold">
-                                            Billing - {order.table?.tableNumber
-                                              ? `Table ${order.table.tableNumber}`
-                                              : order.guestName || `Order #${order.id.slice(-6)}`}
-                                          </DialogTitle>
-                                          <DialogDescription className="text-[10px] mt-0.5">
-                                            {tableOrdersForBilling.length > 1
-                                              ? `${tableOrdersForBilling.length} orders combined`
-                                              : "Review and process payment"}
-                                          </DialogDescription>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Order Details - Top Right */}
-                                      <div className="flex flex-col gap-1 text-right">
-                                        {order.placedByStaff && (
-                                          <div className="text-[10px] text-muted-foreground">
-                                            Waiter: <span className="font-medium text-foreground">{order.placedByStaff.fullName}</span>
-                                          </div>
-                                        )}
-                                        <Badge variant="secondary" className="text-[10px] h-5 justify-end">
-                                          {order.orderType}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  </div>
+                                Start
+                              </Button>
+                            )}
 
-                                  {/* Order Items - Professional One-Line Format */}
-                                  <div className="flex-1 overflow-hidden px-5 py-4">
-                                    <div className="mb-2">
-                                      <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                                        Order Items
-                                      </h3>
-                                    </div>
-                                    <ScrollArea className="h-[280px]">
-                                      <div className="space-y-1">
-                                        {order.items?.map((item, i) => {
-                                          const customizationSummary = getCustomizationSummary(item);
-                                          return (
-                                            <div
-                                              key={i}
-                                              className="flex items-center justify-between py-2 px-3 hover:bg-muted/30 rounded-md transition-colors border-b border-dashed border-gray-200 last:border-0"
-                                            >
-                                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <span className="text-[11px] font-bold text-muted-foreground min-w-[1.5rem]">
-                                                  {item.quantity}x
-                                                </span>
-                                                <div className="flex-1 min-w-0">
-                                                  <div className="text-xs font-semibold text-foreground truncate">
-                                                    {item.itemName}
-                                                  </div>
-                                                  {customizationSummary && (
-                                                    <div className="text-[10px] text-muted-foreground truncate">
-                                                      {customizationSummary}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <div className="text-xs font-bold text-foreground ml-4">
-                                                {currency}{parseFloat(item.totalPrice).toFixed(2)}
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </ScrollArea>
-                                  </div>
+                            {order.status === "PREPARING" && (
+                              <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() =>
+                                  updateStatus.mutate({
+                                    orderId: order.id,
+                                    status: "READY",
+                                  })
+                                } 
+                              disabled={updateStatus.isPending}
+                              className="flex-1 sm:flex-initial"
+                              >
+                                Preparing...
+                              </Button>
+                            )}
 
-                                  {/* Bill Summary - Compact */}
-                                  <div className="px-5 py-3 bg-muted/30 border-t">
-                                    <div className="space-y-1 text-xs max-w-md ml-auto">
-                                      <div className="flex justify-between text-[11px]">
-                                        <span className="text-muted-foreground">Subtotal</span>
-                                        <span className="font-semibold">{currency}{combinedSubtotal.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="text-muted-foreground">GST ({(gstRate * 100).toFixed(1)}%)</span>
-                                        <span className="font-medium">{currency}{combinedGst.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="text-muted-foreground">Service ({(serviceRate * 100).toFixed(1)}%)</span>
-                                        <span className="font-medium">{currency}{combinedService.toFixed(2)}</span>
-                                      </div>
-                                      <Separator className="my-1.5" />
-                                      <div className="flex justify-between items-center pt-1">
-                                        <span className="font-bold text-sm">Total</span>
-                                        <span className="text-primary text-xl font-bold">
-                                          {currency}{combinedTotal.toFixed(2)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
+                            {order.status === "READY" && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() =>
+                                  updateStatus.mutate({
+                                    orderId: order.id,
+                                    status: "SERVED",
+                                  })
+                                }
+                                disabled={updateStatus.isPending}
+                                className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-initial"
+                              >
+                                <span className="hidden sm:inline">Mark as Delivered</span>
+                                <span className="sm:hidden">Delivered</span>
+                              </Button>
+                            )}
 
-                                  {/* Payment Methods - Smaller & Compact */}
-                                  <div className="px-5 py-3 border-t bg-white">
-                                    <Label className="text-[10px] font-semibold text-muted-foreground mb-2 block">
-                                      PAYMENT METHOD
-                                    </Label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                      <Button
-                                        variant="outline"
-                                        className="flex-col h-12 gap-1 hover:border-green-500 hover:bg-green-50 transition-all rounded-lg border-2"
-                                        onClick={() => handlePayment(order, "CASH")}
-                                        disabled={updateStatus.isPending}
-                                      >
-                                        <CreditCard className="w-3.5 h-3.5 text-green-600" />
-                                        <span className="text-[10px] font-bold">CASH</span>
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        className="flex-col h-12 gap-1 hover:border-blue-500 hover:bg-blue-50 transition-all rounded-lg border-2"
-                                        onClick={() => handlePayment(order, "UPI")}
-                                        disabled={updateStatus.isPending}
-                                      >
-                                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                                        <span className="text-[10px] font-bold">UPI</span>
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        className="flex-col h-12 gap-1 hover:border-purple-500 hover:bg-purple-50 transition-all rounded-lg border-2"
-                                        onClick={() => handlePayment(order, "CARD")}
-                                        disabled={updateStatus.isPending}
-                                      >
-                                        <CreditCard className="w-3.5 h-3.5 text-purple-600" />
-                                        <span className="text-[10px] font-bold">CARD</span>
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            </Fragment>
-                          )}
+                            {order.paymentStatus !== "PAID" && 
+                              order.status !== "CANCELLED" && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => {
+                                    setSelectedOrder(order);
+                                    setIsBillingOpen(true);
+                                  }}
+                                  className="bg-primary hover:bg-primary/90 flex-1 sm:flex-initial"
+                                >
+                                  <Receipt className="w-4 h-4 sm:mr-2" />
+                                  <span className="hidden sm:inline">Bill</span>
+                                </Button>
+                              )}
+
+                            {order.paymentStatus === "PAID" && order.status !== "CANCELLED" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedOrder(order);
+                                  setIsBillingOpen(true);
+                                }}
+                                className="border-green-500 text-green-600 hover:bg-green-50 flex-1 sm:flex-initial"
+                              >
+                                <Receipt className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">View Bill</span>
+                                <span className="sm:hidden">Bill</span>
+                              </Button>
+                            )}
+
+
+                            {order.status === "SERVED" && 
+                              order.paymentStatus === "PAID" && 
+                              !order.isClosed &&
+                               (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (window.confirm(
+                                      `Close this order? Future orders for ${order.table?.tableNumber ? `Table ${order.table.tableNumber}` : 'this guest'} will start a new session.`
+                                    )) {
+                                      closeOrder.mutate(order.id);
+                                    }
+                                  }}
+                                  disabled={closeOrder.isPending}
+                                  className="border-blue-500 text-blue-600 hover:bg-blue-50 flex-1 sm:flex-initial"
+                                >
+                                  {closeOrder.isPending ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" />
+                                      <span className="hidden sm:inline">Closing...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 sm:mr-1" />
+                                      <span className="hidden sm:inline">Close Order</span>
+                                      <span className="sm:hidden">Close</span>
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+
+                            {order.status !== "CANCELLED" && order.status !== "SERVED" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCancelOrder(order)}
+                                disabled={cancelWithReason.isPending}
+                                className="border-red-500 text-red-600 hover:bg-red-50 flex-1 sm:flex-initial"
+                              >
+                                <XCircle className="w-4 h-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Cancel</span>
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -1971,6 +1942,196 @@ export default function LiveOrdersPage() {
               })}
             </div>
           )}
+
+
+          {/* Billing Dialog */}
+              {/* Billing Dialog */}
+<Dialog open={isBillingOpen} onOpenChange={setIsBillingOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Bill Details</DialogTitle>
+      <DialogDescription>
+        {selectedOrder && (
+          <span className="block mt-2 font-semibold text-base">
+            {selectedOrder.table?.tableNumber
+              ? `Table ${selectedOrder.table.tableNumber}`
+              : selectedOrder.guestName || `Order #${selectedOrder.id.slice(-6)}`}
+          </span>
+        )}
+      </DialogDescription>
+    </DialogHeader>
+
+    {selectedOrder && (
+      <div className="space-y-4">
+        {/* Order Items */}
+        <div className="max-h-[200px] overflow-y-auto">
+          <h4 className="font-semibold text-sm mb-2">Items</h4>
+          <div className="space-y-1.5">
+            {selectedOrder.items?.map((item, i) => {
+              const customizationSummary = getCustomizationSummary(item);
+              return (
+                <div
+                  key={i}
+                  className="flex justify-between items-start text-xs bg-muted/60 px-2.5 py-1.5 rounded-md border"
+                >
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {item.quantity}x {item.itemName}
+                    </div>
+                    {customizationSummary && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {customizationSummary}
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-semibold ml-2">
+                    {currency}{parseFloat(item.totalPrice).toFixed(2)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Bill Breakdown */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-medium">
+              {currency}{parseFloat(selectedOrder.subtotalAmount).toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              CGST ({(gstRate * 100 / 2).toFixed(1)}%)
+            </span>
+            <span className="font-medium">
+              {currency}{(parseFloat(selectedOrder.gstAmount) / 2).toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              SGST ({(gstRate * 100 / 2).toFixed(1)}%)
+            </span>
+            <span className="font-medium">
+              {currency}{(parseFloat(selectedOrder.gstAmount) / 2).toFixed(2)}
+            </span>
+          </div>
+          {selectedOrder.serviceTaxAmount && parseFloat(selectedOrder.serviceTaxAmount) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Service Tax</span>
+              <span className="font-medium">
+                {currency}{parseFloat(selectedOrder.serviceTaxAmount).toFixed(2)}
+              </span>
+            </div>
+          )}
+          <Separator />
+          <div className="flex justify-between text-base font-bold">
+            <span>Total</span>
+            <span className="text-primary text-xl">
+              {currency}{parseFloat(selectedOrder.totalAmount).toFixed(2)}
+            </span>
+          </div>
+
+          {/* Show amount already paid for PARTIALLY_PAID orders */}
+          {selectedOrder.paymentStatus === "PARTIALLY_PAID" && (
+            <>
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Already Paid</span>
+                <span className="font-medium">
+                  - {currency}{parseFloat(selectedOrder.paid_amount || "0").toFixed(2)}
+                </span>
+              </div>
+              <Separator />
+              <div className="flex justify-between text-lg font-bold text-orange-600">
+                <span>Outstanding Amount</span>
+                <span>
+                  {currency}
+                  {(
+                    parseFloat(selectedOrder.totalAmount) -
+                    parseFloat(selectedOrder.paid_amount || "0")
+                  ).toFixed(2)}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Payment Status */}
+        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <span className="font-medium">Payment Status</span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "flex items-center gap-1.5",
+              getPaymentStatusColor(selectedOrder.paymentStatus)
+            )}
+          >
+            {getPaymentStatusIcon(selectedOrder.paymentStatus)}
+            {selectedOrder.paymentStatus || "DUE"}
+          </Badge>
+        </div>
+
+        {/* Payment Buttons - Show if not fully paid */}
+        {selectedOrder.paymentStatus !== "PAID" && (
+          <>
+            <Separator />
+            <div>
+              <h4 className="font-semibold text-sm mb-3">
+                {selectedOrder.paymentStatus === "PARTIALLY_PAID" 
+                  ? "Pay Outstanding Amount"
+                  : "Accept Payment"}
+              </h4>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  onClick={() => handlePayment(selectedOrder, "CASH")}
+                  variant="outline"
+                  className="flex flex-col items-center gap-1 h-auto py-3"
+                  disabled={updatePaymentStatus.isPending}
+                >
+                  <DollarSign className="w-5 h-5" />
+                  <span className="text-xs">Cash</span>
+                </Button>
+                <Button
+                  onClick={() => handlePayment(selectedOrder, "CARD")}
+                  variant="outline"
+                  className="flex flex-col items-center gap-1 h-auto py-3"
+                  disabled={updatePaymentStatus.isPending}
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span className="text-xs">Card</span>
+                </Button>
+                <Button
+                  onClick={() => handlePayment(selectedOrder, "UPI")}
+                  variant="outline"
+                  className="flex flex-col items-center gap-1 h-auto py-3"
+                  disabled={updatePaymentStatus.isPending}
+                >
+                  <QrCode className="w-5 h-5" />
+                  <span className="text-xs">UPI</span>
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Print Button (always shown) */}
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            toast.success("Print functionality will be implemented soon!");
+          }}
+        >
+          <Printer className="w-4 h-4 mr-2" />
+          Print Bill
+        </Button>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
 
           {/* Bottom Pagination - Duplicate for convenience */}
           {totalPages > 1 && activeOrders.length > 0 && (
@@ -2069,6 +2230,58 @@ export default function LiveOrdersPage() {
           </div>
         </div>
       </div>
+  
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              {orderToCancel && (
+                <span className="block mb-2 font-semibold">
+                  {orderToCancel.table?.tableNumber
+                    ? `Table ${orderToCancel.table.tableNumber}`
+                    : orderToCancel.guestName || `Order #${orderToCancel.id.slice(-6)}`}
+                </span>
+              )}
+              Please provide a reason for cancelling this order. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <Label htmlFor="cancel-reason" className="text-sm font-medium mb-2 block">
+              Cancellation Reason *
+            </Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="E.g., Customer changed mind, wrong order, kitchen unavailable..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="min-h-[100px]"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Minimum 3 characters required
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelWithReason.isPending}>
+              Keep Order
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelOrder}
+              disabled={!cancelReason.trim() || cancelReason.trim().length < 3 || cancelWithReason.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelWithReason.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Cancel Order"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>   
     </DashboardLayout>
   );
 }

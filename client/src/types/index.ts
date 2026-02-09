@@ -117,7 +117,7 @@ export interface Table {
 }
 
 // === Order ===
-export type OrderStatus = "PENDING" | "PREPARING" | "READY" | "SERVED" | "PAID" | "CANCELLED";
+export type OrderStatus = "PENDING" | "PREPARING" | "READY" | "SERVED" | "CANCELLED";
 export type OrderType = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
 
 export interface OrderItem {
@@ -144,6 +144,9 @@ export interface OrderItem {
   customizationAmount?: string | null;
 }
 
+export type paymentStatus = "PAID" | "DUE" | "PARTIALLY_PAID" ;
+export type PaymentMethod = "CASH" | "CARD" | "UPI" | "DUE";
+
 export interface Order {
   id: string;
   restaurantId: string;
@@ -157,13 +160,16 @@ export interface Order {
     role: string;
   };
   status: OrderStatus;
+  paymentStatus: paymentStatus;
   orderType: OrderType;
   subtotalAmount: string;
   gstAmount: string;
+  paid_amount: string;
   serviceTaxAmount: string;
   discountAmount?: string;
   totalAmount: string;
   notes?: string;
+  isClosed?: boolean;
   items?: OrderItem[];
   table?: {
     id: string;
@@ -191,6 +197,8 @@ export interface CreateOrderInput {
   guestName?: string;
   guestPhone?: string;
   orderType?: OrderType;
+  paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE" ;
+  paymentStatus?: "PAID" | "DUE" | "PARTIALLY_PAID";
   items: Array<{
     menuItemId: string;
     quantity: number;
