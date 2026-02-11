@@ -355,6 +355,7 @@ export function useCreateOrder(restaurantId: string | null) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
         qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
       }
       toast.success("Order created successfully");
     },
@@ -372,6 +373,7 @@ export function useUpdateOrderStatus(restaurantId: string | null) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
         qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
       }
     },
     onError: (e: Error) => toast.error(e.message || "Failed to update status"),
@@ -388,6 +390,7 @@ export function useCancelOrder(restaurantId: string | null) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
         qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
       }
       toast.success("Order cancelled");
     },
@@ -970,6 +973,7 @@ export function useUpdatePaymentStatus(restaurantId: string | null) {
         await qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         await qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
         await qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+        await qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
         await qc.invalidateQueries({ queryKey: ["transactions", restaurantId] });
         await qc.invalidateQueries({ queryKey: ["transactions-recent", restaurantId] });
         
@@ -977,7 +981,7 @@ export function useUpdatePaymentStatus(restaurantId: string | null) {
         await qc.invalidateQueries({ queryKey: ["order", restaurantId, updatedOrder.id] });
         
         console.log("✅ Caches invalidated after payment update");
-        console.log("  Updated order paidAmount:", updatedOrder.paidAmount);
+        console.log("  Updated order paidAmount:", updatedOrder.paid_amount);
       }
       toast.success("Payment status updated successfully");
     },
@@ -1108,18 +1112,18 @@ export function useStates(countryCode: string | null, search: string) {
   });
 }
 
-export function useCities(stateCode: string | null, search: string) {
+export function useCities(countryCode: string | null, stateCode: string | null, search: string) {
   return useQuery({
     queryKey: queryKeys.cities(stateCode, search),
     queryFn: () =>
       api
         .get<{ cities: LocationOption[] }>(
-          `/api/meta/cities${stateCode ? `?state=${encodeURIComponent(stateCode)}` : ""}${
-            search ? `${stateCode ? "&" : "?"}q=${encodeURIComponent(search)}` : ""
+          `/api/meta/cities?country=${encodeURIComponent(countryCode || "")}&state=${encodeURIComponent(stateCode || "")}${
+            search ? `&q=${encodeURIComponent(search)}` : ""
           }`,
         )
         .then((r) => r.cities ?? []),
-    enabled: !!stateCode,
+    enabled: !!countryCode && !!stateCode,
   });
 }
 
@@ -1482,5 +1486,94 @@ export function useMenuCardUploadUrl(restaurantId: string | null) {
         expiresIn: number;
       }>(`/api/menu/${restaurantId}/menu-card/upload-url`, data || {}),
     onError: (e: Error) => toast.error(e.message || "Failed to get upload URL"),
+  });
+}
+
+
+
+// Add these hooks to your existing api.ts file
+
+// === Logo Management ===
+
+export function usePredefinedLogos(category?: string) {
+  return useQuery({
+    queryKey: ["predefined-logos", category],
+    queryFn: () =>
+      api.get<{ logos: Array<{
+        id: string;
+        name: string;
+        thumbnail: string;
+        url: string;
+        category: string;
+      }> }>(
+        `/api/logos/templates${category ? `?category=${category}` : ""}`
+      ).then(r => r.logos),
+  });
+}
+
+export function useRestaurantLogo(restaurantId: string | null) {
+  return useQuery({
+    queryKey: ["restaurant-logo", restaurantId],
+    queryFn: () =>
+      api.get<{ logo: {
+        type: 'predefined' | 'custom';
+        url: string;
+        key?: string;
+        updatedAt: string;
+      } | null }>(
+        `/api/logos/${restaurantId}`
+      ).then(r => r.logo),
+    enabled: !!restaurantId,
+  });
+}
+
+export function useLogoUploadUrl(restaurantId: string | null) {
+  return useMutation({
+    mutationFn: (data: { contentType: string }) =>
+      api.post<{
+        uploadUrl: string;
+        key: string;
+        publicUrl: string;
+        expiresIn: number;
+      }>(`/api/logos/${restaurantId}/upload-url`, data),
+    onError: (e: Error) => toast.error(e.message || "Failed to get upload URL"),
+  });
+}
+
+export function useUpdateRestaurantLogo(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      type: 'predefined' | 'custom';
+      url: string;
+      key?: string | null;
+    }) =>
+      api.put<{
+        success: boolean;
+        restaurant: Restaurant;
+        message: string;
+      }>(`/api/logos/${restaurantId}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["restaurant-logo", restaurantId] });
+      qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) });
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update logo"),
+  });
+}
+
+export function useDeleteRestaurantLogo(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.delete<{
+        success: boolean;
+        restaurant: Restaurant;
+        message: string;
+      }>(`/api/logos/${restaurantId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["restaurant-logo", restaurantId] });
+      qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) });
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to remove logo"),
   });
 }

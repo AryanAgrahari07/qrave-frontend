@@ -14,9 +14,11 @@ import { Users, DollarSign, Utensils, Clock, ShoppingCart, Loader2 } from "lucid
 import { cn } from "@/lib/utils";
 import type { Table } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function DashboardPage() {
   const { restaurantId } = useAuth();
+  const isMobile = useIsMobile();
 
   // Option 1: Use single summary endpoint (more efficient)
   const { data: summary, isLoading, isError, error } = useDashboardSummary(restaurantId);
@@ -68,7 +70,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
         <StatsCard 
           title="Total Orders" 
           value={orderStats.totalOrders.toString()} 
@@ -95,26 +97,28 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-7">
-        <Card className="col-span-4 shadow-sm">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-7">
+        <Card className="shadow-sm md:col-span-4">
           <CardHeader>
             <CardTitle>Weekly Scan Activity</CardTitle>
           </CardHeader>
-          <CardContent className="pl-2">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={scanActivity}>
+          <CardContent className="px-2 sm:pl-2">
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 300}>
+              <BarChart data={scanActivity} margin={isMobile ? { top: 4, right: 8, left: -12, bottom: 0 } : { top: 8, right: 12, left: 0, bottom: 0 }}>
                 <XAxis 
                   dataKey="name" 
                   stroke="#888888" 
-                  fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
+                  interval={0}
+                  tick={{ fill: "#888888", fontSize: isMobile ? 10 : 12 }}
                 />
                 <YAxis 
                   stroke="#888888" 
-                  fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
+                  width={isMobile ? 28 : 40}
+                  tick={{ fill: "#888888", fontSize: isMobile ? 10 : 12 }}
                   tickFormatter={(value) => `${value}`} 
                 />
                 <Tooltip 
@@ -128,26 +132,27 @@ export default function DashboardPage() {
                 <Bar 
                   dataKey="scans" 
                   fill="hsl(var(--primary))" 
-                  radius={[4, 4, 0, 0]} 
+                  radius={[4, 4, 0, 0]}
+                  barSize={isMobile ? 18 : 28}
                 />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 shadow-sm">
-          <CardHeader>
+        <Card className="shadow-sm md:col-span-3">
+          <CardHeader className="pb-3 sm:pb-6">
             <CardTitle>Live Tables</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 pb-4 sm:px-6 sm:pb-6">
             {tables && tables.length > 0 ? (
               <>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4">
                   {tables.slice(0, 16).map((table: Table) => (
                     <div 
                       key={table.id} 
                       className={cn(
-                        "aspect-square rounded-lg flex items-center justify-center text-sm font-bold border-2 transition-all cursor-pointer hover:scale-105",
+                        "aspect-square rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold border-2 transition-all cursor-pointer hover:scale-[1.02] sm:hover:scale-105", 
                         table.currentStatus === "OCCUPIED" 
                           ? "bg-red-100 border-red-200 text-red-600" 
                           : table.currentStatus === "RESERVED"
@@ -162,7 +167,7 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-4 mt-6 text-sm text-muted-foreground justify-center flex-wrap">
+                <div className="flex gap-3 sm:gap-4 mt-4 sm:mt-6 text-xs sm:text-sm text-muted-foreground justify-center flex-wrap">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-green-100 border border-green-200 rounded" /> 
                     Available ({tableStats.available_tables})
@@ -266,15 +271,17 @@ function StatsCard({
 }) {
   return (
     <Card className="shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3 sm:px-6 sm:pt-6">
+        <CardTitle className="text-[11px] leading-4 sm:text-sm font-medium text-muted-foreground truncate pr-2">
           {title}
         </CardTitle>
-        <Icon className="h-4 w-4 text-primary" />
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold font-heading">{value}</div>
-        <p className="text-xs text-muted-foreground mt-1">
+      <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
+        <div className="text-lg sm:text-2xl font-bold font-heading leading-tight break-words">
+          {value}
+        </div>
+        <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 break-words">
           {trend}
         </p>
       </CardContent>

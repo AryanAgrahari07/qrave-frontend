@@ -45,6 +45,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { LogoSelector } from "@/components/logo/logo-selector";
 
 const SHOP_TYPES = [
   { id: "fine-dine", label: "Fine Dine", icon: Utensils, desc: "Premium dining experience with table service." },
@@ -74,6 +75,11 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState("₹");
   const [taxRateGst, setTaxRateGst] = useState("5.00");
   const [taxRateService, setTaxRateService] = useState("10.00");
+  const [gstNumber, setGstNumber] = useState("");
+  const [fssaiNumber, setFssaiNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [googleMapsLink, setGoogleMapsLink] = useState("");
   const [spanishEnabled, setSpanishEnabled] = useState(false);
   const [hindiEnabled, setHindiEnabled] = useState(false);
   const [emailReports, setEmailReports] = useState(true);
@@ -84,8 +90,8 @@ export default function SettingsPage() {
   const [citySearch, setCitySearch] = useState("");
   const [currencySearch, setCurrencySearch] = useState("");
 
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
-  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(null);
+  const [selectedStateCode, setSelectedStateCode] = useState(null);
 
   // Popover open states
   const [countryOpen, setCountryOpen] = useState(false);
@@ -95,25 +101,12 @@ export default function SettingsPage() {
 
   const { data: countryOptions, isLoading: loadingCountries } = useCountries(countrySearch);
   const { data: stateOptions, isLoading: loadingStates } = useStates(selectedCountryCode, stateSearch);
-  const { data: cityOptions, isLoading: loadingCities } = useCities(selectedStateCode, citySearch);
+  const { data: cityOptions, isLoading: loadingCities } = useCities(
+    selectedCountryCode,  
+    selectedStateCode, 
+    citySearch
+  );
   const { data: currencyOptions, isLoading: loadingCurrencies } = useCurrencies(currencySearch);
-
-  const selectedCountry = useMemo(
-    () => countryOptions?.find((c: LocationOption) => c.name === country || c.code === selectedCountryCode),
-    [countryOptions, country, selectedCountryCode],
-  );
-  const selectedState = useMemo(
-    () => stateOptions?.find((s: LocationOption) => s.name === state || s.code === selectedStateCode),
-    [stateOptions, state, selectedStateCode],
-  );
-  const selectedCity = useMemo(
-    () => cityOptions?.find((c: LocationOption) => c.name === city),
-    [cityOptions, city],
-  );
-  const selectedCurrency = useMemo(
-    () => currencyOptions?.find((c: CurrencyOption) => c.symbol === currency || c.code === currency),
-    [currencyOptions, currency],
-  );
 
   useEffect(() => {
     if (!restaurant) return;
@@ -129,6 +122,11 @@ export default function SettingsPage() {
     setCurrency(restaurant.currency ?? "₹");
     setTaxRateGst(restaurant.taxRateGst ?? "5.00");
     setTaxRateService(restaurant.taxRateService ?? "10.00");
+    setGstNumber(restaurant.gstNumber ?? "");
+    setFssaiNumber(restaurant.fssaiNumber ?? "");
+    setEmail(restaurant.email ?? "");
+    setPhoneNumber(restaurant.phoneNumber ?? "");
+    setGoogleMapsLink(restaurant.googleMapsLink ?? "");
 
     const settings = (restaurant as { settings?: RestaurantSettings }).settings;
     const languages = settings?.languages;
@@ -142,7 +140,7 @@ export default function SettingsPage() {
 
   // Auto-load countries on mount (search with empty string to get all)
   useEffect(() => {
-    if (!selectedCountryCode && country) {
+    if (!selectedCountryCode && country && countryOptions) {
       // Try to find country code from initial country name
       const foundCountry = countryOptions?.find(c => c.name === country);
       if (foundCountry) {
@@ -153,7 +151,7 @@ export default function SettingsPage() {
 
   // Auto-load states when country is selected
   useEffect(() => {
-    if (!selectedStateCode && state && selectedCountryCode) {
+    if (!selectedStateCode && state && selectedCountryCode && stateOptions) {
       // Try to find state code from initial state name
       const foundState = stateOptions?.find(s => s.name === state);
       if (foundState) {
@@ -176,13 +174,18 @@ export default function SettingsPage() {
           name: restaurantName,
           type: selectedType,
           addressLine1,
-          city: city,
-          state: state,
-          postalCode: postalCode,
-          country: country || "India",
+          city,
+          state,
+          postalCode,
+          country,
           currency,
           taxRateGst,
           taxRateService,
+          gstNumber,
+          fssaiNumber,
+          email,
+          phoneNumber,
+          googleMapsLink,
         },
       });
       toast.success("Profile saved!");
@@ -257,26 +260,25 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 sm:gap-8">
-          <Card>
-            <CardHeader className="px-4 sm:px-6">
-              <div className="flex items-center gap-2">
-                <Store className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                <CardTitle className="text-lg sm:text-xl">Business Profile</CardTitle>
-              </div>
-              <CardDescription className="text-xs sm:text-sm">Update your restaurant details and business category.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-sm">Restaurant Name</Label>
-                  <Input
-                    value={restaurantName}
-                    onChange={(e) => setRestaurantName(e.target.value)}
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Business Type</Label>
+        <Card>
+          <CardHeader>
+            <CardTitle>Business Profile</CardTitle>
+            <CardDescription>
+              Update your restaurant details and business category.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Restaurant Name</Label>
+              <Input
+                value={restaurantName}
+                onChange={(e) => setRestaurantName(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+               <Label className="text-sm">Business Type</Label>
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="outline" className="w-full justify-start font-normal h-10 text-sm">
@@ -320,268 +322,343 @@ export default function SettingsPage() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Address Line 1</Label>
+            </div>
+
+            <div>
+              <Label>Address Line 1</Label>
+              <Input
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                placeholder="Street, building, locality"
+                className="text-sm"
+              />
+            </div>
+
+            {/* Country Selector */}
+            <div>
+              <Label>Country</Label>
+              <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between text-sm"
+                  >
+                    {country || "Select country"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search country..."
+                      value={countrySearch}
+                      onValueChange={setCountrySearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {loadingCountries ? "Loading..." : "No countries found."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {(countryOptions || []).map((c) => (
+                          <CommandItem
+                            key={c.code}
+                            value={c.name}
+                            onSelect={() => {
+                              setCountry(c.name);
+                              setSelectedCountryCode(c.code);
+                              // Reset dependent fields
+                              setSelectedStateCode(null);
+                              setState("");
+                              setCity("");
+                              setCountryOpen(false);
+                            }}
+                            className="text-sm"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                country === c.name ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* State Selector */}
+            <div>
+              <Label>State</Label>
+              <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    disabled={!selectedCountryCode}
+                    className="w-full justify-between text-sm"
+                  >
+                    {state || "Select state"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search state..."
+                      value={stateSearch}
+                      onValueChange={setStateSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {loadingStates ? "Loading..." : "No states found."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {(stateOptions || []).map((s) => (
+                          <CommandItem
+                            key={s.code}
+                            value={s.name}
+                            onSelect={() => {
+                              setState(s.name);
+                              setSelectedStateCode(s.code);
+                              setCity("");
+                              setStateOpen(false);
+                            }}
+                            className="text-sm"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                state === s.name ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {s.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* City Selector */}
+            <div>
+              <Label>City</Label>
+              <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    disabled={!selectedStateCode}
+                    className="w-full justify-between text-sm"
+                  >
+                    {city || "Select city"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search city..."
+                      value={citySearch}
+                      onValueChange={setCitySearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {loadingCities ? "Loading..." : "No cities found."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {(cityOptions || []).map((c) => (
+                          <CommandItem
+                            key={c.code}
+                            value={c.name}
+                            onSelect={() => {
+                              setCity(c.name);
+                              setCityOpen(false);
+                            }}
+                            className="text-sm"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                city === c.name ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
+              <Label>Postal Code</Label>
+              <Input
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+
+            {/* Currency Selector */}
+            <div>
+              <Label>Currency</Label>
+              <Popover open={currencyOpen} onOpenChange={setCurrencyOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between text-sm"
+                  >
+                    {currency || "Select currency"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search currency..."
+                      value={currencySearch}
+                      onValueChange={setCurrencySearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {loadingCurrencies ? "Loading..." : "No currencies found."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {(currencyOptions || []).map((c) => (
+                          <CommandItem
+                            key={c.code}
+                            value={c.code}
+                            onSelect={() => {
+                              setCurrency(c.symbol);
+                              setCurrencyOpen(false);
+                            }}
+                            className="text-sm"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                currency === c.symbol ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.symbol} • {c.name} ({c.code})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>GST %</Label>
                 <Input
-                  value={addressLine1}
-                  onChange={(e) => setAddressLine1(e.target.value)}
-                  placeholder="Street, building, locality"
+                  type="number"
+                  value={taxRateGst}
+                  onChange={(e) => setTaxRateGst(e.target.value)}
                   className="text-sm"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label className="text-sm">Country</Label>
-                  <Popover open={countryOpen} onOpenChange={setCountryOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        role="combobox"
-                        aria-expanded={countryOpen}
-                        className="w-full justify-between text-sm h-10"
-                      >
-                        <span className="truncate">{selectedCountry?.name || country || "Select country"}</span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
-                      <Command>
-                        <CommandInput
-                          value={countrySearch}
-                          onValueChange={setCountrySearch}
-                          placeholder="Search countries..."
-                          className="text-sm"
-                        />
-                        <CommandList>
-                          <CommandEmpty className="text-sm">{loadingCountries ? "Loading..." : "No countries found."}</CommandEmpty>
-                          <CommandGroup>
-                            {(countryOptions || []).map((c: LocationOption) => (
-                              <CommandItem
-                                key={c.code}
-                                value={c.name}
-                                onSelect={() => {
-                                  setCountry(c.name);
-                                  setSelectedCountryCode(c.code);
-                                  setSelectedStateCode(null);
-                                  setState("");
-                                  setCity("");
-                                  setCountryOpen(false);
-                                }}
-                                className="text-sm"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedCountry?.code === c.code ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {c.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">State</Label>
-                  <Popover open={stateOpen} onOpenChange={setStateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        role="combobox"
-                        aria-expanded={stateOpen}
-                        disabled={!selectedCountryCode}
-                        className="w-full justify-between text-sm h-10"
-                      >
-                        <span className="truncate">{state || "Select state"}</span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
-                      <Command>
-                        <CommandInput
-                          value={stateSearch}
-                          onValueChange={setStateSearch}
-                          placeholder="Search states..."
-                          className="text-sm"
-                        />
-                        <CommandList>
-                          <CommandEmpty className="text-sm">{loadingStates ? "Loading..." : "No states found."}</CommandEmpty>
-                          <CommandGroup>
-                            {(stateOptions || []).map((s: LocationOption) => (
-                              <CommandItem
-                                key={s.code}
-                                value={s.name}
-                                onSelect={() => {
-                                  setState(s.name);
-                                  setSelectedStateCode(s.code);
-                                  setCity("");
-                                  setStateOpen(false);
-                                }}
-                                className="text-sm"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedState?.code === s.code ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {s.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">City</Label>
-                  <Popover open={cityOpen} onOpenChange={setCityOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        role="combobox"
-                        aria-expanded={cityOpen}
-                        disabled={!selectedStateCode}
-                        className="w-full justify-between text-sm h-10"
-                      >
-                        <span className="truncate">{city || "Select city"}</span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
-                      <Command>
-                        <CommandInput
-                          value={citySearch}
-                          onValueChange={setCitySearch}
-                          placeholder="Search cities..."
-                          className="text-sm"
-                        />
-                        <CommandList>
-                          <CommandEmpty className="text-sm">{loadingCities ? "Loading..." : "No cities found."}</CommandEmpty>
-                          <CommandGroup>
-                            {(cityOptions || []).map((c: LocationOption) => (
-                              <CommandItem
-                                key={c.code}
-                                value={c.name}
-                                onSelect={() => {
-                                  setCity(c.name);
-                                  setCityOpen(false);
-                                }}
-                                className="text-sm"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedCity?.code === c.code ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {c.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+              <div>
+                <Label>Service Tax %</Label>
+                <Input
+                  type="number"
+                  value={taxRateService}
+                  onChange={(e) => setTaxRateService(e.target.value)}
+                  className="text-sm"
+                />
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label className="text-sm">Postal Code</Label>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-sm font-semibold text-muted-foreground">Contact & Regulatory Information</h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>Email Address</Label>
                   <Input
-                    value={postalCode}
-                    onChange={(e) => setPostalCode(e.target.value)}
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="restaurant@example.com"
                     className="text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Currency</Label>
-                  <Popover open={currencyOpen} onOpenChange={setCurrencyOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        role="combobox"
-                        aria-expanded={currencyOpen}
-                        className="w-full justify-between text-sm h-10"
-                      >
-                        <span className="truncate">
-                          {selectedCurrency ? `${selectedCurrency.symbol} • ${selectedCurrency.code}` : currency || "Select currency"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[300px] p-0">
-                      <Command>
-                        <CommandInput
-                          value={currencySearch}
-                          onValueChange={setCurrencySearch}
-                          placeholder="Search currencies..."
-                          className="text-sm"
-                        />
-                        <CommandList>
-                          <CommandEmpty className="text-sm">{loadingCurrencies ? "Loading..." : "No currencies found."}</CommandEmpty>
-                          <CommandGroup>
-                            {(currencyOptions || []).map((c: CurrencyOption) => (
-                              <CommandItem
-                                key={c.code}
-                                value={`${c.code} ${c.symbol}`}
-                                onSelect={() => {
-                                  setCurrency(c.symbol);
-                                  setCurrencyOpen(false);
-                                }}
-                                className="text-sm"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedCurrency?.code === c.code ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <span className="mr-2">{c.symbol}</span>
-                                <span>{c.name}</span>
-                                <span className="ml-auto text-xs text-muted-foreground">{c.code}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">GST %</Label>
+                <div>
+                  <Label>Phone Number</Label>
                   <Input
-                    type="number"
-                    step="0.01"
-                    value={taxRateGst}
-                    onChange={(e) => setTaxRateGst(e.target.value)}
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+91 98765 43210"
                     className="text-sm"
                   />
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label className="text-sm">Service Tax %</Label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>GST Number</Label>
                   <Input
-                    type="number"
-                    step="0.01"
-                    value={taxRateService}
-                    onChange={(e) => setTaxRateService(e.target.value)}
+                    value={gstNumber}
+                    onChange={(e) => setGstNumber(e.target.value)}
+                    placeholder="22AAAAA0000A1Z5"
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <Label>FSSAI Number</Label>
+                  <Input
+                    value={fssaiNumber}
+                    onChange={(e) => setFssaiNumber(e.target.value)}
+                    placeholder="12345678901234"
                     className="text-sm"
                   />
                 </div>
               </div>
-              <Button onClick={handleSaveProfile} disabled={updateRestaurant.isPending} className="w-full sm:w-auto text-sm">
-                {updateRestaurant.isPending ? "Saving..." : "Save Profile"}
-              </Button>
-            </CardContent>
-          </Card>
+
+              <div>
+                <Label>Google Maps Link</Label>
+                <Input
+                  type="url"
+                  value={googleMapsLink}
+                  onChange={(e) => setGoogleMapsLink(e.target.value)}
+                  placeholder="https://maps.google.com/?q=..."
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Share link for directions to your restaurant
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleSaveProfile}
+              disabled={updateRestaurant.isPending}
+              className="w-full"
+            >
+              {updateRestaurant.isPending ? "Saving..." : "Save Profile"}
+            </Button>
+          </CardContent>
+        </Card>
+
+          {restaurantId && (
+            <LogoSelector 
+              restaurantId={restaurantId}
+              restaurantType={shopType}
+            />
+           )}
 
           <Card>
             <CardHeader className="px-4 sm:px-6">

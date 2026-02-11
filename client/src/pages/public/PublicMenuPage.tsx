@@ -1,7 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Search, Globe, Loader2, ChevronRight, Plus, X, ChevronDown } from "lucide-react";
+import {
+  Search,
+  Globe,
+  Loader2,
+  ChevronRight,
+  Plus,
+  ChevronDown,
+  MapPin,
+  Phone,
+  Mail,
+  Navigation,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useParams } from "wouter";
 import { usePublicMenu } from "@/hooks/api";
@@ -12,6 +23,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 
 const TRANSLATIONS: Record<string, { 
@@ -356,6 +368,24 @@ export default function PublicMenuPage() {
   const restaurant = menuData?.restaurant;
   const currency = restaurant?.currency || "₹";
 
+  const addressParts = [
+    restaurant?.addressLine1,
+    restaurant?.addressLine2,
+    restaurant?.city,
+    restaurant?.state,
+    restaurant?.postalCode,
+    restaurant?.country,
+  ].filter(Boolean) as string[];
+
+  const addressText = addressParts.join(", ");
+
+  // Prefer explicitly saved googleMapsLink; fall back to a query-based directions URL.
+  const directionsUrl = restaurant?.googleMapsLink
+    ? restaurant.googleMapsLink
+    : addressText
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`
+      : null;
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -385,10 +415,123 @@ export default function PublicMenuPage() {
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-white drop-shadow-lg">
             {restaurant?.name || "Restaurant"}
           </h1>
-          <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Open Now
-          </p>
+          <div className="mt-0.5 flex items-center justify-between gap-3">
+            <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              Open Now
+            </p>
+
+            <div className="flex items-center gap-1">
+              {/* Address action */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center justify-center",
+                      "h-8 w-8 rounded-full",
+                      "bg-white/10 text-white hover:bg-white/15",
+                      "transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+                      "disabled:opacity-50 disabled:pointer-events-none"
+                    )}
+                    disabled={!addressText}
+                    aria-label="Address"
+                    title="Address"
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Address</DialogTitle>
+                  </DialogHeader>
+                  {addressText ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-foreground leading-relaxed">{addressText}</p>
+                      {directionsUrl && (
+                        <a
+                          href={directionsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={cn(
+                            "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2",
+                            "bg-primary text-primary-foreground text-sm font-semibold",
+                            "hover:bg-primary/90 transition-colors"
+                          )}
+                        >
+                          <Navigation className="w-4 h-4" />
+                          Open in Google Maps
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Address not available.</p>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              {/* Contact action */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center justify-center",
+                      "h-8 w-8 rounded-full",
+                      "bg-white/10 text-white hover:bg-white/15",
+                      "transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+                      "disabled:opacity-50 disabled:pointer-events-none"
+                    )}
+                    disabled={!restaurant?.phoneNumber && !restaurant?.email}
+                    aria-label="Contact"
+                    title="Contact"
+                  >
+                    <Phone className="h-4 w-4" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Contact</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    {restaurant?.phoneNumber ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm font-medium truncate">{restaurant.phoneNumber}</span>
+                        </div>
+                        <a
+                          className="text-sm font-semibold text-primary hover:underline"
+                          href={`tel:${restaurant.phoneNumber}`}
+                        >
+                          Call
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Phone number not available.</p>
+                    )}
+
+                    {restaurant?.email && (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm font-medium truncate">{restaurant.email}</span>
+                        </div>
+                        <a
+                          className="text-sm font-semibold text-primary hover:underline"
+                          href={`mailto:${restaurant.email}`}
+                        >
+                          Email
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
         </div>
       </div>
 
