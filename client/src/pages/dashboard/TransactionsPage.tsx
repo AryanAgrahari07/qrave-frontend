@@ -32,17 +32,59 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
-import { useRestaurant, useExportTransactionsCSV } from "@/hooks/api";
+import { useRestaurant, useExportTransactionsCSV, useRestaurantLogo } from "@/hooks/api";
 import { useTransactions, useTransactionDetail } from "@/hooks/api";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { BillData } from "@/lib/thermal-printer-utils";
 import { WhatsAppBillFormatter, validateIndianPhoneNumber } from "@/lib/whatsapp-bill";
+import { jsPDF } from "jspdf";
+
+function mergeSameOrderItems<T extends { itemName: string; quantity: number; totalPrice: string }>(
+  items: (T & {
+    unitPrice?: string | number;
+    variantName?: string | null;
+    selectedModifiers?: any;
+    notes?: string | null;
+  })[] = [],
+): (T & { quantity: number; totalPrice: string })[] {
+  const map = new Map<string, any>();
+
+  for (const it of items) {
+    const qty = Number(it.quantity || 0);
+    const total = Number(it.totalPrice || 0);
+    const unit = it.unitPrice !== undefined ? Number(it.unitPrice) : qty ? total / qty : 0;
+
+    const key = [
+      it.itemName,
+      unit.toFixed(2),
+      it.variantName ?? "",
+      // modifiers/customizations: stable stringify
+      it.selectedModifiers ? JSON.stringify(it.selectedModifiers) : "",
+      it.notes ?? "",
+    ].join("|");
+
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        ...it,
+        quantity: qty,
+        totalPrice: total.toFixed(2),
+      });
+    } else {
+      existing.quantity += qty;
+      existing.totalPrice = (Number(existing.totalPrice) + total).toFixed(2);
+    }
+  }
+
+  return Array.from(map.values());
+}
 
 export default function TransactionsPage() {
   const { restaurantId } = useAuth();
   const { data: restaurant } = useRestaurant(restaurantId);
+  const { data: restaurantLogo } = useRestaurantLogo(restaurantId);
   
   // Thermal Printer
   const {
@@ -123,14 +165,196 @@ export default function TransactionsPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const billData = prepareBillData();
+    if (!billData) {
+      toast.error('Bill data not available');
+      return;
+    }
+
+    // IMPORTANT:
+    // Browser print dialogs can paginate automatically and may shrink fonts.
+    // To guarantee a single-page PDF (even for 100 items), generate the PDF directly
+    // with a custom page height based on the receipt text lines.
+
+    // Generate an A4 invoice-style PDF with thermal-like placement:
+    // - item text on left
+    // - amounts on right (right-aligned)
+    // using a readable font.
+
+    const paperWidthMm = 210;
+    const paperHeightMm = 297;
+    const marginMm = 12;
+    const maxY = paperHeightMm - marginMm;
+
+    const fontSizePt = 11; // ~10-12px readable
+    const lineHeightMm = fontSizePt * 0.55;
+
+    const doc = new jsPDF({
+      orientation: "p",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    // Use a readable proportional font, but keep alignment by explicitly positioning columns.
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSizePt);
+
+    const leftX = marginMm;
+    const rightX = paperWidthMm - marginMm;
+    const gapMm = 6;
+    const amountColWidthMm = 38;
+    const leftColWidthMm = paperWidthMm - marginMm * 2 - amountColWidthMm - gapMm;
+
+    const ensureSpace = (nextY: number) => {
+      if (nextY > maxY) {
+        doc.addPage();
+        return marginMm + lineHeightMm;
+      }
+      return nextY;
+    };
+
+    const textWrap = (t: string, widthMm: number) => (doc.splitTextToSize(t || "", widthMm) as string[]);
+
+    const printCentered = (t: string, yPos: number, bold = false) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.text(t, paperWidthMm / 2, yPos, { align: "center" });
+      doc.setFont("helvetica", "normal");
+    };
+
+    const pdfCurrency = (billData.currency || '').trim() === '₹' ? 'Rs.' : (billData.currency || '').trim();
+
+    const printLeftRight = (left: string, right: string, yPos: number) => {
+      // Left text wrapped in left column
+      const leftLines = textWrap(left, leftColWidthMm);
+      const startY = yPos;
+      let yy = startY;
+      for (let i = 0; i < leftLines.length; i++) {
+        yy = ensureSpace(yy);
+        doc.text(leftLines[i], leftX, yy);
+        if (i === 0 && right) {
+          // Right-align amount in amount column
+          doc.text(right, rightX, yy, { align: "right" });
+        }
+        yy += lineHeightMm;
+      }
+      return yy;
+    };
+
+    let y = marginMm + lineHeightMm;
+
+    // Header
+    printCentered(billData.restaurant.name?.toUpperCase?.() || "", y, true);
+    y += lineHeightMm;
+
+    const headerLines = [
+      billData.restaurant.addressLine1,
+      billData.restaurant.addressLine2,
+      [billData.restaurant.city, billData.restaurant.state].filter(Boolean).join(", "),
+      billData.restaurant.postalCode,
+      billData.restaurant.phone ? `Phone: ${billData.restaurant.phone}` : "",
+      billData.restaurant.email ? `Email: ${billData.restaurant.email}` : "",
+      billData.restaurant.gstNumber ? `GSTIN: ${billData.restaurant.gstNumber}` : "",
+      billData.restaurant.fssaiNumber ? `FSSAI LIC NO: ${billData.restaurant.fssaiNumber}` : "",
+    ].filter(Boolean) as string[];
+
+    for (const hl of headerLines) {
+      y = ensureSpace(y);
+      printCentered(hl, y);
+      y += lineHeightMm;
+    }
+
+    y += 1;
+    y = ensureSpace(y);
+    doc.setDrawColor(0);
+    doc.line(leftX, y, rightX, y);
+    y += lineHeightMm;
+
+    // Meta
+    if (billData.bill.guestName) {
+      y = printLeftRight(`Name: ${billData.bill.guestName}`, "", y);
+    }
+    y = printLeftRight(`Date & time : ${billData.bill.time} ${billData.bill.date}`.trim(), "", y);
+    if (billData.bill.dineIn) y = printLeftRight(`Dine In: ${billData.bill.dineIn}`, "", y);
+    if (billData.bill.cashier) y = printLeftRight(`Cashier: ${billData.bill.cashier}`, "", y);
+    if (billData.bill.waiterName) y = printLeftRight(`Waiter: ${billData.bill.waiterName}`, "", y);
+    y = printLeftRight(`Bill No.: ${billData.bill.billNumber}`, "", y);
+
+    y = ensureSpace(y);
+    doc.line(leftX, y, rightX, y);
+    y += lineHeightMm;
+
+    // Column headers
+    doc.setFont("helvetica", "bold");
+    doc.text("Item", leftX, y);
+    doc.text("Amount", rightX, y, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    y += lineHeightMm;
+
+    y = ensureSpace(y);
+    doc.line(leftX, y, rightX, y);
+    y += lineHeightMm;
+
+    // Items
+    for (const it of billData.items) {
+      const amount = `${pdfCurrency}${it.total.toFixed(2)}`;
+      y = printLeftRight(it.name, amount, y);
+      // Qty line like thermal
+      const qtyLine = `${it.quantity} x ${pdfCurrency}${it.price.toFixed(2)}`;
+      y = printLeftRight(qtyLine, "", y);
+      y += 0.5;
+    }
+
+    y = ensureSpace(y);
+    doc.line(leftX, y, rightX, y);
+    y += lineHeightMm;
+
+    // Totals (thermal-like: label left, amount right)
+    y = printLeftRight("Sub Total", `${pdfCurrency}${billData.totals.subtotal.toFixed(2)}`, y);
+    if (billData.totals.serviceCharge > 0) {
+      const sr = billData.taxRateService ?? 0;
+      const label = sr ? `Service Charge ${sr.toFixed(0)}%` : "Service Charge";
+      y = printLeftRight(label, `${pdfCurrency}${billData.totals.serviceCharge.toFixed(2)}`, y);
+    }
+
+    if (billData.totals.cgst !== undefined && billData.totals.sgst !== undefined) {
+      const gr = billData.taxRateGst ?? 0;
+      const half = gr ? gr / 2 : 0;
+      const sgstLabel = half ? `SGST ${half.toFixed(1)}%` : "SGST";
+      const cgstLabel = half ? `CGST ${half.toFixed(1)}%` : "CGST";
+      y = printLeftRight(sgstLabel, `${pdfCurrency}${billData.totals.sgst.toFixed(2)}`, y);
+      y = printLeftRight(cgstLabel, `${pdfCurrency}${billData.totals.cgst.toFixed(2)}`, y);
+    } else if (billData.totals.gst > 0) {
+      const gr = billData.taxRateGst ?? 0;
+      const label = gr ? `GST ${gr.toFixed(1)}%` : "GST";
+      y = printLeftRight(label, `${pdfCurrency}${billData.totals.gst.toFixed(2)}`, y);
+    }
+
+    if (billData.totals.discount && billData.totals.discount > 0) {
+      y = printLeftRight("Discount", `${pdfCurrency}${billData.totals.discount.toFixed(2)}`, y);
+    }
+
+    if (billData.totals.roundOff && billData.totals.roundOff !== 0) {
+      y = printLeftRight("Round Off", `${pdfCurrency}${billData.totals.roundOff.toFixed(2)}`, y);
+    }
+
+    y = ensureSpace(y);
+    doc.line(leftX, y, rightX, y);
+    y += lineHeightMm;
+
+    doc.setFont("helvetica", "bold");
+    y = printLeftRight("GRAND TOTAL", `${pdfCurrency}${billData.totals.grandTotal.toFixed(2)}`, y);
+    doc.setFont("helvetica", "normal");
+
+    y += lineHeightMm;
+    y = ensureSpace(y);
+    printCentered("Thank you! Visit Again", y);
+
+    doc.save(`Bill-${billData.bill.billNumber}.pdf`);
   };
 
-// Updated prepareBillData function with logo support
-// Add this to your TransactionsPage.tsx file
-
 /**
- * Prepare bill data from transaction detail - Enhanced with logo support
+ * Prepare bill data from transaction detail
  */
 const prepareBillData = (): BillData | null => {
   if (!transactionDetail || !restaurant) {
@@ -149,11 +373,8 @@ const prepareBillData = (): BillData | null => {
       email: restaurant.email,
       gstNumber: restaurant.gstNumber,
       fssaiNumber: restaurant.fssaiNumber,
-      // Add logo support - fetch from restaurant settings
-      logo: restaurant.settings?.logo ? {
-        url: restaurant.settings.logo.url,
-        type: restaurant.settings.logo.type,
-      } : undefined,
+      // Ensures the thermal printer can print logo at the very top of the receipt
+      logo: restaurantLogo ? { url: restaurantLogo.url, type: restaurantLogo.type } : undefined,
     },
     bill: {
       billNumber: transactionDetail.billNumber,
@@ -173,14 +394,20 @@ const prepareBillData = (): BillData | null => {
       guestName: transactionDetail.order?.guestName,
       waiterName: transactionDetail.order?.placedByStaff?.fullName,
       cashier: transactionDetail.order?.placedByStaff?.fullName || 'System',
-      dineIn: transactionDetail.order?.table?.tableNumber || 'Takeaway',
+      // Use explicit type label; thermal printer will append table number when tableNumber exists
+      dineIn: transactionDetail.order?.table?.tableNumber ? 'Dine In' : 'Takeaway',
     },
-    items: transactionDetail.order?.items?.map(item => ({
-      name: item.itemName,
-      quantity: item.quantity,
-      price: parseFloat(item.totalPrice) / item.quantity,
-      total: parseFloat(item.totalPrice),
-    })) || [],
+    items: mergeSameOrderItems(transactionDetail.order?.items as any)?.map((item: any) => {
+      const qty = Number(item.quantity || 0);
+      const total = Number(item.totalPrice || 0);
+      const unit = item.unitPrice !== undefined ? Number(item.unitPrice) : qty ? total / qty : 0;
+      return {
+        name: item.itemName,
+        quantity: qty,
+        price: unit,
+        total: total,
+      };
+    }) || [],
     totals: {
       subtotal: parseFloat(transactionDetail.subtotal),
       gst: parseFloat(transactionDetail.gstAmount),
@@ -192,8 +419,9 @@ const prepareBillData = (): BillData | null => {
       grandTotal: parseFloat(transactionDetail.grandTotal),
     },
     currency: currency,
-    taxRateGst: parseFloat(restaurant.taxRateGst || '0'),
-    taxRateService: parseFloat(restaurant.taxRateService || '0'),
+    // Use saved snapshot rates from the transaction (fallback to current restaurant rates for legacy rows)
+    taxRateGst: parseFloat(transactionDetail.taxRateGst ?? restaurant.taxRateGst ?? '0'),
+    taxRateService: parseFloat(transactionDetail.taxRateService ?? restaurant.taxRateService ?? '0'),
   };
 };
 
@@ -360,7 +588,7 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
                     Ordered Items
                   </h4>
                   <div className="space-y-2">
-                    {transactionDetail.order?.items?.map((item, i) => (
+                    {mergeSameOrderItems(transactionDetail.order?.items as any)?.map((item: any, i: number) => (
                       <div key={i} className="flex justify-between items-start gap-3 text-sm p-2.5 rounded-md hover:bg-muted/30 transition-colors border border-transparent hover:border-border">
                         <div className="flex items-start gap-2 flex-1 min-w-0">
                           <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
@@ -405,7 +633,7 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 px-4 sm:px-6 pb-4 sm:pb-6 pt-3">
               <Button variant="outline" className="flex-1 gap-2 h-9 sm:h-10 text-sm" onClick={handlePrint}>
-                <Printer className="w-4 h-4" /> PDF Print
+                <Printer className="w-4 h-4" /> Download PDF
               </Button>
               <Button 
                 variant={isPrinterConnected ? "default" : "outline"} 

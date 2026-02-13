@@ -65,14 +65,8 @@ export interface Restaurant {
 
   qrDesign?: string | null;
 
-  settings?: {
-    logo?: {
-      key?: string | null;
-      url?: string | null;
-      type?: "predefined" | "custom" | null;
-      updatedAt?: string;
-    };
-  };
+  settings?: Record<string, unknown>;
+
 
   createdAt: string;
   updatedAt: string;
@@ -455,18 +449,4 @@ export interface ModifierGroup {
   createdAt: string;
   updatedAt: string;
   modifiers: Modifier[];
-}
-
-
-export interface RestaurantSettings {
-  languages?: RestaurantSettingsLanguages;
-  notifications?: RestaurantSettingsNotifications;
-  logo?: {
-    type: 'predefined' | 'custom';
-    url: string;
-    key?: string;
-    updatedAt: string;
-  };
-  // Allow future settings keys without breaking the type
-  [key: string]: unknown;
 }

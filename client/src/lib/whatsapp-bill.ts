@@ -2,7 +2,6 @@
  * Enhanced WhatsApp Bill Sharing Utility
  * Generates professional GST-compliant bill text for sharing via WhatsApp
  * Matches thermal printer bill quality with proper formatting
- * Includes logo placeholder when logo is set
  */
 
 import { BillData } from './thermal-printer-utils';
@@ -53,21 +52,9 @@ export class WhatsAppBillFormatter {
     const lines: string[] = [];
 
     // ========================================
-    // LOGO PLACEHOLDER (if logo exists)
-    // ========================================
-    if (billData.restaurant.logo?.url) {
-      lines.push(this.separator('━'));
-      lines.push(this.centerText('[ LOGO ]'));
-      lines.push(this.separator('━'));
-      lines.push('');
-    }
-
-    // ========================================
     // HEADER SECTION
     // ========================================
-    if (!billData.restaurant.logo?.url) {
-      lines.push(this.separator('━'));
-    }
+    lines.push(this.separator('━'));
     lines.push(this.centerText(`*${billData.restaurant.name.toUpperCase()}*`));
     lines.push(this.separator('━'));
     lines.push('');

@@ -32,6 +32,7 @@ import {
   useCreateOrder,
   useOrders,
   useUpdatePaymentStatus,
+  useCloseOrder,
 } from "@/hooks/api";
 import type { Table, TableStatus, MenuItem, Order, PaymentMethod } from "@/types";
 import { MobilePOS } from "@/components/pos/mobilepos";
@@ -53,6 +54,7 @@ export default function FloorMapPage() {
   const deleteTable = useDeleteTable(restaurantId);
   const createOrder = useCreateOrder(restaurantId);
   const updatePaymentStatus = useUpdatePaymentStatus(restaurantId);
+  const closeOrder = useCloseOrder(restaurantId);
   
   // Filter waiters only and check if user is admin/owner
   const waiters = staff?.filter((s) => s.role === "WAITER" && s.isActive) || [];
@@ -130,10 +132,18 @@ export default function FloorMapPage() {
   };
 
   const getEffectiveWaiterName = (table: Table): string | null => {
-    // Prefer explicit table assignment; fallback to the active order's staff.
+    // Show ONLY explicitly assigned waiter for the table.
+    // Important: when admin switches to "No waiter", we must not fall back to order.placedByStaff,
+    // otherwise it looks like unassign didn't work.
     if (table.assignedWaiter?.fullName) return table.assignedWaiter.fullName;
-    const activeOrder = getTableOrder(table.id);
-    return activeOrder?.placedByStaff?.fullName ?? null;
+
+    // If we only have the ID (common with optimistic updates), resolve it from staff list.
+    if (table.assignedWaiterId && staff) {
+      const waiter = staff.find((s) => s.id === table.assignedWaiterId);
+      if (waiter?.fullName) return waiter.fullName;
+    }
+
+    return null;
   };
 
   const toggleTableStatus = (table: Table) => {
@@ -739,6 +749,19 @@ export default function FloorMapPage() {
                           )}>
                             {table.capacity} SEATS
                           </span>
+
+                          {/* Waiter */}
+                          {effectiveWaiterName && (
+                            <span
+                              className={cn(
+                                "max-w-[90%] text-[10px] sm:text-xs font-semibold truncate",
+                                effectiveStatus === "AVAILABLE" ? "text-green-600/80" : "text-red-200"
+                              )}
+                              title={effectiveWaiterName}
+                            >
+                              {effectiveWaiterName}
+                            </span>
+                          )}
                           
                           {/* Bill Info */}
                           {hasBill && (
@@ -864,22 +887,34 @@ export default function FloorMapPage() {
 
       {/* Bill Dialog */}
       <Dialog open={isBillDialogOpen} onOpenChange={setIsBillDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Bill Details</DialogTitle>
             <DialogDescription>
               {selectedOrderForBill && (
-                <span className="block mt-2 font-semibold text-base">
-                  Table {selectedOrderForBill.table?.tableNumber}
-                </span>
+                <div className="mt-2 space-y-1">
+                  <div className="font-semibold text-base">
+                    Table {selectedOrderForBill.table?.tableNumber}
+                  </div>
+
+                  {/* Waiter name - same placement (under table), different style */}
+                  {selectedOrderForBill.placedByStaff?.fullName && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Waiter:</span>{" "}
+                      <span className="font-semibold italic text-primary">
+                        {selectedOrderForBill.placedByStaff.fullName}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </DialogDescription>
           </DialogHeader>
 
           {selectedOrderForBill && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-h-0">
               {/* Order Items */}
-              <div className="max-h-[200px] overflow-y-auto">
+              <div className="max-h-[35vh] overflow-y-auto pr-1">
                 <h4 className="font-semibold text-sm mb-2">Items</h4>
                 <div className="space-y-1.5">
                   {selectedOrderForBill.items?.map((item, i) => {
@@ -978,6 +1013,37 @@ export default function FloorMapPage() {
                   {selectedOrderForBill.paymentStatus || "DUE"}
                 </Badge>
               </div>
+
+              {/* Close Order - show only when paid + served and not already closed */}
+              {selectedOrderForBill.paymentStatus === "PAID" &&
+                selectedOrderForBill.status === "SERVED" &&
+                !selectedOrderForBill.isClosed && (
+                  <>
+                    <Separator />
+                    <Button
+                      variant="default"
+                      className="w-full"
+                      disabled={closeOrder.isPending}
+                      onClick={async () => {
+                        try {
+                          await closeOrder.mutateAsync(selectedOrderForBill.id);
+                          setIsBillDialogOpen(false);
+                          setSelectedOrderForBill(null);
+                        } catch {
+                          // handled by hook
+                        }
+                      }}
+                    >
+                      {closeOrder.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Close Order
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Closing will end this table session so new orders create a fresh bill.
+                    </p>
+                  </>
+                )}
 
               {/* Payment Buttons - Show if not fully paid */}
               {selectedOrderForBill.paymentStatus !== "PAID" && (

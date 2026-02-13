@@ -67,6 +67,7 @@ export default function SettingsPage() {
 
   const [shopType, setShopType] = useState("cafe");
   const [restaurantName, setRestaurantName] = useState("");
+  const [slug, setSlug] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -112,6 +113,7 @@ export default function SettingsPage() {
     if (!restaurant) return;
 
     setRestaurantName(restaurant.name ?? "");
+    setSlug(restaurant.slug ?? "");
     setAddressLine1(restaurant.addressLine1 ?? "");
     setShopType(restaurant.type || "cafe");
 
@@ -168,10 +170,11 @@ export default function SettingsPage() {
 
     try {
       const selectedType = SHOP_TYPES.find((t) => t.id === shopType)?.label;
-      await updateRestaurant.mutateAsync({
+      const updated = await updateRestaurant.mutateAsync({
         id: restaurantId,
         data: {
           name: restaurantName,
+          slug,
           type: selectedType,
           addressLine1,
           city,
@@ -188,6 +191,8 @@ export default function SettingsPage() {
           googleMapsLink,
         },
       });
+      // Keep local state in sync with saved value
+      if (updated?.slug) setSlug(updated.slug);
       toast.success("Profile saved!");
     } catch (error) {
       console.error(error);
@@ -275,6 +280,31 @@ export default function SettingsPage() {
                 onChange={(e) => setRestaurantName(e.target.value)}
                 className="text-sm"
               />
+            </div>
+
+            <div>
+              <Label>Public Menu Link (Slug)</Label>
+              <Input
+                value={slug}
+                onChange={(e) =>
+                  setSlug(
+                    e.target.value
+                      .toLowerCase()
+                      .replace(/\s+/g, "-")
+                      .replace(/[^a-z0-9-]/g, "")
+                      .replace(/-+/g, "-")
+                      .replace(/^-|-$/g, ""),
+                  )
+                }
+                placeholder="e.g. my-restaurant"
+                className="text-sm font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Your menu URL: <span className="font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}/r/{slug || '—'}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Slug must be unique. Use only lowercase letters, numbers and hyphens.
+              </p>
             </div>
 
             <div className="space-y-2">

@@ -537,12 +537,62 @@ export function useAssignWaiterToTable(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ tableId, staffId }: { tableId: string; staffId: string | null }) =>
-      api.patch<{ table: Table }>(`/api/restaurants/${restaurantId}/tables/${tableId}/assign-waiter`, { staffId }).then((r) => r.table),
-    onSuccess: () => {
-      if (restaurantId) qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+      api
+        .patch<{ table: Table }>(
+          `/api/restaurants/${restaurantId}/tables/${tableId}/assign-waiter`,
+          { staffId },
+        )
+        .then((r) => r.table),
+
+    // Optimistic update so floor map updates instantly
+    onMutate: async ({ tableId, staffId }) => {
+      if (!restaurantId) return;
+      await qc.cancelQueries({ queryKey: queryKeys.tables(restaurantId) });
+
+      const prev = qc.getQueryData<Table[]>(queryKeys.tables(restaurantId));
+
+      if (prev) {
+        qc.setQueryData<Table[]>(queryKeys.tables(restaurantId),
+          prev.map((t) =>
+            t.id === tableId
+              ? {
+                  ...t,
+                  assignedWaiterId: staffId,
+                  // Clear old waiter object; server will return enriched waiter on success
+                  assignedWaiter: staffId ? t.assignedWaiter : null,
+                  // If assigning to an AVAILABLE table, mimic backend behavior (it switches to OCCUPIED)
+                  currentStatus:
+                    staffId && t.currentStatus === "AVAILABLE" ? "OCCUPIED" : t.currentStatus,
+                }
+              : t,
+          ),
+        );
+      }
+
+      return { prev };
+    },
+
+    onError: (e: Error, _vars, ctx) => {
+      if (restaurantId && ctx?.prev) {
+        qc.setQueryData(queryKeys.tables(restaurantId), ctx.prev);
+      }
+      toast.error(e.message || "Failed to assign waiter");
+    },
+
+    onSuccess: (table) => {
+      if (restaurantId) {
+        // Update cache with the server response (includes assignedWaiter enrichment)
+        qc.setQueryData<Table[]>(queryKeys.tables(restaurantId), (prev) => {
+          if (!prev) return prev;
+          return prev.map((t) => (t.id === table.id ? table : t));
+        });
+      }
       toast.success("Waiter assigned successfully");
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to assign waiter"),
+
+    onSettled: () => {
+      if (restaurantId) qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+    },
   });
 }
 
@@ -827,6 +877,8 @@ export function useTransactionDetail(restaurantId: string | null, transactionId:
           gstAmount: string;
           serviceTaxAmount: string;
           discountAmount: string;
+          taxRateGst?: string | null;
+          taxRateService?: string | null;
           order: {
             id: string;
             orderType: string;
