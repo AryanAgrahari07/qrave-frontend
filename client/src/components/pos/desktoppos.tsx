@@ -31,21 +31,24 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { MenuItem, Table } from "@/types";
+import type { POSCartLineItem } from "@/types/pos";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 
 interface DesktopPOSProps {
   categories: any[];
   menuItems: MenuItem[];
   activeCategory: string;
-  manualCart: {
-    id: string;
-    name: string;
-    price: number;
-    quantity: number;
-    variantId?: string;
-    modifierIds?: string[];
-    isVeg?: boolean;
-  }[];
+  manualCart: POSCartLineItem[];
   selectedTableId: string;
   selectedWaiterId: string | null;
   orderMethod: "dine-in" | "takeaway" | "delivery";
@@ -55,8 +58,12 @@ interface DesktopPOSProps {
   isSearchOpen: boolean;
   onCategoryChange: (categoryId: string) => void;
   onAddToManualCart: (item: MenuItem) => void;
-  onRemoveFromManualCart: (itemId: string) => void;
-  onIncrementManualCart: (itemId: string) => void;
+  onDecrementLineItem: (lineId: string) => void;
+  onIncrementLineItem: (lineId: string) => void;
+  /** Total qty for a menuItemId (used to show qty on menu grid). */
+  getMenuItemQuantity: (menuItemId: string) => number;
+  /** Called when user presses + for an item that already exists and has customization. */
+  onPlusForCustomizableItem: (item: MenuItem) => void;
   onTableChange: (tableId: string) => void;
   onWaiterChange: (waiterId: string) => void;
   onOrderMethodChange: (method: "dine-in" | "takeaway" | "delivery") => void;
@@ -94,8 +101,10 @@ export function DesktopPOS({
   isSearchOpen,
   onCategoryChange,
   onAddToManualCart,
-  onRemoveFromManualCart,
-  onIncrementManualCart,
+  onDecrementLineItem,
+  onIncrementLineItem,
+  getMenuItemQuantity,
+  onPlusForCustomizableItem,
   onTableChange,
   onWaiterChange,
   onOrderMethodChange,
@@ -122,8 +131,11 @@ export function DesktopPOS({
     return false;
   });
 
-  const manualCartTotal = manualCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const manualCartTotal = manualCart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
   const subtotal = manualCartTotal;
+
+  const [repeatDialogOpen, setRepeatDialogOpen] = useState(false);
+  const [repeatDialogItem, setRepeatDialogItem] = useState<MenuItem | null>(null);
   const cgst = subtotal * (gstRate / 2);
   const sgst = subtotal * (gstRate / 2);
   const total = subtotal + cgst + sgst;
@@ -150,7 +162,48 @@ export function DesktopPOS({
           </div>
         </div>
       ) : (
-        <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
+        <>
+          <AlertDialog open={repeatDialogOpen} onOpenChange={setRepeatDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Add again?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {repeatDialogItem?.name
+                    ? `Do you want to repeat the same customizations for "${repeatDialogItem.name}" or add a new customization?`
+                    : "Do you want to repeat the same customization or add a new one?"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (!repeatDialogItem) return;
+                    const lines = manualCart.filter((li) => li.menuItemId === repeatDialogItem.id);
+                    const lastLine = lines[lines.length - 1];
+                    if (lastLine) onIncrementLineItem(lastLine.lineId);
+                    setRepeatDialogOpen(false);
+                    setRepeatDialogItem(null);
+                  }}
+                >
+                  Repeat
+                </AlertDialogAction>
+                <AlertDialogAction
+                  className="bg-primary"
+                  onClick={() => {
+                    if (!repeatDialogItem) return;
+                    // Start fresh customization flow
+                    onAddToManualCart(repeatDialogItem);
+                    setRepeatDialogOpen(false);
+                    setRepeatDialogItem(null);
+                  }}
+                >
+                  New customization
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
           {/* Main Content Area */}
           <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left Side - Category & Items */}
@@ -228,7 +281,7 @@ export function DesktopPOS({
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
                     {filteredItems.map((item: MenuItem) => {
-                      const quantity = manualCart.find((i) => i.id === item.id)?.quantity || 0;
+                      const quantity = getMenuItemQuantity(item.id);
                       const isAdded = quantity > 0;
                       const isVeg = item.dietaryTags?.some(
                         (tag) => tag.toLowerCase() === "veg"
@@ -262,6 +315,9 @@ export function DesktopPOS({
                             <span className="text-sm sm:text-base font-bold text-gray-900 block">
                               {currency}{item.price}
                             </span>
+                            {((item.variants?.length || 0) > 0 || (item.modifierGroups?.length || 0) > 0) && (
+                              <span className="text-[10px] text-muted-foreground font-semibold">Customizable</span>
+                            )}
                             
                             {!isAdded ? (
                               <Button
@@ -275,7 +331,11 @@ export function DesktopPOS({
                             ) : (
                               <div className="flex items-center justify-center gap-2 bg-primary/10 rounded-md border-2 border-primary/30 p-1">
                                 <Button
-                                  onClick={() => onRemoveFromManualCart(item.id)}
+                                  onClick={() => {
+                                    const lines = manualCart.filter((li) => li.menuItemId === item.id);
+                                    const line = lines[lines.length - 1];
+                                    if (line) onDecrementLineItem(line.lineId);
+                                  }}
                                   size="sm"
                                   variant="ghost"
                                   className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
@@ -286,7 +346,22 @@ export function DesktopPOS({
                                   {quantity}
                                 </span>
                                 <Button
-                                  onClick={() => onIncrementManualCart(item.id)}
+                                  onClick={() => {
+                                    const isCustomizable =
+                                      (item.variants && item.variants.length > 0) ||
+                                      (item.modifierGroups && item.modifierGroups.length > 0);
+
+                                    if (isCustomizable) {
+                                      setRepeatDialogItem(item);
+                                      setRepeatDialogOpen(true);
+                                      return;
+                                    }
+
+                                    const lines = manualCart.filter((li) => li.menuItemId === item.id);
+                                    const line = lines[lines.length - 1];
+                                    if (line) onIncrementLineItem(line.lineId);
+                                    else onAddToManualCart(item);
+                                  }}
                                   size="sm"
                                   variant="ghost"
                                   className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
@@ -343,7 +418,7 @@ export function DesktopPOS({
                     ) : (
                       <ChefHat className="size-3 sm:size-3.5 sm:mr-1.5" />
                     )}
-                    <span className="hidden xs:inline">Kitchen</span>
+                    <span className="hidden sm:inline">Kitchen</span>
                   </Button>
                 </div>
               </div>
@@ -440,7 +515,7 @@ export function DesktopPOS({
                     <div className="space-y-1.5">
                       {manualCart.map((item, idx) => {
                         const menuItem = menuItems?.find(
-                          (mi) => mi.id === item.id
+                          (mi) => mi.id === item.menuItemId
                         );
                         const selectedVariant = menuItem?.variants?.find(
                           (v) => v.id === item.variantId
@@ -487,7 +562,7 @@ export function DesktopPOS({
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
                                   <Button
-                                    onClick={() => onRemoveFromManualCart(item.id)}
+                                    onClick={() => onDecrementLineItem(item.lineId)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
@@ -498,7 +573,7 @@ export function DesktopPOS({
                                     {item.quantity}
                                   </span>
                                   <Button
-                                    onClick={() => onIncrementManualCart(item.id)}
+                                    onClick={() => onIncrementLineItem(item.lineId)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
@@ -507,7 +582,7 @@ export function DesktopPOS({
                                   </Button>
                                 </div>
                                 <span className="font-bold text-gray-900 min-w-[2.5rem] md:min-w-[3rem] text-right text-[9px] md:text-[10px]">
-                                  {currency}{(item.price * item.quantity).toFixed(2)}
+                                  {currency}{(item.unitPrice * item.quantity).toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -610,6 +685,7 @@ export function DesktopPOS({
             </div>
           </div>
         </div>
+        </>
       )}
     </DialogContent>
   );

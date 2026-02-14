@@ -19,6 +19,7 @@ import InventoryPage from "@/pages/dashboard/InventoryPage";
 import FloorMapPage from "@/pages/dashboard/FloorMapPage";
 import QueuePage from "@/pages/dashboard/QueuePage";
 import LiveOrdersPage from "@/pages/dashboard/LiveOrdersPage";
+import CancelledOrdersPage from "@/pages/dashboard/CancelledOrdersPage";
 import TransactionsPage from "@/pages/dashboard/TransactionsPage";
 import KitchenKDSPage from "@/pages/dashboard/KitchenKDSPage";
 import WaiterTerminalPage from "@/pages/dashboard/WaiterTerminalPage";
@@ -54,6 +55,7 @@ function Router() {
       {/* Dashboard Routes */}
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/dashboard/orders" component={LiveOrdersPage} />
+      <Route path="/dashboard/orders/cancelled" component={CancelledOrdersPage} />
       <Route path="/dashboard/floor-map" component={FloorMapPage} />
       <Route path="/dashboard/queue" component={QueuePage} />
       <Route path="/dashboard/transactions" component={TransactionsPage} />

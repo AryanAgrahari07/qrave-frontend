@@ -17,8 +17,10 @@ import {
   CheckCircle2,
   XCircle,
   DollarSign,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -47,10 +49,8 @@ import {
   useCloseOrder,
 } from "@/hooks/api";
 import type { Order, MenuItem, OrderStatus, PaymentMethod } from "@/types";
-import { formatDistanceToNow } from "date-fns";
-import {
-  getCustomizationSummary,
-} from "@/components/menu/Customizedorderitemdisplay";
+import type { POSCartLineItem } from "@/types/pos";
+import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,6 +61,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatDistanceToNow } from "date-fns";
+import {
+  getCustomizationSummary,
+} from "@/components/menu/Customizedorderitemdisplay";
 import { Textarea } from "@/components/ui/textarea";
 import { MobilePOS } from "@/components/pos/mobilepos";
 import { DesktopPOS } from "@/components/pos/desktoppos";
@@ -96,17 +100,11 @@ export default function LiveOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isBillingOpen, setIsBillingOpen] = useState(false);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
-  const [manualCart, setManualCart] = useState<
-    {
-      id: string;
-      name: string;
-      price: number;
-      quantity: number;
-      variantId?: string;
-      modifierIds?: string[];
-      isVeg?: boolean;
-    }[]
-  >([]);
+  const [manualCart, setManualCart] = useState<POSCartLineItem[]>([]);
+
+  const [repeatCustomizationDialogOpen, setRepeatCustomizationDialogOpen] = useState(false);
+  const [repeatCustomizationTargetItem, setRepeatCustomizationTargetItem] = useState<MenuItem | null>(null);
+
   const [selectedTableId, setSelectedTableId] = useState<string>("1");
   const [selectedWaiterId, setSelectedWaiterId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -162,57 +160,82 @@ export default function LiveOrdersPage() {
     }
   }, [menuData, activeCategory]);
 
-  const addToManualCart = (item: MenuItem) => {
-    const hasCustomizationOptions =
-      (item.variants && item.variants.length > 0) ||
-      (item.modifierGroups && item.modifierGroups.length > 0);
+  const makeLineId = (menuItemId: string) =>
+    `${menuItemId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    if (hasCustomizationOptions) {
+  const isItemCustomizable = (item: MenuItem) =>
+    (item.variants && item.variants.length > 0) ||
+    (item.modifierGroups && item.modifierGroups.length > 0);
+
+  const addToManualCart = (item: MenuItem) => {
+    if (isItemCustomizable(item)) {
       setCustomizingItem(item);
       setCustomizationTarget("manual");
-    } else {
-      setManualCart((prev) => {
-        const existing = prev.find((i) => i.id === item.id);
-        if (existing) {
-          return prev.map((i) =>
-            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
-          );
-        }
-        const isVeg = item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
-        return [
-          ...prev,
-          {
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            quantity: 1,
-            isVeg,
-          },
-        ];
-      });
+      return;
     }
-  };
 
-  const removeFromManualCart = (itemId: string) => {
     setManualCart((prev) => {
-      const item = prev.find((i) => i.id === itemId);
-      if (!item) return prev;
-      
-      if (item.quantity === 1) {
-        return prev.filter((i) => i.id !== itemId);
-      }
-      return prev.map((i) =>
-        i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i,
+      const existing = prev.find(
+        (li) =>
+          li.menuItemId === item.id &&
+          !li.variantId &&
+          (!li.modifierIds || li.modifierIds.length === 0),
       );
+      if (existing) {
+        return prev.map((li) =>
+          li.lineId === existing.lineId
+            ? { ...li, quantity: li.quantity + 1 }
+            : li,
+        );
+      }
+
+      const isVeg = item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+      const newLine: POSCartLineItem = {
+        lineId: makeLineId(item.id),
+        menuItemId: item.id,
+        name: item.name,
+        unitPrice: item.price,
+        quantity: 1,
+        isVeg,
+        menuItem: item,
+      };
+      return [...prev, newLine];
     });
   };
 
-  const incrementManualCart = (itemId: string) => {
+  const decrementLineItem = (lineId: string) => {
     setManualCart((prev) =>
-      prev.map((i) =>
-        i.id === itemId ? { ...i, quantity: i.quantity + 1 } : i,
+      prev
+        .map((li) =>
+          li.lineId === lineId ? { ...li, quantity: li.quantity - 1 } : li,
+        )
+        .filter((li) => li.quantity > 0),
+    );
+  };
+
+  const incrementLineItem = (lineId: string) => {
+    setManualCart((prev) =>
+      prev.map((li) =>
+        li.lineId === lineId ? { ...li, quantity: li.quantity + 1 } : li,
       ),
     );
+  };
+
+  const getMenuItemQuantity = (menuItemId: string) =>
+    manualCart.reduce(
+      (sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum),
+      0,
+    );
+
+  const handlePlusForCustomizableItem = (item: MenuItem) => {
+    const existingLines = manualCart.filter((li) => li.menuItemId === item.id);
+    if (existingLines.length > 0) {
+      setRepeatCustomizationTargetItem(item);
+      setRepeatCustomizationDialogOpen(true);
+      return;
+    }
+    setCustomizingItem(item);
+    setCustomizationTarget("manual");
   };
 
   const handleAddCustomizedToCart = (selection: {
@@ -244,17 +267,19 @@ export default function LiveOrdersPage() {
 
     const isVeg = customizingItem.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
 
-    const cartItem = {
-      id: customizingItem.id,
+    const cartLine: POSCartLineItem = {
+      lineId: makeLineId(customizingItem.id),
+      menuItemId: customizingItem.id,
       name: customizingItem.name,
-      price,
+      unitPrice: price,
       quantity: selection.quantity,
       variantId: selection.variantId,
       modifierIds: selection.modifierIds,
       isVeg,
+      menuItem: customizingItem,
     };
 
-    setManualCart((prev) => [...prev, cartItem]);
+    setManualCart((prev) => [...prev, cartLine]);
     setCustomizingItem(null);
   };
 
@@ -298,7 +323,7 @@ export default function LiveOrdersPage() {
         tableId: orderMethod === "dine-in" ? selectedTableId : undefined,
         orderType: orderTypeMap[orderMethod] as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
         items: manualCart.map((item) => ({
-          menuItemId: item.id,
+          menuItemId: item.menuItemId,
           quantity: item.quantity,
           variantId: item.variantId,
           modifierIds: item.modifierIds,
@@ -475,35 +500,91 @@ export default function LiveOrdersPage() {
   // Render mobile POS overlay when active
   if (showMobilePOS && isMobile) {
     return (
-      <MobilePOS
-        categories={menuData?.categories || []}
-        menuItems={menuData?.items || []}
-        activeCategory={activeCategory}
-        orderItems={Object.fromEntries(
-          manualCart.map((item) => [item.id, item.quantity])
+      <>
+        <AlertDialog
+          open={repeatCustomizationDialogOpen}
+          onOpenChange={setRepeatCustomizationDialogOpen}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Add again?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {repeatCustomizationTargetItem?.name
+                  ? `Do you want to repeat the same customizations for "${repeatCustomizationTargetItem.name}" or add a new customization?`
+                  : "Do you want to repeat the same customization or add a new one?"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (!repeatCustomizationTargetItem) return;
+                  const lines = manualCart.filter(
+                    (li) => li.menuItemId === repeatCustomizationTargetItem.id,
+                  );
+                  const lastLine = lines[lines.length - 1];
+                  if (lastLine) incrementLineItem(lastLine.lineId);
+                  setRepeatCustomizationDialogOpen(false);
+                  setRepeatCustomizationTargetItem(null);
+                }}
+              >
+                Repeat
+              </AlertDialogAction>
+              <AlertDialogAction
+                className="bg-primary"
+                onClick={() => {
+                  if (!repeatCustomizationTargetItem) return;
+                  setCustomizingItem(repeatCustomizationTargetItem);
+                  setRepeatCustomizationDialogOpen(false);
+                }}
+              >
+                New customization
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {customizingItem ? (
+          <div className="fixed inset-0 z-50 bg-white">
+            <ItemCustomizationContent
+              menuItem={customizingItem}
+              currency={currency}
+              onClose={() => setCustomizingItem(null)}
+              onAddToCart={handleAddCustomizedToCart}
+            />
+          </div>
+        ) : (
+          <MobilePOS
+            categories={menuData?.categories || []}
+            menuItems={menuData?.items || []}
+            activeCategory={activeCategory}
+            cartItems={manualCart}
+            tableNumber={selectedTableId}
+            waiterName={selectedWaiterId}
+            diningType={orderMethod}
+            paymentMethod={paymentMethod}
+            onCategoryChange={setActiveCategory}
+            onAddItem={addToManualCart}
+            onDecrementLineItem={decrementLineItem}
+            onIncrementLineItem={incrementLineItem}
+            getMenuItemQuantity={getMenuItemQuantity}
+            onPlusForCustomizableItem={handlePlusForCustomizableItem}
+            onTableChange={setSelectedTableId}
+            onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
+            onDiningTypeChange={setOrderMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            onSendToKitchen={handleSendToKitchen}
+            onSave={handleSave}
+            onSaveAndPrint={handleSaveAndPrint}
+            onClose={handleCloseMobilePOS}
+            currency={currency}
+            gstRate={gstRate}
+            tables={tables}
+            staff={staff}
+            isLoading={createOrder.isPending}
+          />
         )}
-        tableNumber={selectedTableId}
-        waiterName={selectedWaiterId}
-        diningType={orderMethod}
-        paymentMethod={paymentMethod}
-        onCategoryChange={setActiveCategory}
-        onAddItem={addToManualCart}
-        onRemoveItem={removeFromManualCart}
-        onIncrement={incrementManualCart}
-        onTableChange={setSelectedTableId}
-        onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
-        onDiningTypeChange={setOrderMethod}
-        onPaymentMethodChange={setPaymentMethod}
-        onSendToKitchen={handleSendToKitchen}
-        onSave={handleSave}
-        onSaveAndPrint={handleSaveAndPrint}
-        onClose={handleCloseMobilePOS}
-        currency={currency}
-        gstRate={gstRate}
-        tables={tables}
-        staff={staff}
-        isLoading={createOrder.isPending}
-      />
+      </>
     );
   }
 
@@ -518,7 +599,7 @@ export default function LiveOrdersPage() {
             Monitor active orders and process payments.
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <Button
             variant="outline"
             size="icon"
@@ -527,6 +608,15 @@ export default function LiveOrdersPage() {
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
+
+          <Link href="/dashboard/orders/cancelled">
+            <Button variant="outline" className="shrink-0">
+              <XCircle className="w-1 h-1 mr-2 text-red-600" />
+              <span className="hidden sm:inline">Cancelled</span>
+              <span className="sm:hidden">Cancelled</span>
+              {/* <ExternalLink className="w-4 h-4 ml-2" />  */}
+            </Button>
+          </Link>
           {isMobile ? (
             <Button 
               onClick={handleNewOrderClick}
@@ -572,8 +662,10 @@ export default function LiveOrdersPage() {
                 isSearchOpen={isSearchOpen}
                 onCategoryChange={setActiveCategory}
                 onAddToManualCart={addToManualCart}
-                onRemoveFromManualCart={removeFromManualCart}
-                onIncrementManualCart={incrementManualCart}
+                onDecrementLineItem={decrementLineItem}
+                onIncrementLineItem={incrementLineItem}
+                getMenuItemQuantity={getMenuItemQuantity}
+                onPlusForCustomizableItem={handlePlusForCustomizableItem}
                 onTableChange={setSelectedTableId}
                 onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
                 onOrderMethodChange={setOrderMethod}

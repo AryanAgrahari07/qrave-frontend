@@ -25,20 +25,28 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { MenuItem, Table } from "@/types";
+import type { POSCartLineItem } from "@/types/pos";
+import { getCustomizationSummary } from "@/components/menu/Customizedorderitemdisplay";
 
 interface MobilePOSProps {
   categories: any[];
   menuItems: MenuItem[];
   activeCategory: string;
-  orderItems: Record<string, number>;
+  cartItems: POSCartLineItem[];
   tableNumber: string;
   waiterName: string | null;
   diningType: "dine-in" | "takeaway" | "delivery";
   paymentMethod: "cash" | "card" | "upi" | "due";
   onCategoryChange: (categoryId: string) => void;
   onAddItem: (item: MenuItem) => void;
-  onRemoveItem: (itemId: string) => void;
-  onIncrement: (itemId: string) => void;
+  /** Decrement/removes a specific cart line. */
+  onDecrementLineItem: (lineId: string) => void;
+  /** Increments a specific cart line. */
+  onIncrementLineItem: (lineId: string) => void;
+  /** Total qty for a menuItemId (used to show qty on menu grid). */
+  getMenuItemQuantity: (menuItemId: string) => number;
+  /** Called when user presses + for an item that already exists and has customization. */
+  onPlusForCustomizableItem: (item: MenuItem) => void;
   onTableChange: (tableId: string) => void;
   onWaiterChange: (waiterId: string) => void;
   onDiningTypeChange: (type: "dine-in" | "takeaway" | "delivery") => void;
@@ -58,15 +66,17 @@ export function MobilePOS({
   categories,
   menuItems,
   activeCategory,
-  orderItems,
+  cartItems,
   tableNumber,
   waiterName,
   diningType,
   paymentMethod,
   onCategoryChange,
   onAddItem,
-  onRemoveItem,
-  onIncrement,
+  onDecrementLineItem,
+  onIncrementLineItem,
+  getMenuItemQuantity,
+  onPlusForCustomizableItem,
   onTableChange,
   onWaiterChange,
   onDiningTypeChange,
@@ -84,26 +94,16 @@ export function MobilePOS({
   const [activeView, setActiveView] = useState<"items" | "order">("items");
 
   const filteredItems = menuItems.filter((item: any) => item.categoryId === activeCategory && item.isAvailable);
-  const totalItems = Object.values(orderItems).reduce((sum: number, qty: any) => sum + qty, 0);
+  const totalItems = cartItems.reduce((sum, li) => sum + li.quantity, 0);
 
   // Calculate totals
-  const subtotal = Object.entries(orderItems).reduce((total, [itemId, quantity]: any) => {
-    const item = menuItems.find((m: any) => m.id === itemId);
-    return total + (item?.price || 0) * quantity;
-  }, 0);
+  const subtotal = cartItems.reduce((total, li) => total + li.unitPrice * li.quantity, 0);
 
   const cgst = subtotal * (gstRate / 2);
   const sgst = subtotal * (gstRate / 2);
   const total = subtotal + cgst + sgst;
 
-  const orderedMenuItems = Object.entries(orderItems)
-    .map(([itemId, quantity]: any) => ({
-      item: menuItems.find((m: any) => m.id === itemId)!,
-      quantity,
-    }))
-    .filter((o) => o.item);
-
-  const hasItems = orderedMenuItems.length > 0;
+  const hasItems = cartItems.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col">
@@ -181,9 +181,12 @@ export function MobilePOS({
               <div className="p-4">
                 <div className="grid grid-cols-2 gap-3">
                   {filteredItems.map((item: any) => {
-                    const quantity = orderItems[item.id] || 0;
+                    const quantity = getMenuItemQuantity(item.id);
                     const isAdded = quantity > 0;
                     const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
+                    const isCustomizable =
+                      (item.variants && item.variants.length > 0) ||
+                      (item.modifierGroups && item.modifierGroups.length > 0);
 
                     return (
                       <div
@@ -191,9 +194,16 @@ export function MobilePOS({
                         className="bg-white border border-gray-200 rounded-lg p-2.5 hover:shadow-md transition-shadow flex flex-col"
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-medium text-gray-900 flex-1 text-xs leading-tight line-clamp-2 min-h-[2rem]">
-                            {item.name}
-                          </h3>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 min-h-[2rem]">
+                              {item.name}
+                            </h3>
+                            {isCustomizable && (
+                              <Badge variant="secondary" className="mt-1 text-[9px] px-1.5 py-0 h-4 inline-flex">
+                                Customizable
+                              </Badge>
+                            )}
+                          </div>
                           <div
                             className={`size-2.5 rounded-full flex-shrink-0 mt-0.5 ml-1.5 ${
                               isVeg ? "bg-green-500" : "bg-red-500"
@@ -216,7 +226,11 @@ export function MobilePOS({
                           ) : (
                             <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
                               <Button
-                                onClick={() => onRemoveItem(item.id)}
+                                onClick={() => {
+                                  // for non-customizable items, decrement the single line; for customizable, user should use cart view.
+                                  const line = cartItems.find((li) => li.menuItemId === item.id);
+                                  if (line) onDecrementLineItem(line.lineId);
+                                }}
                                 size="sm"
                                 variant="ghost"
                                 className="h-6 w-6 p-0 hover:bg-gray-200"
@@ -227,7 +241,15 @@ export function MobilePOS({
                                 {quantity}
                               </span>
                               <Button
-                                onClick={() => onIncrement(item.id)}
+                                onClick={() => {
+                                  if (isCustomizable) {
+                                    onPlusForCustomizableItem(item);
+                                    return;
+                                  }
+                                  const line = cartItems.find((li) => li.menuItemId === item.id);
+                                  if (line) onIncrementLineItem(line.lineId);
+                                  else onAddItem(item);
+                                }}
                                 size="sm"
                                 variant="ghost"
                                 className="h-6 w-6 p-0 hover:bg-gray-200"
@@ -263,36 +285,63 @@ export function MobilePOS({
               <ScrollArea className="h-full">
                 <div className="p-3">
                   <h3 className="font-semibold text-gray-900 mb-2 text-sm">
-                    Selected Items ({orderedMenuItems.length})
+                    Selected Items ({cartItems.length})
                   </h3>
-                  {orderedMenuItems.length === 0 ? (
+                  {cartItems.length === 0 ? (
                     <p className="text-gray-500 text-xs text-center py-6">
                       No items added
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {orderedMenuItems.map(({ item, quantity }: any) => {
-                        const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
+                      {cartItems.map((li) => {
+                        const menuItem = li.menuItem || menuItems.find((m) => m.id === li.menuItemId);
+                        const isVeg = li.isVeg ?? menuItem?.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
+                        const hasCustomization = !!(li.variantId || (li.modifierIds && li.modifierIds.length > 0));
+                        const summary = hasCustomization && menuItem
+                          ? getCustomizationSummary({
+                              variantName: li.variantId
+                                ? menuItem.variants?.find((v) => v.id === li.variantId)?.variantName
+                                : undefined,
+                              selectedModifiers: (li.modifierIds || []).flatMap((id) =>
+                                menuItem.modifierGroups?.flatMap((g) => g.modifiers?.filter((m) => m.id === id) || []) || []
+                              ) as any,
+                            } as any)
+                          : "";
+
                         return (
                           <div
-                            key={item.id}
+                            key={li.lineId}
                             className="bg-white rounded-lg border border-gray-200 p-2"
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0 w-0">
                                 <div
                                   className={`size-2.5 rounded-full flex-shrink-0 ${
                                     isVeg ? "bg-green-500" : "bg-red-500"
                                   }`}
                                 />
-                                <span className="font-medium text-gray-900 text-xs truncate">
-                                  {item.name}
-                                </span>
+                                <div className="min-w-0 w-full">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-gray-900 text-xs truncate block max-w-[140px] sm:max-w-[220px]">
+                                      {li.name}
+                                    </span>
+                                    {hasCustomization && (
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                        Customized
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {summary && (
+                                    <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
+                                      {summary}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
+                              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
                                 <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
                                   <Button
-                                    onClick={() => onRemoveItem(item.id)}
+                                    onClick={() => onDecrementLineItem(li.lineId)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-6 w-6 p-0 hover:bg-gray-200"
@@ -300,10 +349,10 @@ export function MobilePOS({
                                     <Minus className="size-3" />
                                   </Button>
                                   <span className="font-semibold text-xs min-w-[1rem] text-center px-0.5">
-                                    {quantity}
+                                    {li.quantity}
                                   </span>
                                   <Button
-                                    onClick={() => onIncrement(item.id)}
+                                    onClick={() => onIncrementLineItem(li.lineId)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-6 w-6 p-0 hover:bg-gray-200"
@@ -311,8 +360,8 @@ export function MobilePOS({
                                     <Plus className="size-3" />
                                   </Button>
                                 </div>
-                                <span className="font-semibold text-gray-900 text-xs min-w-[3rem] text-right">
-                                  {currency}{(item.price * quantity).toFixed(2)}
+                                <span className="font-semibold text-gray-900 text-xs min-w-0 tabular-nums text-right">
+                                  {currency}{(li.unitPrice * li.quantity).toFixed(2)}
                                 </span>
                               </div>
                             </div>

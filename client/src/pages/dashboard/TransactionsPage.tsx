@@ -531,7 +531,7 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
     if (!isBillDialogOpen || !selectedTransactionId) return null;
 
     return (
-      <DialogContent className="w-[95vw] max-w-md max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Receipt className="w-5 h-5 text-primary shrink-0" />
@@ -631,33 +631,43 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
             <Separator />
             
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 px-4 sm:px-6 pb-4 sm:pb-6 pt-3">
-              <Button variant="outline" className="flex-1 gap-2 h-9 sm:h-10 text-sm" onClick={handlePrint}>
-                <Printer className="w-4 h-4" /> Download PDF
-              </Button>
-              <Button 
-                variant={isPrinterConnected ? "default" : "outline"} 
-                className="flex-1 gap-2 h-9 sm:h-10 text-sm" 
-                onClick={handleThermalPrint}
-                disabled={isPrinting || !isPrinterConnected}
-              >
-                {isPrinting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
+            <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-3">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-0 gap-2 h-9 sm:h-10 text-sm"
+                  onClick={handlePrint}
+                >
                   <Printer className="w-4 h-4" />
-                )}
-                {isPrinterConnected ? 'Print Bill' : 'Connect Printer'}
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex-1 gap-2 h-9 sm:h-10 text-sm bg-green-50 hover:bg-green-100 text-green-700 border-green-200" 
-                onClick={() => {
-                  setIsBillDialogOpen(false);
-                  setTimeout(() => setIsWhatsAppDialogOpen(true), 100);
-                }}
-              >
-                <MessageCircle className="w-4 h-4" /> WhatsApp
-              </Button>
+                  <span className="truncate">Download PDF</span>
+                </Button>
+
+                <Button
+                  variant={isPrinterConnected ? "default" : "outline"}
+                  className="flex-1 min-w-0 gap-2 h-9 sm:h-10 text-sm"
+                  onClick={handleThermalPrint}
+                  disabled={isPrinting || !isPrinterConnected}
+                >
+                  {isPrinting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4" />
+                  )}
+                  <span className="truncate">{isPrinterConnected ? 'Print Bill' : 'Connect Printer'}</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-0 gap-2 h-9 sm:h-10 text-sm bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                  onClick={() => {
+                    setIsBillDialogOpen(false);
+                    setTimeout(() => setIsWhatsAppDialogOpen(true), 100);
+                  }}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span className="truncate">WhatsApp</span>
+                </Button>
+              </div>
             </div>
           </>
         ) : (

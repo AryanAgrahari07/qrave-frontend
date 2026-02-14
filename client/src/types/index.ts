@@ -176,6 +176,7 @@ export interface Order {
   };
   status: OrderStatus;
   paymentStatus: paymentStatus;
+  cancelReason?: string;
   orderType: OrderType;
   subtotalAmount: string;
   gstAmount: string;

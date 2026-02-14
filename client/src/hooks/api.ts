@@ -72,6 +72,7 @@ const queryKeys = {
   restaurantBySlug: (slug: string | null) => ["restaurant-by-slug", slug] as const,
   menuPublic: (slug: string | null, dietaryFilter?: 'veg' | 'non-veg' | 'any' | null) => ["menu-public", slug, dietaryFilter] as const,
   orders: (restaurantId: string | null, opts?: Record<string, unknown>) => ["orders", restaurantId, opts] as const,
+  cancelledOrdersSummary: (restaurantId: string | null, opts?: Record<string, unknown>) => ["cancelled-orders-summary", restaurantId, opts] as const,
   ordersKitchen: (restaurantId: string | null) => ["orders-kitchen", restaurantId] as const,
   ordersStats: (restaurantId: string | null) => ["orders-stats", restaurantId] as const,
   transactions: (restaurantId: string | null, opts?: Record<string, unknown>) => ["transactions", restaurantId, opts] as const,
@@ -281,6 +282,65 @@ export function useUpdateMenuItemAvailability(restaurantId: string | null) {
 }
 
 // === Orders (with customization support) ===
+
+export type CancelledOrderSummary = Pick<Order,
+  | "id"
+  | "status"
+  | "orderType"
+  | "paymentStatus"
+  | "cancelReason"
+  | "subtotalAmount"
+  | "gstAmount"
+  | "serviceTaxAmount"
+  | "discountAmount"
+  | "totalAmount"
+  | "paid_amount"
+  | "guestName"
+  | "guestPhone"
+  | "createdAt"
+  | "updatedAt"
+  | "closedAt"
+  | "isClosed"
+> & {
+  table?: { id: string; tableNumber: string; floorSection?: string | null } | null;
+  placedByStaff?: { id: string; fullName: string; role: string } | null;
+};
+
+export function useCancelledOrdersSummary(
+  restaurantId: string | null,
+  opts?: { orderType?: string; tableId?: string; fromDate?: string; toDate?: string; limit?: number; offset?: number }
+) {
+  const params = new URLSearchParams();
+  if (opts?.orderType) params.set("orderType", opts.orderType);
+  if (opts?.tableId) params.set("tableId", opts.tableId);
+  if (opts?.fromDate) params.set("fromDate", opts.fromDate);
+  if (opts?.toDate) params.set("toDate", opts.toDate);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const q = params.toString();
+
+  return useQuery({
+    queryKey: queryKeys.cancelledOrdersSummary(restaurantId, opts),
+    queryFn: () =>
+      api.get<{
+        orders: CancelledOrderSummary[];
+        pagination?: {
+          total: number;
+          limit: number;
+          offset: number;
+          hasMore: boolean;
+          totalPages: number;
+          currentPage: number;
+        };
+      }>(`/api/restaurants/${restaurantId}/orders/cancelled/summary${q ? `?${q}` : ""}`),
+    enabled: !!restaurantId,
+    // Cancelled orders list doesn't need realtime polling
+    refetchInterval: false,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useOrders(restaurantId: string | null, opts?: { status?: string; orderType?: string; tableId?: string; limit?: number; offset?: number }) {
   const params = new URLSearchParams();
   if (opts?.status) params.set("status", opts.status);
@@ -451,6 +511,19 @@ export function useRemoveOrderItem(restaurantId: string | null) {
       toast.success("Item removed from order");
     },
     onError: (e: Error) => toast.error(e.message || "Failed to remove item"),
+  });
+}
+
+export function useOrderDetail(restaurantId: string | null, orderId: string | null) {
+  return useQuery({
+    queryKey: ["order-detail", restaurantId, orderId],
+    queryFn: () =>
+      api.get<{ order: Order }>(`/api/restaurants/${restaurantId}/orders/${orderId}`).then((r) => r.order),
+    enabled: !!restaurantId && !!orderId,
+    // Details are fetched on demand (dialogs), no polling
+    refetchInterval: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
