@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAnalytics } from "@/hooks/api";
+import { useAnalyticsOverview } from "@/hooks/api";
 import { useAuth } from "@/context/AuthContext";
 
 const COLORS = ["hsl(var(--primary))", "#fbbf24", "#10b981", "#6366f1", "#f43f5e"];
@@ -37,7 +37,7 @@ export default function AnalyticsPage() {
   const { restaurantId } = useAuth();
 
     
-  const { data: analytics, isLoading } = useAnalytics(restaurantId, timeframe);
+  const { data: analytics, isLoading } = useAnalyticsOverview(restaurantId, timeframe);
 
   if (isLoading) {
     return (
@@ -59,10 +59,11 @@ export default function AnalyticsPage() {
     );
   }
 
-  const totalRevenue = analytics.revenueData.reduce((acc, curr) => acc + Number(curr.total), 0);
+  const totalRevenue = analytics.kpis.revenue;
+  const revenueChange = analytics.kpis.revenueChangePercent;
   const peakHoursText = `${formatHour(analytics.peakHours.startHour)} - ${formatHour(analytics.peakHours.endHour)}`;
-  const avgOrderValue = Number(analytics.avgOrderValue.avg_value).toFixed(2);
-  const growthPercent = Number(analytics.avgOrderValue.growth_percent).toFixed(1);
+  const avgOrderValue = analytics.kpis.avgOrderValue.toFixed(2);
+  const growthPercent = analytics.kpis.avgOrderValueChangePercent.toFixed(1);
 
   return (
     <DashboardLayout>
@@ -87,7 +88,7 @@ export default function AnalyticsPage() {
           </Select>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <Card className="shadow-sm border-primary/10 bg-gradient-to-br from-white to-slate-50">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
@@ -97,14 +98,49 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold font-mono">
-                ₹{totalRevenue.toLocaleString()}
+                ₹{totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
-              <p className="text-xs text-green-600 font-bold flex items-center mt-2">
-                <ArrowUpRight className="w-3 h-3 mr-1" /> +12.5% vs prev
+              <p
+                className={cn(
+                  "text-xs font-bold flex items-center mt-2",
+                  revenueChange >= 0 ? "text-green-600" : "text-red-600"
+                )}
+              >
+                {revenueChange >= 0 ? (
+                  <ArrowUpRight className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDownRight className="w-3 h-3 mr-1" />
+                )}
+                {Math.abs(revenueChange).toFixed(1)}% vs prev
               </p>
             </CardContent>
           </Card>
           
+          <Card className="shadow-sm border-primary/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                Paid Orders
+                <Users className="w-4 h-4 text-primary" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.kpis.paidOrders.toLocaleString()}</div>
+              <p
+                className={cn(
+                  "text-xs font-bold flex items-center mt-2",
+                  analytics.kpis.paidOrdersChangePercent >= 0 ? "text-green-600" : "text-red-600"
+                )}
+              >
+                {analytics.kpis.paidOrdersChangePercent >= 0 ? (
+                  <ArrowUpRight className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDownRight className="w-3 h-3 mr-1" />
+                )}
+                {Math.abs(analytics.kpis.paidOrdersChangePercent).toFixed(1)}% vs prev
+              </p>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-sm border-primary/10">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
@@ -115,7 +151,7 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="text-2xl font-bold">{peakHoursText}</div>
               <p className="text-xs text-blue-600 font-bold flex items-center mt-2">
-                Dinner Rush Active
+                Highest footfall
               </p>
             </CardContent>
           </Card>
@@ -147,11 +183,11 @@ export default function AnalyticsPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                 Table Turnover
-                <Users className="w-4 h-4 text-primary" />
+                <Clock className="w-4 h-4 text-primary" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.tableTurnover} mins</div>
+              <div className="text-2xl font-bold">{analytics.kpis.tableTurnoverMinutes} mins</div>
               <p className="text-xs text-slate-500 font-bold flex items-center mt-2">
                 Optimal range
               </p>
@@ -170,7 +206,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={analytics.revenueData}>
+                <AreaChart data={analytics.revenueSeries.points}>
                   <defs>
                     <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
@@ -189,9 +225,10 @@ export default function AnalyticsPage() {
                     axisLine={false} 
                     tickLine={false} 
                     tick={{fill: '#94a3b8', fontSize: 12}}
-                    tickFormatter={(value) => `₹${value}`}
+                    tickFormatter={(value) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                   />
-                  <Tooltip 
+                  <Tooltip
+                    formatter={(value: any) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
                   <Area 
@@ -215,7 +252,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {analytics.topDishes.map((dish, index) => (
+                {analytics.topItems.map((dish, index) => (
                   <div key={dish.name} className="flex items-center justify-between group">
                     <div className="flex items-center gap-4">
                       <div className={cn(
@@ -228,6 +265,7 @@ export default function AnalyticsPage() {
                       <div>
                         <p className="font-bold text-sm group-hover:text-primary transition-colors">{dish.name}</p>
                         <p className="text-xs text-muted-foreground">{dish.orders.toLocaleString()} orders</p>
+                        <p className="text-[11px] text-muted-foreground/80">₹{dish.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                       </div>
                     </div>
                     {dish.trend === "up" ? (
@@ -258,17 +296,17 @@ export default function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={analytics.salesByCategory}
+                    data={analytics.categoryBreakdown.map((c) => ({ name: c.name, value: c.revenue }))}
                     innerRadius={70}
                     outerRadius={90}
                     paddingAngle={8}
                     dataKey="value"
                   >
-                    {analytics.salesByCategory.map((entry, index) => (
+                    {analytics.categoryBreakdown.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: any) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
                   <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
                 </PieChart>
               </ResponsiveContainer>

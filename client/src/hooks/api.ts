@@ -93,12 +93,12 @@ const queryKeys = {
     ["analytics", restaurantId, timeframe] as const,
   dashboard: {
     all: ["dashboard"] as const,
-    summary: () => ["dashboard", "summary"] as const,
-    tables: () => ["dashboard", "tables"] as const,
-    orders: () => ["dashboard", "orders"] as const,
-    queue: () => ["dashboard", "queue"] as const,
-    scanActivity: () => ["dashboard", "scan-activity"] as const,
-    recentOrders: (limit?: number) => ["dashboard", "recent-orders", limit] as const,
+    summary: (restaurantId: string | null) => ["dashboard", restaurantId, "summary"] as const,
+    tables: (restaurantId: string | null) => ["dashboard", restaurantId, "tables"] as const,
+    orders: (restaurantId: string | null) => ["dashboard", restaurantId, "orders"] as const,
+    queue: (restaurantId: string | null) => ["dashboard", restaurantId, "queue"] as const,
+    scanActivity: (restaurantId: string | null) => ["dashboard", restaurantId, "scan-activity"] as const,
+    recentOrders: (restaurantId: string | null, limit?: number) => ["dashboard", restaurantId, "recent-orders", limit] as const,
   },
   extraction: {
     job: (restaurantId: string | null, jobId: string | null) => 
@@ -1101,6 +1101,11 @@ export function useUpdatePaymentStatus(restaurantId: string | null) {
         await qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
         await qc.invalidateQueries({ queryKey: ["transactions", restaurantId] });
         await qc.invalidateQueries({ queryKey: ["transactions-recent", restaurantId] });
+
+        // Dashboard + analytics must reflect payments immediately
+        await qc.invalidateQueries({ queryKey: ["analytics-overview", restaurantId] });
+        await qc.invalidateQueries({ queryKey: queryKeys.dashboard.summary(restaurantId) });
+        await qc.invalidateQueries({ queryKey: queryKeys.dashboard.orders(restaurantId) });
         
         // Also invalidate the specific order
         await qc.invalidateQueries({ queryKey: ["order", restaurantId, updatedOrder.id] });
@@ -1279,58 +1284,117 @@ export function useAnalytics(restaurantId: string | null, timeframe: string = "d
   });
 }
 
-// === Dashboard hooks ===
-export function useDashboardSummary(restaurantId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.dashboard.summary(),
-    queryFn: () => api.get<DashboardSummary>(`/api/dashboard/${restaurantId}/summary`),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
+// New, richer analytics payload (recommended)
+export interface AnalyticsOverview {
+  timeframe: 'day' | 'month' | 'quarter' | 'year';
+  range: {
+    start: string;
+    end: string;
+    previousStart: string;
+    previousEnd: string;
+  };
+  kpis: {
+    revenue: number;
+    revenueChangePercent: number;
+    paidOrders: number;
+    paidOrdersChangePercent: number;
+    avgOrderValue: number;
+    avgOrderValueChangePercent: number;
+    tableTurnoverMinutes: number;
+  };
+  revenueSeries: {
+    timeframe: string;
+    bucket: 'hour' | 'day' | 'week' | 'month';
+    start: string;
+    end: string;
+    points: { name: string; total: number }[];
+  };
+  topItems: { name: string; orders: number; revenue: number; trend: 'up' | 'down'; changePercent: number }[];
+  categoryBreakdown: { name: string; revenue: number; items: number; sharePercent: number }[];
+  trafficVolume: { hour: string; hour24: number; count: number }[];
+  peakHours: { startHour: number; endHour: number };
 }
 
-export function useTableStatsAPI(restaurantId: string | null) {
+export function useAnalyticsOverview(restaurantId: string | null, timeframe: string = 'day') {
   return useQuery({
-    queryKey: queryKeys.dashboard.tables(),
-    queryFn: () => api.get<TableStats>(`/api/dashboard/${restaurantId}/tables`),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-}
-
-export function useOrderStatsAPI(restaurantId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.dashboard.orders(),
-    queryFn: () => api.get<OrderStats>(`/api/dashboard/${restaurantId}/orders`),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-}
-
-export function useQueueStatsAPI(restaurantId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.dashboard.queue(),
-    queryFn: () => api.get<QueueStats>(`/api/dashboard/${restaurantId}/queue`),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-}
-
-export function useScanActivity(restaurantId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.dashboard.scanActivity(),
-    queryFn: () => api.get<ScanActivity[]>(`/api/dashboard/${restaurantId}/scan-activity`),
+    queryKey: ['analytics-overview', restaurantId, timeframe],
+    queryFn: async () => {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const response = await api.get<{ analytics: AnalyticsOverview }>(
+        `/api/analytics/${restaurantId}/overview?timeframe=${timeframe}&timezone=${encodeURIComponent(tz)}`
+      );
+      return response.analytics;
+    },
+    enabled: !!restaurantId,
     staleTime: 60000,
     refetchInterval: 60000,
   });
 }
 
-export function useRecentOrders(restaurantId: string | null, limit: number = 5) {
+// === Dashboard hooks ===
+export function useDashboardSummary(restaurantId: string | null) {
   return useQuery({
-    queryKey: queryKeys.dashboard.recentOrders(limit),
-    queryFn: () => api.get<RecentOrder[]>(`/api/dashboard/${restaurantId}/recent-orders?limit=${limit}`),
+    queryKey: queryKeys.dashboard.summary(restaurantId),
+    queryFn: () => api.get<DashboardSummary>(`/api/dashboard/${restaurantId}/summary`),
+    enabled: !!restaurantId,
     staleTime: 15000,
     refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useTableStatsAPI(restaurantId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.tables(restaurantId),
+    queryFn: () => api.get<TableStats>(`/api/dashboard/${restaurantId}/tables`),
+    enabled: !!restaurantId,
+    staleTime: 15000,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useOrderStatsAPI(restaurantId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.orders(restaurantId),
+    queryFn: () => api.get<OrderStats>(`/api/dashboard/${restaurantId}/orders`),
+    enabled: !!restaurantId,
+    staleTime: 15000,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useQueueStatsAPI(restaurantId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.queue(restaurantId),
+    queryFn: () => api.get<QueueStats>(`/api/dashboard/${restaurantId}/queue`),
+    enabled: !!restaurantId,
+    staleTime: 15000,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useScanActivity(restaurantId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.scanActivity(restaurantId),
+    queryFn: () => api.get<ScanActivity[]>(`/api/dashboard/${restaurantId}/scan-activity`),
+    enabled: !!restaurantId,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useRecentOrders(restaurantId: string | null, limit: number = 5) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.recentOrders(restaurantId, limit),
+    queryFn: () => api.get<RecentOrder[]>(`/api/dashboard/${restaurantId}/recent-orders?limit=${limit}`),
+    enabled: !!restaurantId,
+    staleTime: 10000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 }
 
