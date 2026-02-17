@@ -213,8 +213,10 @@ export interface CreateOrderInput {
   guestName?: string;
   guestPhone?: string;
   orderType?: OrderType;
-  paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE" ;
+  paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE";
   paymentStatus?: "PAID" | "DUE" | "PARTIALLY_PAID";
+  /** If true, service charge will not be applied (dine-in only). */
+  waiveServiceCharge?: boolean;
   items: Array<{
     menuItemId: string;
     quantity: number;

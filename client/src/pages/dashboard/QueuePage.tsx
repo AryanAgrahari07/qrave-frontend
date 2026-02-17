@@ -2,9 +2,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users as UsersIcon, Clock, UserPlus, Phone, Loader2, RefreshCw, Bell, X, ChevronRight } from "lucide-react";
+import { Users as UsersIcon, Clock, UserPlus, Phone, Loader2, RefreshCw, Bell, X, ChevronRight, QrCode, ExternalLink, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { 
   Dialog, 
@@ -19,12 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
-import { useQueueActive, useTables, useRegisterInQueue, useCallNextGuest, useSeatGuest, useCancelQueueEntry, useQueueStats } from "@/hooks/api";
+import { useQueueActive, useTables, useRegisterInQueue, useCallNextGuest, useSeatGuest, useCancelQueueEntry, useQueueStats, useRestaurant } from "@/hooks/api";
 import type { QueueEntry, Table } from "@/types";
 import { formatDistanceToNow } from "date-fns";
+import QRCode from "qrcode";
 
 export default function QueuePage() {
   const { restaurantId } = useAuth();
+  const { data: restaurant } = useRestaurant(restaurantId);
   const { data: queueEntries, isLoading, refetch } = useQueueActive(restaurantId);
   const { data: tables } = useTables(restaurantId);
   const { data: queueStats } = useQueueStats(restaurantId);
@@ -38,6 +40,39 @@ export default function QueuePage() {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSeatDialogOpen, setIsSeatDialogOpen] = useState(false);
+  const [isQueueQrDialogOpen, setIsQueueQrDialogOpen] = useState(false);
+
+  // Customer-facing queue QR
+  const [queueQrDataUrl, setQueueQrDataUrl] = useState<string | null>(null);
+  const queueJoinUrl = useMemo(() => {
+    const base = window.location.origin;
+    return restaurant?.slug ? `${base}/q/${restaurant.slug}` : "";
+  }, [restaurant?.slug]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!queueJoinUrl) {
+        setQueueQrDataUrl(null);
+        return;
+      }
+      try {
+        const url = await QRCode.toDataURL(queueJoinUrl, {
+          errorCorrectionLevel: "M",
+          margin: 2,
+          width: 256,
+        });
+        if (!cancelled) setQueueQrDataUrl(url);
+      } catch {
+        if (!cancelled) setQueueQrDataUrl(null);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [queueJoinUrl]);
   
   // New guest form
   const [newGuest, setNewGuest] = useState({
@@ -109,6 +144,26 @@ export default function QueuePage() {
     }
   };
 
+  const downloadQR = (dataUrl: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Downloaded ${filename}`);
+  };
+
+  const copyQueueLink = async () => {
+    if (!queueJoinUrl) return;
+    try {
+      await navigator.clipboard.writeText(queueJoinUrl);
+      toast.success("Queue link copied");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -130,7 +185,7 @@ export default function QueuePage() {
           <h2 className="text-2xl sm:text-3xl font-heading font-bold">Guest Queue</h2>
           <p className="text-sm sm:text-base text-muted-foreground">Manage waitlists and seat guests efficiently.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <Button variant="outline" size="icon" onClick={() => refetch()} className="shrink-0">
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -143,6 +198,86 @@ export default function QueuePage() {
             <Bell className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Call Next</span>
           </Button>
+
+          <Dialog open={isQueueQrDialogOpen} onOpenChange={setIsQueueQrDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex-1 sm:flex-none">
+                <QrCode className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Customer QR</span>
+                <span className="sm:hidden">QR</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[95vw] max-w-md">
+              <DialogHeader>
+                <DialogTitle>Customer Queue QR</DialogTitle>
+                <DialogDescription>
+                  Customers can scan this QR to enter their details and join the queue.
+                </DialogDescription>
+              </DialogHeader>
+
+              {queueJoinUrl ? (
+                <div className="space-y-4 py-2">
+                  <div className="w-full flex justify-center">
+                    <div className="bg-white p-3 rounded-xl shadow-sm border">
+                      {queueQrDataUrl ? (
+                        <img
+                          src={queueQrDataUrl}
+                          alt="Queue QR Code"
+                          className="w-56 h-56"
+                        />
+                      ) : (
+                        <div className="w-56 h-56 flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-xs sm:text-sm font-mono break-all rounded-md bg-muted/50 p-2 border">
+                    {queueJoinUrl}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(queueJoinUrl, "_blank")}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" /> Open
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={copyQueueLink}
+                    >
+                      <Copy className="w-4 h-4 mr-2" /> Copy link
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!queueQrDataUrl}
+                      onClick={() =>
+                        queueQrDataUrl &&
+                        downloadQR(
+                          queueQrDataUrl,
+                          `${restaurant?.slug || "restaurant"}-queue-qr.png`,
+                        )
+                      }
+                    >
+                      <Download className="w-4 h-4 mr-2" /> Download QR
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground py-4">
+                  Queue link not available (missing restaurant slug).
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button className="shadow-lg shadow-primary/20 flex-1 sm:flex-none">

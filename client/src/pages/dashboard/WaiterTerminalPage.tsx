@@ -23,6 +23,7 @@ import {
   useUpdateOrderStatus,
   useAddOrderItems,
   useRemoveOrderItem,
+  useUpdateOrder,
 } from "@/hooks/api";
 import type { Table, QueueEntry, MenuItem, MenuCategory, Order, OrderItem, OrderStatus } from "@/types";
 import {
@@ -42,7 +43,11 @@ import { CustomizedOrderItemDisplay } from "@/components/menu/Customizedorderite
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { MobilePOS } from "@/components/pos/mobilepos";
+import { DesktopPOS } from "@/components/pos/desktoppos";
+import type { POSCartLineItem, POSCustomizationSelection } from "@/types/pos";
 import {
   Select,
   SelectContent,
@@ -51,645 +56,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Mobile POS New Order Component
-function MobilePOSNewOrder({
-  categories,
-  menuItems,
-  activeCategory,
-  orderItems,
-  tableNumber,
-  onCategoryChange,
-  onAddItem,
-  onRemoveItem,
-  onIncrement,
-  onTableChange,
-  onSendToKitchen,
-  onClose,
-  currency,
-  gstRate,
-  tables,
-  isLoading,
-}: any) {
-  const [activeView, setActiveView] = useState<"items" | "order">("items");
-
-  const filteredItems = menuItems.filter((item: any) => item.categoryId === activeCategory && item.isAvailable);
-  const totalItems = Object.values(orderItems).reduce((sum: number, qty: any) => sum + qty, 0);
-
-  // Calculate totals
-  const subtotal = Object.entries(orderItems).reduce((total, [itemId, quantity]: any) => {
-    const item = menuItems.find((m: any) => m.id === itemId);
-    return total + (item?.price || 0) * quantity;
-  }, 0);
-
-  const cgst = subtotal * (gstRate / 2);
-  const sgst = subtotal * (gstRate / 2);
-  const total = subtotal + cgst + sgst;
-
-  const orderedMenuItems = Object.entries(orderItems)
-    .map(([itemId, quantity]: any) => ({
-      item: menuItems.find((m: any) => m.id === itemId)!,
-      quantity,
-    }))
-    .filter((o) => o.item);
-
-  const hasItems = orderedMenuItems.length > 0;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-primary text-white px-1 py-1 shadow-md flex-shrink-0 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="text-white hover:bg-primary-foreground/20 h-9 w-9"
-        >
-          <ArrowLeft className="size-5" />
-        </Button>
-        <div className="flex-1">
-          <p className="text-primary-foreground font-semibold text-base">New Order</p>
-        </div>
-      </div>
-
-      {/* View Toggle Tabs */}
-      <div className="bg-white border-b border-gray-200 flex flex-shrink-0">
-        <button
-          onClick={() => setActiveView("items")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors ${
-            activeView === "items"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
-        >
-          <Grid3x3 className="size-5" />
-          Items
-        </button>
-        <button
-          onClick={() => setActiveView("order")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors relative ${
-            activeView === "order"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
-        >
-          <ShoppingCart className="size-5" />
-          Order
-          {totalItems > 0 && (
-            <Badge className="bg-primary text-white absolute -top-1 right-8 h-5 min-w-[20px] flex items-center justify-center">
-              {totalItems}
-            </Badge>
-          )}
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {activeView === "items" ? (
-          <div className="h-full flex flex-col">
-            {/* Category Bar */}
-            <div className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-                {categories.map((category: any) => (
-                  <button
-                    key={category.id}
-                    onClick={() => onCategoryChange(category.id)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium text-sm ${
-                      activeCategory === category.id
-                        ? "bg-primary text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Items Grid */}
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {filteredItems.map((item: any) => {
-                    const quantity = orderItems[item.id] || 0;
-                    const isAdded = quantity > 0;
-                    const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="font-medium text-gray-900 flex-1 text-sm">
-                            {item.name}
-                          </h3>
-                          <div
-                            className={`size-3 rounded-full flex-shrink-0 mt-1 ml-2 ${
-                              isVeg ? "bg-green-500" : "bg-red-500"
-                            }`}
-                            title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-base font-semibold text-gray-900">
-                            {currency}{item.price}
-                          </span>
-                          {!isAdded ? (
-                            <Button
-                              onClick={() => onAddItem(item)}
-                              size="sm"
-                              className="bg-primary hover:bg-primary/90 text-white h-8"
-                            >
-                              <Plus className="size-4" />
-                            </Button>
-                          ) : (
-                            <div className="flex items-center gap-1.5 bg-gray-100 rounded-md">
-                              <Button
-                                onClick={() => onRemoveItem(item.id)}
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                              >
-                                <Minus className="size-3.5" />
-                              </Button>
-                              <span className="font-semibold text-gray-900 min-w-[1.25rem] text-center text-sm">
-                                {quantity}
-                              </span>
-                              <Button
-                                onClick={() => onIncrement(item.id)}
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                              >
-                                <Plus className="size-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </ScrollArea>
-
-            {/* View Order Button */}
-            {totalItems > 0 && (
-              <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
-                <Button
-                  onClick={() => setActiveView("order")}
-                  className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-base font-semibold"
-                >
-                  View Order ({totalItems} items)
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="h-full flex flex-col bg-gray-50">
-            {/* Order Items List */}
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-3 text-base">
-                  Selected Items ({orderedMenuItems.length})
-                </h3>
-                {orderedMenuItems.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-8">
-                    No items added
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {orderedMenuItems.map(({ item, quantity }: any) => {
-                      const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
-                      return (
-                        <div
-                          key={item.id}
-                          className="bg-white rounded-lg border border-gray-200 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <div
-                                className={`size-3 rounded-full flex-shrink-0 ${
-                                  isVeg ? "bg-green-500" : "bg-red-500"
-                                }`}
-                              />
-                              <span className="font-medium text-gray-900 text-sm truncate">
-                                {item.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <div className="flex items-center gap-1.5 bg-gray-100 rounded-md">
-                                <Button
-                                  onClick={() => onRemoveItem(item.id)}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Minus className="size-4" />
-                                </Button>
-                                <span className="font-semibold text-sm min-w-[1.5rem] text-center">
-                                  {quantity}
-                                </span>
-                                <Button
-                                  onClick={() => onIncrement(item.id)}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Plus className="size-4" />
-                                </Button>
-                              </div>
-                              <span className="font-semibold text-gray-900 min-w-[4rem] text-right">
-                                {currency}{(item.price * quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            {/* Bottom Section - Settings & Actions */}
-            <div className="flex-shrink-0 bg-white border-t border-gray-200">
-              {/* Tax Breakdown */}
-              <div className="px-4 pt-4 pb-3 border-b border-gray-200">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="text-gray-900 font-medium">{currency}{subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                    <span className="text-gray-900 font-medium">{currency}{cgst.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                    <span className="text-gray-900 font-medium">{currency}{sgst.toFixed(2)}</span>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-900">Total</span>
-                    <span className="font-bold text-xl text-primary">
-                      {currency}{total.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Table Dropdown */}
-              <div className="px-4 py-3 border-b border-gray-200">
-                <Label className="text-xs text-gray-600 mb-1.5 block">Table Number</Label>
-                <Select value={tableNumber} onValueChange={onTableChange}>
-                  <SelectTrigger className="text-xs h-9">
-                    <SelectValue placeholder="Table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables?.filter((t: Table) => 
-                      t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
-                    ).map((table: Table) => (
-                      <SelectItem key={table.id} value={table.id}>
-                        Table {table.tableNumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Action Button */}
-              <div className="px-4 py-3">
-                <Button
-                  onClick={onSendToKitchen}
-                  disabled={!hasItems || isLoading}
-                  className="w-full h-12 text-sm flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white"
-                >
-                  {isLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <ChefHat className="size-4" />
-                  )}
-                  <span className="text-sm font-semibold">Send to Kitchen</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Mobile POS Add Items Component
-function MobilePOSAddItems({
-  categories,
-  menuItems,
-  activeCategory,
-  orderItems,
-  tableNumber,
-  onCategoryChange,
-  onAddItem,
-  onRemoveItem,
-  onIncrement,
-  onAddToOrder,
-  onClose,
-  currency,
-  gstRate,
-  isLoading,
-}: any) {
-  const [activeView, setActiveView] = useState<"items" | "order">("items");
-
-  const filteredItems = menuItems.filter((item: any) => item.categoryId === activeCategory && item.isAvailable);
-  const totalItems = Object.values(orderItems).reduce((sum: number, qty: any) => sum + qty, 0);
-
-  // Calculate totals
-  const subtotal = Object.entries(orderItems).reduce((total, [itemId, quantity]: any) => {
-    const item = menuItems.find((m: any) => m.id === itemId);
-    return total + (item?.price || 0) * quantity;
-  }, 0);
-
-  const cgst = subtotal * (gstRate / 2);
-  const sgst = subtotal * (gstRate / 2);
-  const total = subtotal + cgst + sgst;
-
-  const orderedMenuItems = Object.entries(orderItems)
-    .map(([itemId, quantity]: any) => ({
-      item: menuItems.find((m: any) => m.id === itemId)!,
-      quantity,
-    }))
-    .filter((o) => o.item);
-
-  const hasItems = orderedMenuItems.length > 0;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-primary text-white px-1 py-1 shadow-md flex-shrink-0 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="text-white hover:bg-primary-foreground/20 h-9 w-9"
-        >
-          <ArrowLeft className="size-5" />
-        </Button>
-        <div className="flex-1">
-          <p className="text-primary-foreground font-semibold text-base">Add Items - {tableNumber}</p>
-        </div>
-      </div>
-
-      {/* View Toggle Tabs */}
-      <div className="bg-white border-b border-gray-200 flex flex-shrink-0">
-        <button
-          onClick={() => setActiveView("items")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors ${
-            activeView === "items"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
-        >
-          <Grid3x3 className="size-5" />
-          Items
-        </button>
-        <button
-          onClick={() => setActiveView("order")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors relative ${
-            activeView === "order"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
-        >
-          <ShoppingCart className="size-5" />
-          Order
-          {totalItems > 0 && (
-            <Badge className="bg-primary text-white absolute -top-1 right-8 h-5 min-w-[20px] flex items-center justify-center">
-              {totalItems}
-            </Badge>
-          )}
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {activeView === "items" ? (
-          <div className="h-full flex flex-col">
-            {/* Category Bar */}
-            <div className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-                {categories.map((category: any) => (
-                  <button
-                    key={category.id}
-                    onClick={() => onCategoryChange(category.id)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium text-sm ${
-                      activeCategory === category.id
-                        ? "bg-primary text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Items Grid */}
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {filteredItems.map((item: any) => {
-                    const quantity = orderItems[item.id] || 0;
-                    const isAdded = quantity > 0;
-                    const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="font-medium text-gray-900 flex-1 text-sm">
-                            {item.name}
-                          </h3>
-                          <div
-                            className={`size-3 rounded-full flex-shrink-0 mt-1 ml-2 ${
-                              isVeg ? "bg-green-500" : "bg-red-500"
-                            }`}
-                            title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-base font-semibold text-gray-900">
-                            {currency}{item.price}
-                          </span>
-                          {!isAdded ? (
-                            <Button
-                              onClick={() => onAddItem(item)}
-                              size="sm"
-                              className="bg-primary hover:bg-primary/90 text-white h-8"
-                            >
-                              <Plus className="size-4" />
-                            </Button>
-                          ) : (
-                            <div className="flex items-center gap-1.5 bg-gray-100 rounded-md">
-                              <Button
-                                onClick={() => onRemoveItem(item.id)}
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                              >
-                                <Minus className="size-3.5" />
-                              </Button>
-                              <span className="font-semibold text-gray-900 min-w-[1.25rem] text-center text-sm">
-                                {quantity}
-                              </span>
-                              <Button
-                                onClick={() => onIncrement(item.id)}
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                              >
-                                <Plus className="size-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </ScrollArea>
-
-            {/* View Order Button */}
-            {totalItems > 0 && (
-              <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
-                <Button
-                  onClick={() => setActiveView("order")}
-                  className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-base font-semibold"
-                >
-                  View Order ({totalItems} items)
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="h-full flex flex-col bg-gray-50">
-            {/* Order Items List */}
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-3 text-base">
-                  Selected Items ({orderedMenuItems.length})
-                </h3>
-                {orderedMenuItems.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-8">
-                    No items added
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {orderedMenuItems.map(({ item, quantity }: any) => {
-                      const isVeg = item.dietaryTags?.some((tag: string) => tag.toLowerCase() === "veg");
-                      return (
-                        <div
-                          key={item.id}
-                          className="bg-white rounded-lg border border-gray-200 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <div
-                                className={`size-3 rounded-full flex-shrink-0 ${
-                                  isVeg ? "bg-green-500" : "bg-red-500"
-                                }`}
-                              />
-                              <span className="font-medium text-gray-900 text-sm truncate">
-                                {item.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <div className="flex items-center gap-1.5 bg-gray-100 rounded-md">
-                                <Button
-                                  onClick={() => onRemoveItem(item.id)}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Minus className="size-4" />
-                                </Button>
-                                <span className="font-semibold text-sm min-w-[1.5rem] text-center">
-                                  {quantity}
-                                </span>
-                                <Button
-                                  onClick={() => onIncrement(item.id)}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Plus className="size-4" />
-                                </Button>
-                              </div>
-                              <span className="font-semibold text-gray-900 min-w-[4rem] text-right">
-                                {currency}{(item.price * quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            {/* Bottom Section - Tax & Actions */}
-            <div className="flex-shrink-0 bg-white border-t border-gray-200">
-              {/* Tax Breakdown */}
-              <div className="px-4 pt-4 pb-3 border-b border-gray-200">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="text-gray-900 font-medium">{currency}{subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                    <span className="text-gray-900 font-medium">{currency}{cgst.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                    <span className="text-gray-900 font-medium">{currency}{sgst.toFixed(2)}</span>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-900">Total</span>
-                    <span className="font-bold text-xl text-primary">
-                      {currency}{total.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="px-4 py-3">
-                <Button
-                  onClick={onAddToOrder}
-                  disabled={!hasItems || isLoading}
-                  className="w-full h-12 text-sm flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white"
-                >
-                  {isLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
-                  <span className="text-sm font-semibold">Add to Order</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function WaiterTerminalPage() {
   const [_, setLocation] = useLocation();
   const { restaurantId, user, logout } = useAuth();
@@ -697,7 +63,15 @@ export default function WaiterTerminalPage() {
   const { data: tables, isLoading: tablesLoading, refetch: refetchTables } = useTables(restaurantId);
   const { data: queueEntries, isLoading: queueLoading, refetch: refetchQueue } = useQueueActive(restaurantId);
   const { data: menuData, refetch: refetchMenu } = useMenuCategories(restaurantId, restaurant?.slug ?? null);
-  const { data: orders, refetch: refetchOrders } = useOrders(restaurantId, { limit: 50 });
+  const { data: ordersData, refetch: refetchOrders } = useOrders(restaurantId, { limit: 50 });
+
+  // `useOrders` returns `{ orders, pagination }` in most places, but some older code treated it as `Order[]`.
+  // Normalize to a plain array to avoid runtime crashes like `(orders || []).filter is not a function`.
+  const orders: Order[] = useMemo(() => {
+    if (Array.isArray(ordersData)) return ordersData as Order[];
+    const maybe = (ordersData as any)?.orders;
+    return Array.isArray(maybe) ? (maybe as Order[]) : [];
+  }, [ordersData]);
   
   const updateTableStatus = useUpdateTableStatus(restaurantId);
   const createOrder = useCreateOrder(restaurantId);
@@ -706,15 +80,13 @@ export default function WaiterTerminalPage() {
   const updateOrderStatus = useUpdateOrderStatus(restaurantId);
   const addOrderItems = useAddOrderItems(restaurantId);
   const removeOrderItem = useRemoveOrderItem(restaurantId);
+  const updateOrder = useUpdateOrder(restaurantId);
 
   const [language, setLanguage] = useState<"en" | "es" | "hi">("en");
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
-  const [cart, setCart] = useState<Array<{
-     item: MenuItem; 
-     quantity: number
-     variantId?: string; 
-      modifierIds?: string[];
-  }>>([]);
+
+  // POS cart lines (same structure as Live Orders POS)
+  const [cart, setCart] = useState<POSCartLineItem[]>([]);
 
   const [selectedGuestForSeating, setSelectedGuestForSeating] = useState<QueueEntry | null>(null);
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<Order | null>(null);
@@ -723,18 +95,37 @@ export default function WaiterTerminalPage() {
   
   // Mobile detection and POS state
   const [isMobile, setIsMobile] = useState(false);
-  const [showMobilePOSNewOrder, setShowMobilePOSNewOrder] = useState(false);
-  const [showMobilePOSAddItems, setShowMobilePOSAddItems] = useState(false);
+  const [showMobilePOS, setShowMobilePOS] = useState(false);
+  const [posMode, setPosMode] = useState<"new" | "addItems">("new");
+  /** Used as the table selector value for the POS overlay (mobile). */
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Minimal POS state for DesktopPOS (waiter mode keeps most options hidden)
+  const [selectedWaiterId, setSelectedWaiterId] = useState<string | null>(null);
+  const [orderMethod, setOrderMethod] = useState<"dine-in" | "takeaway" | "delivery">("dine-in");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi" | "due">("due");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [waiveServiceCharge, setWaiveServiceCharge] = useState(false);
   
   // Track served orders for notifications
   const servedOrdersRef = useRef<Set<string>>(new Set());
+
+  // Track new table/order assignments for this waiter
+  const assignmentTablesInitRef = useRef(false);
+  const assignmentOrdersInitRef = useRef(false);
+  const prevTableAssignmentsRef = useRef<Map<string, string | null | undefined>>(new Map());
+  const seenAssignedOrdersRef = useRef<Set<string>>(new Set());
+
   const [notifications, setNotifications] = useState<{ id: string; message: string; time: Date }[]>([]);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [isCustomizing, setIsCustomizing] = useState(false);
+
+  // Cooking note (maps to Order.notes)
+  const [cookingNote, setCookingNote] = useState("");
+  const [editCookingNote, setEditCookingNote] = useState("");
 
 
   // Mobile detection
@@ -757,8 +148,6 @@ export default function WaiterTerminalPage() {
 
   // Check for newly ready orders and notify
   useEffect(() => {
-    if (!orders) return;
-    
     const readyOrders = orders.filter((o: Order) => o.status === "READY");
     readyOrders.forEach((order: Order) => {
       if (!servedOrdersRef.current.has(order.id)) {
@@ -769,20 +158,83 @@ export default function WaiterTerminalPage() {
           message: `🍽️ ${tableName} is READY for pickup!`,
           time: new Date(),
         };
-        setNotifications(prev => [notification, ...prev].slice(0, 10));
-        toast.success(notification.message, { 
+        setNotifications((prev) => [notification, ...prev].slice(0, 10));
+        toast.success(notification.message, {
           duration: 10000,
           icon: <ChefHat className="w-5 h-5 text-green-500" />,
         });
-        
+
         // Play notification sound if available
         try {
-          const audio = new Audio('/notification.mp3');
+          const audio = new Audio("/notification.mp3");
           audio.play().catch(() => {});
         } catch {}
       }
     });
   }, [orders]);
+
+  // Notify waiter when a new table is assigned to them
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) return;
+    if (!tables) return;
+
+    // First load: prime cache without notifications
+    if (!assignmentTablesInitRef.current) {
+      tables.forEach((t) => prevTableAssignmentsRef.current.set(t.id, t.assignedWaiterId));
+      assignmentTablesInitRef.current = true;
+      return;
+    }
+
+    for (const table of tables) {
+      const prev = prevTableAssignmentsRef.current.get(table.id);
+      const next = table.assignedWaiterId;
+      prevTableAssignmentsRef.current.set(table.id, next);
+
+      if (next === uid && prev !== uid) {
+        const msg = `🪑 New table assigned: Table ${table.tableNumber}`;
+        const notification = { id: `table-${table.id}`, message: msg, time: new Date() };
+        setNotifications((p) => [notification, ...p].slice(0, 10));
+        toast.success(msg, { duration: 9000, icon: <Bell className="w-5 h-5 text-primary" /> });
+        try {
+          const audio = new Audio("/notification.mp3");
+          audio.play().catch(() => {});
+        } catch {}
+      }
+    }
+  }, [tables, user?.id]);
+
+  // Notify waiter when a new order is assigned to them
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) return;
+
+    const assignedToMe = orders.filter((o) => (o.placedByStaffId || "") === uid);
+
+    // First load: prime set without notifications
+    if (!assignmentOrdersInitRef.current) {
+      assignedToMe.forEach((o) => seenAssignedOrdersRef.current.add(o.id));
+      assignmentOrdersInitRef.current = true;
+      return;
+    }
+
+    for (const order of assignedToMe) {
+      if (seenAssignedOrdersRef.current.has(order.id)) continue;
+      seenAssignedOrdersRef.current.add(order.id);
+
+      const who = order.table?.tableNumber
+        ? `Table ${order.table.tableNumber}`
+        : order.guestName || `Order #${order.id.slice(-4)}`;
+      const msg = `🧾 New order assigned: ${who}`;
+      const notification = { id: `order-${order.id}`, message: msg, time: new Date() };
+      setNotifications((p) => [notification, ...p].slice(0, 10));
+      toast.success(msg, { duration: 9000, icon: <Receipt className="w-5 h-5 text-primary" /> });
+      try {
+        const audio = new Audio("/notification.mp3");
+        audio.play().catch(() => {});
+      } catch {}
+    }
+  }, [orders, user?.id]);
 
   const t = {
     en: { 
@@ -877,68 +329,117 @@ export default function WaiterTerminalPage() {
     updateTableStatus.mutate({ tableId: table.id, status: newStatus });
   };
 
- const addToCart = (item: MenuItem) => {
-  // Check if item has customization options
-  const hasCustomization = 
+  const makeLineId = (menuItemId: string) =>
+    `${menuItemId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const isItemCustomizable = (item: MenuItem) =>
     (item.variants && item.variants.length > 0) ||
     (item.modifierGroups && item.modifierGroups.length > 0);
 
-  if (hasCustomization) {
-    // Open customization dialog
-    setIsCustomizing(true);
-    setCustomizingItem(item);
-  } else {
-    // Add directly to cart (existing behavior)
-    setCart(prev => {
-      const existing = prev.find(i => i.item.id === item.id);
+  const getMenuItemQuantity = (menuItemId: string) =>
+    cart.reduce(
+      (sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum),
+      0,
+    );
+
+  const addToCart = (item: MenuItem) => {
+    if (isItemCustomizable(item)) {
+      setCustomizingItem(item);
+      setIsCustomizing(true);
+      return;
+    }
+
+    setCart((prev) => {
+      const existing = prev.find(
+        (li) =>
+          li.menuItemId === item.id &&
+          !li.variantId &&
+          (!li.modifierIds || li.modifierIds.length === 0),
+      );
+
       if (existing) {
-        return prev.map(i => i.item.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map((li) =>
+          li.lineId === existing.lineId
+            ? { ...li, quantity: li.quantity + 1 }
+            : li,
+        );
       }
-      return [...prev, { item, quantity: 1 }];
+
+      const isVeg = item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+      const newLine: POSCartLineItem = {
+        lineId: makeLineId(item.id),
+        menuItemId: item.id,
+        name: item.name,
+        unitPrice: parseFloat(item.price as any),
+        quantity: 1,
+        isVeg,
+        menuItem: item,
+      };
+      return [...prev, newLine];
     });
-  }
-};
+  };
 
-const handleAddCustomizedItem = (selection: {
-  menuItemId: string;
-  quantity: number;
-  variantId?: string;
-  modifierIds?: string[];
-}) => {
-  if (!customizingItem) return;
+  const decrementLineItem = (lineId: string) => {
+    setCart((prev) =>
+      prev
+        .map((li) =>
+          li.lineId === lineId ? { ...li, quantity: li.quantity - 1 } : li,
+        )
+        .filter((li) => li.quantity > 0),
+    );
+  };
 
-  setCart(prev => [
-    ...prev,
-    {
-      item: customizingItem,
+  const incrementLineItem = (lineId: string) => {
+    setCart((prev) =>
+      prev.map((li) =>
+        li.lineId === lineId ? { ...li, quantity: li.quantity + 1 } : li,
+      ),
+    );
+  };
+
+  const handlePlusForCustomizableItem = (item: MenuItem) => {
+    // For waiter flow we always open customization for customizable items.
+    setCustomizingItem(item);
+    setIsCustomizing(true);
+  };
+
+  const handleAddCustomizedItem = (selection: POSCustomizationSelection) => {
+    if (!customizingItem) return;
+
+    let price = parseFloat(customizingItem.price as any);
+
+    if (selection.variantId) {
+      const variant = customizingItem.variants?.find((v) => v.id === selection.variantId);
+      if (variant) price = parseFloat(variant.price as any);
+    }
+
+    if (selection.modifierIds) {
+      customizingItem.modifierGroups?.forEach((group) => {
+        group.modifiers?.forEach((mod) => {
+          if (selection.modifierIds!.includes(mod.id)) {
+            price += parseFloat(mod.price as any);
+          }
+        });
+      });
+    }
+
+    const isVeg = customizingItem.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+
+    const cartLine: POSCartLineItem = {
+      lineId: makeLineId(customizingItem.id),
+      menuItemId: customizingItem.id,
+      name: customizingItem.name,
+      unitPrice: price,
       quantity: selection.quantity,
       variantId: selection.variantId,
       modifierIds: selection.modifierIds,
-    }
-  ]);
+      isVeg,
+      menuItem: customizingItem,
+    };
 
-  setCustomizingItem(null);
-  setIsCustomizing(false);
-
-};
-
-  const removeFromCart = (index: number) => {
-   setCart(prev => prev.filter((_, i) => i !== index));
-  };
-
-
-  const updateQuantity = (index: number, delta: number) => {
-    setCart(prev => {
-      const newCart = prev.map((item, i) => {
-        if (i === index) {
-          const newQty = Math.max(0, item.quantity + delta);
-          return { ...item, quantity: newQty };
-        }
-        return item;
-      });
-      // Remove items with quantity 0
-      return newCart.filter(item => item.quantity > 0);
-    });
+    setCart((prev) => [...prev, cartLine]);
+    setCustomizingItem(null);
+    setIsCustomizing(false);
   };
 
 
@@ -950,19 +451,21 @@ const submitOrder = async () => {
     await createOrder.mutateAsync({
       tableId,
       orderType: "DINE_IN",
-      items: cart.map(c => ({
-        menuItemId: c.item.id,
-        quantity: c.quantity,
-        variantId: c.variantId,        // Include variant
-        modifierIds: c.modifierIds,    // Include modifiers
+      items: cart.map((li) => ({
+        menuItemId: li.menuItemId,
+        quantity: li.quantity,
+        variantId: li.variantId,
+        modifierIds: li.modifierIds,
       })),
+      notes: cookingNote.trim() || undefined,
     });
     if (isMobile) {
-      handleCloseMobilePOSNewOrder();
+      handleCloseMobilePOS();
     } else {
       setSelectedTableForOrder(null);
     }
     setCart([]);
+    setCookingNote("");
     refetchOrders();
   } catch {
     // Error handled by mutation
@@ -973,21 +476,30 @@ const submitOrder = async () => {
     if (!selectedOrderForEdit || cart.length === 0) return;
     
     try {
+      // Update cooking note for the order (optional)
+      if (editCookingNote.trim() !== (selectedOrderForEdit.notes || "").trim()) {
+        await updateOrder.mutateAsync({
+          orderId: selectedOrderForEdit.id,
+          data: { notes: editCookingNote.trim() || undefined },
+        });
+      }
+
       await addOrderItems.mutateAsync({
         orderId: selectedOrderForEdit.id,
-        items: cart.map(c => ({
-          menuItemId: c.item.id,
-          quantity: c.quantity,
-          variantId: c.variantId,
-          modifierIds: c.modifierIds,
+        items: cart.map((li) => ({
+          menuItemId: li.menuItemId,
+          quantity: li.quantity,
+          variantId: li.variantId,
+          modifierIds: li.modifierIds,
         })),
       });
       if (isMobile) {
-        handleCloseMobilePOSAddItems();
+        handleCloseMobilePOS();
       } else {
         setSelectedOrderForEdit(null);
       }
       setCart([]);
+      setEditCookingNote("");
       refetchOrders();
     } catch {
     }
@@ -1030,21 +542,27 @@ const submitOrder = async () => {
 
   // Mobile handlers
   const handleNewOrderClick = (table: Table) => {
+    setCookingNote("");
+    setCart([]);
     if (isMobile) {
+      setPosMode("new");
       setSelectedTableId(table.id);
-      setShowMobilePOSNewOrder(true);
+      setShowMobilePOS(true);
     } else {
       setSelectedTableForOrder(table);
     }
   };
 
   const handleAddItemsClick = (order: Order) => {
+    setEditCookingNote(order.notes || "");
+    setCart([]);
     if (isMobile) {
+      setPosMode("addItems");
       setSelectedOrderForEdit(order);
-      setShowMobilePOSAddItems(true);
+      setSelectedTableId(order.table?.id || "");
+      setShowMobilePOS(true);
     } else {
       setSelectedOrderForEdit(order);
-      setCart([]);
     }
   };
 
@@ -1052,35 +570,13 @@ const submitOrder = async () => {
     addToCart(item);
   };
 
-  const handleMobileRemoveItem = (itemId: string) => {
-    setCart(prev => {
-      const itemIndex = prev.findIndex(c => c.item.id === itemId);
-      if (itemIndex === -1) return prev;
-      
-      const item = prev[itemIndex];
-      if (item.quantity === 1) {
-        return prev.filter((_, i) => i !== itemIndex);
-      }
-      return prev.map((c, i) => 
-        i === itemIndex ? { ...c, quantity: c.quantity - 1 } : c
-      );
-    });
-  };
-
-  const handleMobileIncrement = (itemId: string) => {
-    setCart(prev => {
-      const itemIndex = prev.findIndex(c => c.item.id === itemId);
-      if (itemIndex === -1) return prev;
-      return prev.map((c, i) => 
-        i === itemIndex ? { ...c, quantity: c.quantity + 1 } : c
-      );
-    });
-  };
-
-  const handleCloseMobilePOSNewOrder = () => {
-    setShowMobilePOSNewOrder(false);
+  const handleCloseMobilePOS = () => {
+    setShowMobilePOS(false);
     setCart([]);
     setSelectedTableId("");
+    setSelectedOrderForEdit(null);
+    setCookingNote("");
+    setEditCookingNote("");
     setSearchQuery("");
     setIsSearchOpen(false);
     if (menuData?.categories?.[0]?.id) {
@@ -1088,15 +584,6 @@ const submitOrder = async () => {
     }
   };
 
-  const handleCloseMobilePOSAddItems = () => {
-    setShowMobilePOSAddItems(false);
-    setCart([]);
-    setSearchQuery("");
-    setIsSearchOpen(false);
-    if (menuData?.categories?.[0]?.id) {
-      setActiveCategory(menuData.categories[0].id);
-    }
-  };
 
   const handleSave = () => {
     if (cart.length === 0) {
@@ -1118,29 +605,33 @@ const submitOrder = async () => {
   const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
 
   const cartTotal = useMemo(() => {
-    return cart.reduce((sum, cartItem) => {
-      const { item, quantity, variantId, modifierIds } = cartItem;
-      
-      let itemPrice = parseFloat(item.price as any);
-      if (variantId) {
-        const variant = item.variants?.find(v => v.id === variantId);
-        if (variant) {
-          itemPrice = parseFloat(variant.price as any);
-        }
+    return cart.reduce((sum, li) => {
+      // `cart` is POSCartLineItem[] (same as Live Orders POS)
+      // Prefer the computed unitPrice captured at add-to-cart time.
+      const baseUnit = Number.isFinite(li.unitPrice)
+        ? li.unitPrice
+        : parseFloat((li.menuItem?.price as any) ?? "0");
+
+      // If a variant was selected, use that variant price.
+      let unit = baseUnit;
+      if (li.variantId && li.menuItem?.variants) {
+        const v = li.menuItem.variants.find((vv) => vv.id === li.variantId);
+        if (v) unit = parseFloat(v.price as any);
       }
-      
+
+      // Add modifiers price.
       let modifiersTotal = 0;
-      if (modifierIds && modifierIds.length > 0) {
-        item.modifierGroups?.forEach(group => {
-          group.modifiers?.forEach(mod => {
-            if (modifierIds.includes(mod.id)) {
+      if (li.modifierIds && li.modifierIds.length > 0 && li.menuItem?.modifierGroups) {
+        li.menuItem.modifierGroups.forEach((group) => {
+          group.modifiers?.forEach((mod) => {
+            if (li.modifierIds!.includes(mod.id)) {
               modifiersTotal += parseFloat(mod.price as any);
             }
           });
         });
       }
-      
-      return sum + ((itemPrice + modifiersTotal) * quantity);
+
+      return sum + (unit + modifiersTotal) * li.quantity;
     }, 0);
   }, [cart]);
 
@@ -1172,15 +663,6 @@ const submitOrder = async () => {
       return "—";
     }
   };
-
-  // Convert cart array to orderItems object for mobile components
-  const cartToOrderItems = useMemo(() => {
-    const items: Record<string, number> = {};
-    cart.forEach(c => {
-      items[c.item.id] = (items[c.item.id] || 0) + c.quantity;
-    });
-    return items;
-  }, [cart]);
 
   // Filter menu items by active category and search query
   const filteredMenuItems = useMemo(() => {
@@ -1232,10 +714,47 @@ const submitOrder = async () => {
   const calledGuests = queueEntries?.filter((e: QueueEntry) => e.status === "CALLED") || [];
   const availableTables = tables?.filter((t: Table) => t.currentStatus === "AVAILABLE") || [];
 
-  // Active orders (not paid/cancelled)
-  const activeOrders = (orders || []).filter((o: Order) => 
-    o.status === "PENDING" || o.status === "PREPARING" || o.status === "READY" || o.status === "SERVED"
-  );
+  // Active orders for THIS waiter
+  // - Exclude cancelled
+  // - Exclude served+closed (not actionable anymore)
+  // - Restrict to orders either placed by this staff OR belonging to a table assigned to this waiter
+  const waiterTableIds = useMemo(() => {
+    const uid = user?.id;
+    if (!uid || !tables) return new Set<string>();
+    return new Set(
+      tables
+        .filter((t) => t.assignedWaiterId === uid || t.assignedWaiter?.id === uid)
+        .map((t) => t.id),
+    );
+  }, [tables, user?.id]);
+
+  const activeOrders = useMemo(() => {
+    const uid = user?.id;
+    if (!uid) return [] as Order[];
+
+    return orders.filter((o: Order) => {
+      if (o.status === "CANCELLED") return false;
+      if (o.status === "SERVED" && o.isClosed) return false;
+
+      // Consider "active" as: pending/preparing/ready (and optionally served but not closed)
+      const isActiveStatus =
+        o.status === "PENDING" ||
+        o.status === "PREPARING" ||
+        o.status === "READY" ||
+        (o.status === "SERVED" && !o.isClosed);
+
+      if (!isActiveStatus) return false;
+
+      const placedByThisWaiter =
+        o.placedByStaffId === uid || o.placedByStaff?.id === uid;
+
+      const onWaiterTable =
+        (!!o.tableId && waiterTableIds.has(o.tableId)) ||
+        (!!o.table?.id && waiterTableIds.has(o.table.id));
+
+      return placedByThisWaiter || onWaiterTable;
+    });
+  }, [orders, user?.id, waiterTableIds]);
 
   // Count ready orders for notification badge
   const readyOrdersCount = activeOrders.filter((o: Order) => o.status === "READY").length;
@@ -1250,52 +769,51 @@ const submitOrder = async () => {
     );
   }
 
-  // Mobile POS render checks
-  if (showMobilePOSNewOrder && isMobile) {
-    return (
-      <MobilePOSNewOrder
-        categories={menuData?.categories || []}
-        menuItems={menuData?.items || []}
-        activeCategory={activeCategory}
-        orderItems={cartToOrderItems}
-        tableNumber={selectedTableId}
-        onCategoryChange={setActiveCategory}
-        onAddItem={handleMobileAddItem}
-        onRemoveItem={handleMobileRemoveItem}
-        onIncrement={handleMobileIncrement}
-        onTableChange={setSelectedTableId}
-        onSendToKitchen={submitOrder}
-        onClose={handleCloseMobilePOSNewOrder}
-        currency={currency}
-        gstRate={gstRate}
-        tables={tables}
-        isLoading={createOrder.isPending}
-      />
-    );
-  }
-
-  if (showMobilePOSAddItems && isMobile) {
-    const tableDisplay = selectedOrderForEdit?.table?.tableNumber 
-      ? `Table ${selectedOrderForEdit.table.tableNumber}` 
-      : `Order #${selectedOrderForEdit?.id.slice(-4)}`;
+  // Render mobile POS overlay when active
+  if (showMobilePOS && isMobile) {
+    const title = posMode === "addItems" ? "Add Items" : "New Order";
 
     return (
-      <MobilePOSAddItems
-        categories={menuData?.categories || []}
-        menuItems={menuData?.items || []}
-        activeCategory={activeCategory}
-        orderItems={cartToOrderItems}
-        tableNumber={tableDisplay}
-        onCategoryChange={setActiveCategory}
-        onAddItem={handleMobileAddItem}
-        onRemoveItem={handleMobileRemoveItem}
-        onIncrement={handleMobileIncrement}
-        onAddToOrder={handleAddItemsToOrder}
-        onClose={handleCloseMobilePOSAddItems}
-        currency={currency}
-        gstRate={gstRate}
-        isLoading={addOrderItems.isPending}
-      />
+      <>
+        {customizingItem ? (
+          <div className="fixed inset-0 z-50 bg-white">
+            <ItemCustomizationContent
+              menuItem={customizingItem}
+              currency={currency}
+              onClose={() => setCustomizingItem(null)}
+              onAddToCart={handleAddCustomizedItem}
+            />
+          </div>
+        ) : (
+          <MobilePOS
+            mode="waiter"
+            title={title}
+            categories={menuData?.categories || []}
+            menuItems={menuData?.items || []}
+            activeCategory={activeCategory}
+            cartItems={cart}
+            tableNumber={selectedTableId}
+            waiterName={null}
+            diningType="dine-in"
+            paymentMethod="due"
+            cookingNote={posMode === "addItems" ? editCookingNote : cookingNote}
+            onCookingNoteChange={posMode === "addItems" ? setEditCookingNote : setCookingNote}
+            onCategoryChange={setActiveCategory}
+            onAddItem={addToCart}
+            onDecrementLineItem={decrementLineItem}
+            onIncrementLineItem={incrementLineItem}
+            getMenuItemQuantity={getMenuItemQuantity}
+            onPlusForCustomizableItem={handlePlusForCustomizableItem}
+            onTableChange={setSelectedTableId}
+            onSendToKitchen={posMode === "addItems" ? handleAddItemsToOrder : submitOrder}
+            onClose={handleCloseMobilePOS}
+            currency={currency}
+            gstRate={gstRate}
+            tables={tables}
+            isLoading={posMode === "addItems" ? addOrderItems.isPending : createOrder.isPending}
+          />
+        )}
+      </>
     );
   }
 
@@ -1598,670 +1116,134 @@ const submitOrder = async () => {
       </div>
 
       {/* New Order Dialog */}
-      <Dialog 
-        open={!!selectedTableForOrder} 
+      <Dialog
+        open={!!selectedTableForOrder}
         onOpenChange={(open) => {
           if (!open && customizingItem) return;
           if (!open) {
             setSelectedTableForOrder(null);
+            setSelectedTableId("");
             setCart([]);
-            setDietaryFilter('any');
             setSearchQuery("");
             setIsSearchOpen(false);
+            setCookingNote("");
           }
         }}
       >
-        <DialogContent
-          className="max-w-[90vw] w-[90vw] h-[90vh] max-h-[90vh] p-0 gap-0 rounded-lg"
-          onInteractOutside={(e) => {
-            if (customizingItem) e.preventDefault();
+        <DesktopPOS
+          mode="waiter"
+          title={selectedTableForOrder?.tableNumber ? `New Order - T${selectedTableForOrder.tableNumber}` : "New Order"}
+          categories={menuData?.categories || []}
+          menuItems={menuData?.items || []}
+          activeCategory={activeCategory}
+          manualCart={cart}
+          selectedTableId={selectedTableId || selectedTableForOrder?.id || ""}
+          selectedWaiterId={null}
+          orderMethod="dine-in"
+          paymentMethod="due"
+          cookingNote={cookingNote}
+          onCookingNoteChange={setCookingNote}
+          customizingItem={customizingItem}
+          searchQuery={searchQuery}
+          isSearchOpen={isSearchOpen}
+          onCategoryChange={setActiveCategory}
+          onAddToManualCart={addToCart}
+          onDecrementLineItem={decrementLineItem}
+          onIncrementLineItem={incrementLineItem}
+          getMenuItemQuantity={getMenuItemQuantity}
+          onPlusForCustomizableItem={handlePlusForCustomizableItem}
+          onTableChange={(tableId) => {
+            setSelectedTableId(tableId);
+            const next = tables?.find((t) => t.id === tableId) || null;
+            setSelectedTableForOrder(next);
           }}
-          onEscapeKeyDown={(e) => {
-            if (customizingItem) e.preventDefault();
-          }}
-        >
-          {customizingItem ? (
-            <div className="h-full flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-              <div className="max-w-2xl w-full">
-                <ItemCustomizationContent
-                  menuItem={customizingItem}
-                  currency={currency}
-                  onClose={() => setCustomizingItem(null)}
-                  onAddToCart={handleAddCustomizedItem}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
-              {/* Main Content Area */}
-              <div className="flex flex-1 overflow-hidden min-h-0">
-                {/* Left Side - Category & Items */}
-                <div className="flex-[1_1_60%] flex flex-col overflow-hidden bg-white min-w-0 max-w-[60%]">
-                  {/* Category Bar with Search */}
-                  <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-min pb-1">
-                          {!isSearchOpen && menuData?.categories?.map((category) => (
-                            <button
-                              key={category.id}
-                              onClick={() => {
-                                setActiveCategory(category.id);
-                                setSearchQuery("");
-                              }}
-                              className={cn(
-                                "px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-[11px] sm:text-xs whitespace-nowrap transition-all flex-shrink-0",
-                                activeCategory === category.id && !searchQuery
-                                  ? "bg-primary text-white shadow-md"
-                                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                              )}
-                            >
-                              {category.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {!isSearchOpen ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setIsSearchOpen(true)}
-                          className="flex-shrink-0 h-8 sm:h-9 px-2 sm:px-3"
-                        >
-                          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </Button>
-                      ) : (
-                        <div className="flex items-center gap-2 flex-1 max-w-xs">
-                          <div className="relative flex-1">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                            <Input
-                              type="text"
-                              placeholder="Search items..."
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="h-8 sm:h-9 pl-8 pr-2 text-xs sm:text-sm"
-                              autoFocus
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setIsSearchOpen(false);
-                              setSearchQuery("");
-                            }}
-                            className="flex-shrink-0 h-8 sm:h-9 px-2"
-                          >
-                            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Items Grid */}
-                  <ScrollArea className="flex-1 min-h-0">
-                    <div className="p-2 sm:p-3 md:p-4">
-                      {searchQuery && (
-                        <div className="mb-3 text-xs text-gray-600">
-                          Found {filteredMenuItems.length} item(s) for "{searchQuery}"
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-                        {filteredMenuItems.map((item: MenuItem) => {
-                          const cartItem = cart.find((c) => c.item.id === item.id);
-                          const quantity = cartItem ? cartItem.quantity : 0;
-                          const isAdded = quantity > 0;
-                          const isVeg = item.dietaryTags?.some(
-                            (tag) => tag.toLowerCase() === "veg"
-                          );
-
-                          return (
-                            <div
-                              key={item.id}
-                              className={cn(
-                                "bg-white rounded-xl p-2.5 sm:p-3 hover:shadow-md transition-all flex flex-col",
-                                isAdded 
-                                  ? "border-2 border-primary shadow-md ring-2 ring-primary/20" 
-                                  : "border-2 border-gray-200 hover:border-primary/30"
-                              )}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <h3 className="font-semibold text-gray-900 flex-1 text-xs sm:text-sm line-clamp-2 leading-tight">
-                                  {item.name}
-                                </h3>
-                                <div
-                                  className={cn(
-                                    "size-2.5 sm:size-3 rounded-sm border-2 flex-shrink-0 mt-0.5 ml-1.5",
-                                    isVeg 
-                                      ? "border-green-600 bg-white relative after:content-[''] after:absolute after:inset-[3px] after:bg-green-600 after:rounded-full" 
-                                      : "border-red-600 bg-white relative after:content-[''] after:absolute after:inset-[3px] after:bg-red-600 after:rounded-full"
-                                  )}
-                                />
-                              </div>
-                              
-                              <div className="mt-auto space-y-2">
-                                <span className="text-sm sm:text-base font-bold text-gray-900 block">
-                                  {currency}{item.price}
-                                </span>
-                                
-                                {!isAdded ? (
-                                  <Button
-                                    onClick={() => addToCart(item)}
-                                    size="sm"
-                                    className="bg-primary hover:bg-primary/90 text-white h-8 w-full rounded-md font-semibold"
-                                  >
-                                    <Plus className="size-4 mr-1" />
-                                    Add
-                                  </Button>
-                                ) : (
-                                  <div className="flex items-center justify-center gap-2 bg-primary/10 rounded-md border-2 border-primary/30 p-1">
-                                    <Button
-                                      onClick={() => {
-                                        const index = cart.findIndex(c => c.item.id === item.id);
-                                        if (index !== -1) updateQuantity(index, -1);
-                                      }}
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
-                                    >
-                                      <Minus className="size-4 text-primary" />
-                                    </Button>
-                                    <span className="font-bold text-gray-900 min-w-[1.5rem] text-center text-sm">
-                                      {quantity}
-                                    </span>
-                                    <Button
-                                      onClick={() => {
-                                        const index = cart.findIndex(c => c.item.id === item.id);
-                                        if (index !== -1) updateQuantity(index, 1);
-                                        else addToCart(item);
-                                      }}
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0 hover:bg-primary/20 rounded-md"
-                                    >
-                                      <Plus className="size-4 text-primary" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {filteredMenuItems.length === 0 && (
-                        <div className="text-center py-12 text-gray-500">
-                          <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">No items found</p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-
-                  {/* Action Buttons */}
-                  <div className="bg-white border-t border-gray-200 p-2 sm:p-3 flex-shrink-0">
-                    <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-                      {/* <Button
-                        onClick={handleSave}
-                        variant="outline"
-                        disabled={cart.length === 0}
-                        size="sm"
-                        className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
-                      >
-                        <Save className="size-3 sm:size-3.5 sm:mr-1.5" />
-                        <span className="hidden sm:inline">Save</span>
-                      </Button> */}
-                      {/* <Button
-                        onClick={handleSaveAndPrint}
-                        variant="outline"
-                        disabled={cart.length === 0}
-                        size="sm"
-                        className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
-                      >
-                        <Printer className="size-3 sm:size-3.5 sm:mr-1.5" />
-                        <span className="hidden sm:inline">Print</span>
-                      </Button> */}
-                      <Button
-                        onClick={submitOrder}
-                        disabled={cart.length === 0 || createOrder.isPending}
-                        size="sm"
-                        className="bg-primary hover:bg-primary/90 text-white px-3 sm:px-6 text-[11px] sm:text-xs h-8 sm:h-9"
-                      >
-                        {createOrder.isPending ? (
-                          <Loader2 className="size-3 sm:size-3.5 sm:mr-1.5 animate-spin" />
-                        ) : (
-                          <ChefHat className="size-3 sm:size-3.5 sm:mr-1.5" />
-                        )}
-                        <span className="hidden xs:inline">Kitchen</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side - Order Summary */}
-                <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 border-l border-gray-200 flex flex-col h-full overflow-hidden">
-                  {/* Header */}
-                  <div className="bg-white border-b border-gray-200 p-3 sm:p-4 flex-shrink-0">
-                    <h2 className="text-sm sm:text-base font-bold text-gray-900 mb-3">
-                      Order Summary
-                    </h2>
-
-                    <div className="grid grid-cols-1 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
-                          <UtensilsCrossed className="size-3" />
-                          Table
-                        </Label>
-                        <Select 
-                          value={selectedTableForOrder?.id || ""} 
-                          onValueChange={(value) => {
-                            const table = tables?.find((t: Table) => t.id === value);
-                            if (table) setSelectedTableForOrder(table);
-                          }}
-                        >
-                          <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {tables?.filter((t: Table) => 
-                              t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
-                            ).map((table: Table) => (
-                              <SelectItem key={table.id} value={table.id}>
-                                T{table.tableNumber}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Order Items */}
-                  <ScrollArea className="flex-1 min-h-0">
-                    <div className="p-3 sm:p-4">
-                      <h3 className="font-semibold text-gray-900 mb-2 text-xs sm:text-sm">
-                        Items ({cart.length})
-                      </h3>
-                      {cart.length === 0 ? (
-                        <p className="text-gray-500 text-xs text-center py-8">
-                          No items added
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {cart.map((cartItem, idx) => {
-                            const { item, quantity, variantId, modifierIds } = cartItem;
-                            
-                            const selectedVariant = item.variants?.find(
-                              (v) => v.id === variantId
-                            );
-                            const selectedModifiers =
-                              item.modifierGroups?.flatMap(
-                                (g) =>
-                                  g.modifiers?.filter((m) =>
-                                    modifierIds?.includes(m.id)
-                                  ) || []
-                              ) || [];
-
-                            const isVeg = item.dietaryTags?.some(
-                              (tag) => tag.toLowerCase() === "veg"
-                            );
-
-                            let displayPrice = parseFloat(item.price as any);
-                            if (selectedVariant) {
-                              displayPrice = parseFloat(selectedVariant.price as any);
-                            }
-                            let modifiersPrice = 0;
-                            selectedModifiers.forEach(mod => {
-                              modifiersPrice += parseFloat(mod.price as any);
-                            });
-                            const totalItemPrice = displayPrice + modifiersPrice;
-
-                            return (
-                              <div
-                                key={idx}
-                                className="bg-white rounded-lg border-2 border-gray-200 p-2"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                    <div
-                                      className={cn(
-                                        "size-2 rounded-sm border flex-shrink-0",
-                                        isVeg 
-                                          ? "border-green-600 bg-white relative after:content-[''] after:absolute after:inset-[2px] after:bg-green-600 after:rounded-full" 
-                                          : "border-red-600 bg-white relative after:content-[''] after:absolute after:inset-[2px] after:bg-red-600 after:rounded-full"
-                                      )}
-                                    />
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="font-semibold text-gray-900 text-[11px] sm:text-xs truncate">
-                                        {item.name}
-                                      </span>
-                                      {selectedVariant && (
-                                        <span className="text-[9px] text-blue-600 truncate">
-                                          {selectedVariant.variantName}
-                                        </span>
-                                      )}
-                                      {selectedModifiers.length > 0 && (
-                                        <span className="text-[9px] text-amber-600 truncate">
-                                          + {selectedModifiers.map((m) => m.name).join(", ")}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-                                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-md">
-                                      <Button
-                                        onClick={() => updateQuantity(idx, -1)}
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-5 w-5 sm:h-6 sm:w-6 p-0"
-                                      >
-                                        <Minus className="size-2 sm:size-2.5" />
-                                      </Button>
-                                      <span className="font-bold text-[9px] sm:text-[11px] min-w-[0.75rem] sm:min-w-[0.875rem] text-center">
-                                        {quantity}
-                                      </span>
-                                      <Button
-                                        onClick={() => updateQuantity(idx, 1)}
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-5 w-5 sm:h-6 sm:w-6 p-0"
-                                      >
-                                        <Plus className="size-2 sm:size-2.5" />
-                                      </Button>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                      onClick={() => removeFromCart(idx)}
-                                      title="Remove item"
-                                    >
-                                      <X className="size-3 sm:size-3.5" />
-                                    </Button>
-                                    <span className="font-bold text-gray-900 min-w-[2rem] sm:min-w-[2.5rem] text-right text-[9px] sm:text-[11px] md:text-xs">
-                                      {currency}{(totalItemPrice * quantity).toFixed(2)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-
-                  {/* Bill Breakdown */}
-                  <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
-                    <div className="space-y-1.5 mb-3">
-                      <div className="flex justify-between text-[10px] sm:text-xs">
-                        <span className="text-gray-600">Subtotal</span>
-                        <span className="text-gray-900 font-semibold">
-                          {currency}{billBreakdown.subtotal.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[10px] sm:text-xs">
-                        <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                        <span className="text-gray-900 font-semibold">
-                          {currency}{billBreakdown.cgst.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[10px] sm:text-xs">
-                        <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                        <span className="text-gray-900 font-semibold">
-                          {currency}{billBreakdown.sgst.toFixed(2)}
-                        </span>
-                      </div>
-                      <Separator className="my-2" />
-                      <div className="flex justify-between items-center pt-1">
-                        <span className="font-bold text-gray-900 text-xs sm:text-sm">Total</span>
-                        <span className="font-bold text-lg sm:text-xl text-primary">
-                          {currency}{billBreakdown.total.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
+          onSendToKitchen={submitOrder}
+          onCloseCustomization={() => setCustomizingItem(null)}
+          onAddCustomizedToCart={handleAddCustomizedItem}
+          onSearchQueryChange={setSearchQuery}
+          onSearchOpenChange={setIsSearchOpen}
+          currency={currency}
+          gstRate={gstRate}
+          tables={tables}
+          staff={[]}
+          isLoading={createOrder.isPending}
+        />
       </Dialog>
 
       {/* Add Items to Existing Order Dialog */}
-      <Dialog open={!!selectedOrderForEdit} onOpenChange={() => { setSelectedOrderForEdit(null); setCart([]); setDietaryFilter('any'); }}>
-        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+      <Dialog
+        open={!!selectedOrderForEdit}
+        onOpenChange={(open) => {
+          if (!open && customizingItem) return;
+          if (!open) {
+            setSelectedOrderForEdit(null);
+            setSelectedTableId("");
+            setCart([]);
+            setSearchQuery("");
+            setIsSearchOpen(false);
+            setEditCookingNote("");
+            setDietaryFilter("any");
+          }
+        }}
+      >
+        <DesktopPOS
+          mode="waiter"
+          title={
+            selectedOrderForEdit?.table?.tableNumber
+              ? `Add Items - T${selectedOrderForEdit.table.tableNumber}`
+              : "Add Items"
+          }
+          categories={menuData?.categories || []}
+          menuItems={menuData?.items || []}
+          activeCategory={activeCategory}
+          manualCart={cart}
+          selectedTableId={selectedTableId || selectedOrderForEdit?.table?.id || ""}
+          selectedWaiterId={null}
+          orderMethod="dine-in"
+          paymentMethod="due"
+          cookingNote={editCookingNote}
+          onCookingNoteChange={setEditCookingNote}
+          customizingItem={customizingItem}
+          searchQuery={searchQuery}
+          isSearchOpen={isSearchOpen}
+          onCategoryChange={setActiveCategory}
+          onAddToManualCart={addToCart}
+          onDecrementLineItem={decrementLineItem}
+          onIncrementLineItem={incrementLineItem}
+          getMenuItemQuantity={getMenuItemQuantity}
+          onPlusForCustomizableItem={handlePlusForCustomizableItem}
+          onTableChange={(tableId) => {
+            setSelectedTableId(tableId);
 
-          {customizingItem ? (
-             <ItemCustomizationContent
-               menuItem={customizingItem}
-               currency={currency}
-               onClose={() => setCustomizingItem(null)}
-               onAddToCart={handleAddCustomizedItem}
-              />
-            ) : (
-            <>
-          <DialogHeader className="p-4 border-b bg-slate-50">
-            <DialogTitle className="flex items-center gap-2">
-              <Edit2 className="w-5 h-5 text-primary" />
-              {t.addItems} - {selectedOrderForEdit?.table?.tableNumber ? `Table ${selectedOrderForEdit.table.tableNumber}` : `Order #${selectedOrderForEdit?.id.slice(-4)}`}
-            </DialogTitle>
-            <DialogDescription>
-              Current items: {selectedOrderForEdit?.items?.map(i => `${i.quantity}x ${i.itemName}`).join(", ")}
-            </DialogDescription>
-          </DialogHeader>
-           </> )}
+            // In "Add Items" flow, changing the table should also switch the target order.
+            const nextOrder = activeOrders
+              .filter((o) => o.table?.id === tableId)
+              // Prefer most recent order for that table
+              .sort((a, b) => {
+                const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                return tb - ta;
+              })[0];
 
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-            <div className="flex flex-1 overflow-hidden min-h-0">
-              {/* Left Side - 60% - Menu Items */}
-              <div className="flex-[1_1_60%] flex flex-col overflow-hidden bg-white min-w-0">
-              {/* Dietary Filter Buttons */}
-              <div className="flex gap-2 mb-4 sticky top-0 bg-white pb-2 z-10 border-b">
-                <button
-                  onClick={() => setDietaryFilter('any')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1",
-                    dietaryFilter === 'any'
-                      ? "bg-primary text-white shadow-md"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setDietaryFilter('veg')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1",
-                    dietaryFilter === 'veg'
-                      ? "bg-green-500 text-white shadow-md"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  Veg
-                </button>
-                <button
-                  onClick={() => setDietaryFilter('non-veg')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1",
-                    dietaryFilter === 'non-veg'
-                      ? "bg-red-500 text-white shadow-md"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  Non-Veg
-                </button>
-              </div>
-              
-              {categoriesWithItems.map((category: MenuCategory & { items: MenuItem[] }) => (
-                <div key={category.id} className="space-y-2">
-                  <h3 className="font-bold text-sm text-slate-500 uppercase tracking-wider sticky top-0 bg-white py-1">{category.name}</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {category.items.map((item: MenuItem) => {
-                      const vegTag = item.dietaryTags?.find(tag => tag.toLowerCase() === "veg");
-                      const nonVegTag = item.dietaryTags?.find(tag => tag.toLowerCase() === "non-veg");
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => addToCart(item)}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-border bg-white hover:border-primary hover:bg-primary/5 transition-all text-left"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <p className="font-bold text-sm truncate">{item.name}</p>
-                              {vegTag && (
-                                <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1 py-0 h-3.5 flex-shrink-0">
-                                  V
-                                </Badge>
-                              )}
-                              {nonVegTag && (
-                                <Badge className="bg-red-100 text-red-800 border-red-200 text-[9px] px-1 py-0 h-3.5 flex-shrink-0">
-                                  NV
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-primary font-bold text-xs">{currency}{item.price}</p>
-                          </div>
-                          <Plus className="w-4 h-4 text-primary flex-shrink-0" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-              {/* Right Side - 40% - Order Summary */}
-              <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 border-l flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="bg-white border-b p-3 sm:p-4 flex-shrink-0">
-                  <h2 className="font-bold text-sm sm:text-base mb-2">
-                    Add Items - {selectedOrderForEdit?.table?.tableNumber ? `Table ${selectedOrderForEdit.table.tableNumber}` : `Order #${selectedOrderForEdit?.id.slice(-4)}`}
-                  </h2>
-                </div>
-
-                {/* Items list */}
-                <ScrollArea className="flex-1 min-h-0">
-                  <div className="p-3 sm:p-4">
-                    <h3 className="font-semibold mb-2 text-xs sm:text-sm">New Items ({cart.length})</h3>
-                    {cart.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground text-sm">
-                        <ShoppingCart className="w-6 h-6 mx-auto mb-1 opacity-20" />
-                        <p>No items added</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {cart.map((cartItem, index) => {
-                          const { item, quantity, variantId, modifierIds } = cartItem;
-                          
-                          const selectedVariant = item.variants?.find(v => v.id === variantId);
-                          const selectedModifiers = item.modifierGroups?.flatMap(g => 
-                            g.modifiers?.filter(m => modifierIds?.includes(m.id)) || []
-                          ) || [];
-
-                          let displayPrice = parseFloat(item.price as any);
-                          if (selectedVariant) {
-                            displayPrice = parseFloat(selectedVariant.price as any);
-                          }
-                          let modifiersPrice = 0;
-                          selectedModifiers.forEach(mod => {
-                            modifiersPrice += parseFloat(mod.price as any);
-                          });
-                          const totalItemPrice = displayPrice + modifiersPrice;
-
-                          return (
-                            <div key={index} className="flex items-center justify-between group p-2 rounded-lg hover:bg-muted/40 transition-colors bg-white border border-gray-200">
-                              <div className="flex flex-col flex-1 min-w-0">
-                                <span className="text-sm font-bold truncate">{item.name}</span>
-                                
-                                {selectedVariant && (
-                                  <span className="text-[10px] text-blue-600 font-medium">
-                                    {selectedVariant.variantName}
-                                  </span>
-                                )}
-                                
-                                {selectedModifiers.length > 0 && (
-                                  <span className="text-[10px] text-amber-600">
-                                    + {selectedModifiers.map(m => m.name).join(", ")}
-                                  </span>
-                                )}
-                                
-                                <span className="text-xs text-muted-foreground">
-                                  {currency}{totalItemPrice.toFixed(2)} x {quantity} = {currency}{(totalItemPrice * quantity).toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 ml-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive"
-                                  onClick={() => updateQuantity(index, -1)}
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </Button>
-                                <span className="text-sm font-bold min-w-[24px] text-center bg-primary/10 px-2 py-1 rounded">
-                                  {quantity}
-                                </span>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 rounded-full border hover:bg-primary/10 hover:border-primary"
-                                  onClick={() => updateQuantity(index, 1)}
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 rounded-full border hover:bg-destructive/10 hover:border-destructive text-destructive"
-                                  onClick={() => removeFromCart(index)}
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-
-                {/* Bill breakdown */}
-                <div className="bg-white border-t p-3 sm:p-4 flex-shrink-0">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal</span>
-                      <span>{currency}{cartTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                      <span>{currency}{(cartTotal * gstRate / 2).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                      <span>{currency}{(cartTotal * gstRate / 2).toFixed(2)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold">
-                      <span>Total</span>
-                      <span className="text-primary text-xl">{currency}{(cartTotal * (1 + gstRate)).toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <Button 
-                    className="w-full mt-4" 
-                    disabled={cart.length === 0 || addOrderItems.isPending} 
-                    onClick={handleAddItemsToOrder}
-                  >
-                    {addOrderItems.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                    Add to Order
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
+            if (nextOrder) {
+              setSelectedOrderForEdit(nextOrder);
+              setEditCookingNote(nextOrder.notes || "");
+              setCart([]);
+            } else {
+              toast.error("No active order found for that table");
+            }
+          }}
+          onSendToKitchen={handleAddItemsToOrder}
+          onCloseCustomization={() => setCustomizingItem(null)}
+          onAddCustomizedToCart={handleAddCustomizedItem}
+          onSearchQueryChange={setSearchQuery}
+          onSearchOpenChange={setIsSearchOpen}
+          currency={currency}
+          gstRate={gstRate}
+          tables={tables}
+          staff={[]}
+          isLoading={addOrderItems.isPending}
+        />
       </Dialog>
 
       {/* Seat Guest Dialog */}

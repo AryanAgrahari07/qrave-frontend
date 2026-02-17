@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -27,6 +29,9 @@ import {
   UtensilsCrossed,
   Users,
   Utensils,
+  StickyNote,
+  Percent,
+  MinusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -44,7 +49,23 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 
+type POSMode = "full" | "waiter";
+
 interface DesktopPOSProps {
+  /** Hide the table selector (useful when table is pre-selected, e.g. Floor Map). */
+  hideTableSelect?: boolean;
+  /** Hide the order type selector (useful when order type is fixed, e.g. Floor Map dine-in). */
+  hideOrderTypeSelect?: boolean;
+  /**
+   * - `full`: Live Orders POS
+   * - `waiter`: Waiter terminal POS (limited controls)
+   */
+  mode?: POSMode;
+  title?: string;
+
+  serviceRatePct?: number;
+  waiveServiceCharge?: boolean;
+  onToggleWaiveServiceCharge?: (waive: boolean) => void;
   categories: any[];
   menuItems: MenuItem[];
   activeCategory: string;
@@ -53,6 +74,14 @@ interface DesktopPOSProps {
   selectedWaiterId: string | null;
   orderMethod: "dine-in" | "takeaway" | "delivery";
   paymentMethod: "cash" | "card" | "upi" | "due";
+
+  // Optional fields
+  cookingNote?: string;
+  onCookingNoteChange?: (note: string) => void;
+  showDiscount?: boolean;
+  discountAmount?: string;
+  onDiscountAmountChange?: (value: string) => void;
+
   customizingItem: MenuItem | null;
   searchQuery: string;
   isSearchOpen: boolean;
@@ -65,12 +94,12 @@ interface DesktopPOSProps {
   /** Called when user presses + for an item that already exists and has customization. */
   onPlusForCustomizableItem: (item: MenuItem) => void;
   onTableChange: (tableId: string) => void;
-  onWaiterChange: (waiterId: string) => void;
-  onOrderMethodChange: (method: "dine-in" | "takeaway" | "delivery") => void;
-  onPaymentMethodChange: (method: "cash" | "card" | "upi" | "due") => void;
+  onWaiterChange?: (waiterId: string) => void;
+  onOrderMethodChange?: (method: "dine-in" | "takeaway" | "delivery") => void;
+  onPaymentMethodChange?: (method: "cash" | "card" | "upi" | "due") => void;
   onSendToKitchen: () => void;
-  onSave: () => void;
-  onSaveAndPrint: () => void;
+  onSave?: () => void;
+  onSaveAndPrint?: () => void;
   onCloseCustomization: () => void;
   onAddCustomizedToCart: (selection: {
     menuItemId: string;
@@ -88,6 +117,10 @@ interface DesktopPOSProps {
 }
 
 export function DesktopPOS({
+  mode = "full",
+  title,
+  hideTableSelect = false,
+  hideOrderTypeSelect = false,
   categories,
   menuItems,
   activeCategory,
@@ -96,6 +129,11 @@ export function DesktopPOS({
   selectedWaiterId,
   orderMethod,
   paymentMethod,
+  cookingNote = "",
+  onCookingNoteChange,
+  showDiscount = false,
+  discountAmount = "",
+  onDiscountAmountChange,
   customizingItem,
   searchQuery,
   isSearchOpen,
@@ -121,7 +159,14 @@ export function DesktopPOS({
   tables,
   staff,
   isLoading,
+  serviceRatePct = 0,
+  waiveServiceCharge = false,
+  onToggleWaiveServiceCharge,
 }: DesktopPOSProps) {
+  const isWaiterMode = mode === "waiter";
+
+  const discountNum = Math.max(0, parseFloat(discountAmount || "0") || 0);
+
   const filteredItems = menuItems.filter((item: MenuItem) => {
     if (!searchQuery && activeCategory) {
       return item.categoryId === activeCategory && item.isAvailable;
@@ -136,9 +181,24 @@ export function DesktopPOS({
 
   const [repeatDialogOpen, setRepeatDialogOpen] = useState(false);
   const [repeatDialogItem, setRepeatDialogItem] = useState<MenuItem | null>(null);
+
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"amount" | "percent">("amount");
+  const [discountPercent, setDiscountPercent] = useState("");
   const cgst = subtotal * (gstRate / 2);
   const sgst = subtotal * (gstRate / 2);
-  const total = subtotal + cgst + sgst;
+
+  const serviceCharge =
+    !isWaiterMode && orderMethod === "dine-in" && !waiveServiceCharge
+      ? subtotal * (Math.max(0, serviceRatePct) / 100)
+      : 0;
+
+  const totalBeforeDiscount = subtotal + cgst + sgst + serviceCharge;
+  const total = Math.max(
+    0,
+    totalBeforeDiscount - (!isWaiterMode && showDiscount ? discountNum : 0)
+  );
 
   return (
     <DialogContent
@@ -387,8 +447,9 @@ export function DesktopPOS({
               {/* Action Buttons */}
               <div className="bg-white border-t border-gray-200 p-2 sm:p-3 flex-shrink-0">
                 <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                  {!isWaiterMode && (
                   <Button
-                    onClick={onSave}
+                    onClick={onSave!}
                     variant="outline"
                     disabled={manualCart.length === 0}
                     size="sm"
@@ -397,8 +458,10 @@ export function DesktopPOS({
                     <Save className="size-3 sm:size-3.5 sm:mr-1.5" />
                     <span className="hidden sm:inline">Save</span>
                   </Button>
+                  )}
+                  {!isWaiterMode && (
                   <Button
-                    onClick={onSaveAndPrint}
+                    onClick={onSaveAndPrint!}
                     variant="outline"
                     disabled={manualCart.length === 0}
                     size="sm"
@@ -407,6 +470,7 @@ export function DesktopPOS({
                     <Printer className="size-3 sm:size-3.5 sm:mr-1.5" />
                     <span className="hidden sm:inline">Print</span>
                   </Button>
+                  )}
                   <Button
                     onClick={onSendToKitchen}
                     disabled={manualCart.length === 0 || isLoading}
@@ -432,18 +496,25 @@ export function DesktopPOS({
                   Order Summary
                 </h2>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1">
+                <div
+                  className={cn(
+                    "grid gap-2 items-end",
+                    isWaiterMode ? "grid-cols-[1fr_auto]" : "grid-cols-[1fr_1fr_1fr_auto]",
+                  )}
+                >
+                  {/* Table */}
+                  {!hideTableSelect && (
+                  <div className="space-y-1 min-w-0">
                     <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
                       <UtensilsCrossed className="size-3" />
                       Table
                     </Label>
                     <Select value={selectedTableId} onValueChange={onTableChange}>
-                      <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                      <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {tables?.filter((t: Table) => 
+                        {tables?.filter((t: Table) =>
                           t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
                         ).map((table: Table) => (
                           <SelectItem key={table.id} value={table.id}>
@@ -453,17 +524,17 @@ export function DesktopPOS({
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
 
-                  <div className="space-y-1">
+                  {/* Waiter */}
+                  {!isWaiterMode && (
+                  <div className="space-y-1 min-w-0">
                     <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
                       <Users className="size-3" />
                       Waiter
                     </Label>
-                    <Select
-                      value={selectedWaiterId || "none"}
-                      onValueChange={onWaiterChange}
-                    >
-                      <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                    <Select value={selectedWaiterId || "none"} onValueChange={onWaiterChange}>
+                      <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent>
@@ -472,23 +543,23 @@ export function DesktopPOS({
                           ?.filter((s: any) => s.role === "WAITER" && s.isActive)
                           .map((waiter: any) => (
                             <SelectItem key={waiter.id} value={waiter.id}>
-                              {waiter.fullName.split(' ')[0]}
+                              {waiter.fullName.split(" ")[0]}
                             </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
 
-                  <div className="space-y-1">
+                  {/* Type */}
+                  {!hideOrderTypeSelect && !isWaiterMode && (
+                  <div className="space-y-1 min-w-0">
                     <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
                       <Utensils className="size-3" />
                       Type
                     </Label>
-                    <Select
-                      value={orderMethod}
-                      onValueChange={onOrderMethodChange}
-                    >
-                      <SelectTrigger className="h-9 text-xs border-2 focus:border-primary">
+                    <Select value={orderMethod} onValueChange={onOrderMethodChange}>
+                      <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -498,6 +569,141 @@ export function DesktopPOS({
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
+
+                  {/* Options */}
+                  <div className="flex flex-col items-end justify-end gap-1 pb-[4px]">
+                    <div className="flex items-end justify-end gap-2">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] text-gray-600 font-medium">Note</span>
+                        <Button
+                      type="button"
+                      variant={cookingNote.trim() ? "default" : "outline"}
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setNoteDialogOpen(true)}
+                      title="Cooking note"
+                    >
+                      <StickyNote className="h-3.5 w-3.5" />
+                    </Button>
+                      </div>
+
+                      {!isWaiterMode && showDiscount && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-[9px] text-gray-600 font-medium">Disc</span>
+                          <Button
+                            type="button"
+                            variant={discountAmount.trim() ? "default" : "outline"}
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setDiscountDialogOpen(true)}
+                            title="Discount"
+                          >
+                            <Percent className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dialogs */}
+                  <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Cooking Note</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-2">
+                        <Label>Note (optional)</Label>
+                        <Input
+                          value={cookingNote}
+                          onChange={(e) => onCookingNoteChange?.(e.target.value)}
+                          placeholder="E.g. less spicy, no onions"
+                        />
+                        <div className="flex justify-end">
+                          <Button type="button" onClick={() => setNoteDialogOpen(false)}>
+                            Done
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  <Dialog open={discountDialogOpen} onOpenChange={setDiscountDialogOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Discount</DialogTitle>
+                      </DialogHeader>
+
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Discount Type</Label>
+                          <RadioGroup
+                            value={discountMode}
+                            onValueChange={(v) => setDiscountMode(v as "amount" | "percent")}
+                            className="flex gap-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="amount" id="disc_amount" />
+                              <Label htmlFor="disc_amount">Amount</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="percent" id="disc_percent" />
+                              <Label htmlFor="disc_percent">Percent</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        {discountMode === "amount" ? (
+                          <div className="space-y-2">
+                            <Label>Discount Amount (optional)</Label>
+                            <Input
+                              value={discountAmount}
+                              onChange={(e) => onDiscountAmountChange?.(e.target.value)}
+                              placeholder="0"
+                              inputMode="decimal"
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Label>Discount Percent (optional)</Label>
+                            <Input
+                              value={discountPercent}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDiscountPercent(v);
+                                const pct = Math.max(0, Math.min(100, parseFloat(v || "0") || 0));
+                                const amt = (totalBeforeDiscount * pct) / 100;
+                                onDiscountAmountChange?.(amt ? amt.toFixed(2) : "");
+                              }}
+                              placeholder="0"
+                              inputMode="decimal"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Applies on total ({currency}{totalBeforeDiscount.toFixed(2)}). Amount: {currency}
+                              {(((totalBeforeDiscount * (parseFloat(discountPercent || "0") || 0)) / 100) || 0).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setDiscountPercent("");
+                              onDiscountAmountChange?.("");
+                            }}
+                          >
+                            Clear
+                          </Button>
+                          <Button type="button" onClick={() => setDiscountDialogOpen(false)}>
+                            Done
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
                 </div>
               </div>
 
@@ -615,6 +821,39 @@ export function DesktopPOS({
                       {currency}{sgst.toFixed(2)}
                     </span>
                   </div>
+
+                  {!isWaiterMode && orderMethod === "dine-in" && serviceCharge > 0 && (
+                    <div className="flex justify-between text-[9px] md:text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-600">
+                          Service Charge{serviceRatePct > 0 ? ` (${serviceRatePct.toFixed(0)}%)` : ""}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-600 hover:text-red-700"
+                          title="Remove service charge"
+                          onClick={() => onToggleWaiveServiceCharge?.(true)}
+                        >
+                          <MinusCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <span className="text-gray-900 font-semibold">
+                        {currency}{serviceCharge.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                  {!isWaiterMode && showDiscount && discountNum > 0 && (
+                    <div className="flex justify-between text-[9px] md:text-[10px]">
+                      <span className="text-gray-600">Discount</span>
+                      <span className="text-gray-900 font-semibold">
+                        - {currency}{discountNum.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
                   <Separator className="my-1" />
                   <div className="flex justify-between items-center pt-0.5">
                     <span className="font-bold text-gray-900 text-[11px] md:text-xs">Total</span>
@@ -624,11 +863,12 @@ export function DesktopPOS({
                   </div>
                 </div>
 
+                {!isWaiterMode && (
                 <div className="px-2 md:p-3 border-b border-gray-200">
                   <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
                   <div className="flex gap-1 md:gap-1.5">
                     <Button
-                      onClick={() => onPaymentMethodChange("cash")}
+                      onClick={() => onPaymentMethodChange?.("cash")}
                       variant={paymentMethod === "cash" ? "default" : "outline"}
                       size="sm"
                       className={cn(
@@ -641,7 +881,7 @@ export function DesktopPOS({
                       Cash
                     </Button>
                     <Button
-                      onClick={() => onPaymentMethodChange("card")}
+                      onClick={() => onPaymentMethodChange?.("card")}
                       variant={paymentMethod === "card" ? "default" : "outline"}
                       size="sm"
                       className={cn(
@@ -654,7 +894,7 @@ export function DesktopPOS({
                       Card
                     </Button>
                     <Button
-                      onClick={() => onPaymentMethodChange("upi")}
+                      onClick={() => onPaymentMethodChange?.("upi")}
                       variant={paymentMethod === "upi" ? "default" : "outline"}
                       size="sm"
                       className={cn(
@@ -667,7 +907,7 @@ export function DesktopPOS({
                       UPI
                     </Button>
                     <Button
-                      onClick={() => onPaymentMethodChange("due")}
+                      onClick={() => onPaymentMethodChange?.("due")}
                       variant={paymentMethod === "due" ? "default" : "outline"}
                       size="sm"
                       className={cn(
@@ -681,6 +921,7 @@ export function DesktopPOS({
                     </Button>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           </div>

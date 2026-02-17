@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
-import { Search, Calendar, FileText, Download, Eye, Receipt, CreditCard, Utensils, Clock, Printer, Share2, Loader2, ChevronLeft, ChevronRight, Filter, ChevronsLeft, ChevronsRight, Bluetooth, MessageCircle, Send } from "lucide-react";
+import { Search, Calendar, FileText, Download, Eye, Receipt, CreditCard, Utensils, Clock, Printer, Share2, Loader2, ChevronLeft, ChevronRight, Filter, ChevronsLeft, ChevronsRight, Bluetooth, MessageCircle, Send, MinusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,7 +33,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
 import { useRestaurant, useExportTransactionsCSV, useRestaurantLogo } from "@/hooks/api";
-import { useTransactions, useTransactionDetail } from "@/hooks/api";
+import { useTransactions, useTransactionDetail, useRemoveOrderServiceCharge } from "@/hooks/api";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
@@ -145,10 +145,13 @@ export default function TransactionsPage() {
   });
 
   // Only fetch full details when modal opens
-  const { data: transactionDetail, isLoading: isDetailLoading } = useTransactionDetail(
-    restaurantId,
-    selectedTransactionId
-  );
+  const {
+    data: transactionDetail,
+    isLoading: isDetailLoading,
+    refetch: refetchTransactionDetail,
+  } = useTransactionDetail(restaurantId, selectedTransactionId);
+
+  const removeServiceCharge = useRemoveOrderServiceCharge(restaurantId);
 
   const exportCSV = useExportTransactionsCSV(restaurantId);
 
@@ -394,7 +397,6 @@ const prepareBillData = (): BillData | null => {
       guestName: transactionDetail.order?.guestName,
       waiterName: transactionDetail.order?.placedByStaff?.fullName,
       cashier: transactionDetail.order?.placedByStaff?.fullName || 'System',
-      // Use explicit type label; thermal printer will append table number when tableNumber exists
       dineIn: transactionDetail.order?.table?.tableNumber ? 'Dine In' : 'Takeaway',
     },
     items: mergeSameOrderItems(transactionDetail.order?.items as any)?.map((item: any) => {
@@ -531,7 +533,7 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
     if (!isBillDialogOpen || !selectedTransactionId) return null;
 
     return (
-      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] h-[90vh] flex flex-col overflow-hidden p-0">
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Receipt className="w-5 h-5 text-primary shrink-0" />
@@ -552,7 +554,7 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
           </div>
         ) : transactionDetail ? (
           <>
-            <ScrollArea className="flex-1 px-4 sm:px-6">
+            <ScrollArea className="flex-1 min-h-0 px-4 sm:px-6">
               <div className="py-4 space-y-4 sm:space-y-5">
                 {/* Bill Info Grid */}
                 <div className="grid grid-cols-2 gap-3 bg-muted/30 p-3 sm:p-4 rounded-lg">
@@ -589,15 +591,17 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
                   </h4>
                   <div className="space-y-2">
                     {mergeSameOrderItems(transactionDetail.order?.items as any)?.map((item: any, i: number) => (
-                      <div key={i} className="flex justify-between items-start gap-3 text-sm p-2.5 rounded-md hover:bg-muted/30 transition-colors border border-transparent hover:border-border">
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 text-sm p-2.5 rounded-md hover:bg-muted/30 transition-colors border border-transparent hover:border-border overflow-hidden">
+                        <div className="flex items-start gap-2 min-w-0">
                           <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
-                          <div className="flex-1 min-w-0">
+                          <div className="min-w-0">
                             <p className="font-medium truncate">{item.itemName}</p>
-                            <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                            <p className="text-xs text-muted-foreground truncate">Qty: {item.quantity}</p>
                           </div>
                         </div>
-                        <span className="text-muted-foreground font-mono text-sm shrink-0">{currency}{parseFloat(item.totalPrice).toFixed(2)}</span>
+                        <span className="font-mono font-semibold tabular-nums text-sm text-right whitespace-nowrap pl-2">
+                          {currency}{parseFloat(item.totalPrice).toFixed(2)}
+                        </span>
                       </div>
                     )) || (
                       <div className="text-center py-4 text-muted-foreground text-sm">
@@ -611,18 +615,70 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
 
                 {/* Totals */}
                 <div className="space-y-2.5">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-mono font-medium">{currency}{parseFloat(transactionDetail.subtotal).toFixed(2)}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm">
+                    <span className="text-muted-foreground sm:flex-1 min-w-0 truncate">Subtotal</span>
+                    <span className="font-mono font-semibold tabular-nums sm:shrink-0 sm:min-w-[88px] sm:text-right text-right">
+                      {currency}{parseFloat(transactionDetail.subtotal).toFixed(2)}
+                    </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">GST & Service Tax</span>
-                    <span className="font-mono font-medium">{currency}{(parseFloat(transactionDetail.gstAmount) + parseFloat(transactionDetail.serviceTaxAmount)).toFixed(2)}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm">
+                    <span className="text-muted-foreground sm:flex-1 min-w-0 truncate">GST</span>
+                    <span className="font-mono font-semibold tabular-nums sm:shrink-0 sm:min-w-[88px] sm:text-right text-right">
+                      {currency}{parseFloat(transactionDetail.gstAmount).toFixed(2)}
+                    </span>
                   </div>
+
+                  {transactionDetail.order?.orderType === "DINE_IN" &&
+                    parseFloat(transactionDetail.serviceTaxAmount || "0") > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm">
+                        <div className="flex items-center gap-2 sm:flex-1 min-w-0">
+                          <span className="text-muted-foreground truncate">Service Charge</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-600 hover:text-red-700"
+                            title="Remove service charge"
+                            disabled={removeServiceCharge.isPending || !transactionDetail.order?.id}
+                            onClick={async () => {
+                              const orderId = transactionDetail.order?.id;
+                              if (!orderId) return;
+                              try {
+                                await removeServiceCharge.mutateAsync({ orderId });
+                                await refetchTransactionDetail();
+                              } catch {
+                                // toast handled by mutation
+                              }
+                            }}
+                          >
+                            {removeServiceCharge.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <MinusCircle className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <span className="font-mono font-semibold tabular-nums sm:shrink-0 sm:min-w-[88px] sm:text-right text-right">
+                          {currency}{parseFloat(transactionDetail.serviceTaxAmount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+
+                  {parseFloat(transactionDetail.discountAmount || "0") > 0 && (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm">
+                      <span className="text-muted-foreground sm:flex-1 min-w-0 truncate">Discount</span>
+                      <span className="font-mono font-semibold tabular-nums sm:shrink-0 sm:min-w-[88px] sm:text-right text-right text-green-700">
+                        -{currency}{parseFloat(transactionDetail.discountAmount || "0").toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
                   <Separator className="my-2" />
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="font-bold text-base sm:text-lg">Grand Total</span>
-                    <span className="font-bold text-xl sm:text-2xl text-primary font-mono">{currency}{parseFloat(transactionDetail.grandTotal).toFixed(2)}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 pt-1">
+                    <span className="font-bold text-base sm:text-lg sm:flex-1 min-w-0 truncate">Grand Total</span>
+                    <span className="font-bold text-xl sm:text-2xl text-primary font-mono tabular-nums sm:shrink-0 sm:min-w-[104px] sm:text-right text-right">
+                      {currency}{parseFloat(transactionDetail.grandTotal).toFixed(2)}
+                    </span>
                   </div>
                 </div>
               </div>

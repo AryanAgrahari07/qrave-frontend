@@ -1,3 +1,4 @@
+
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,8 @@ import {
   XCircle,
   DollarSign,
   ExternalLink,
+  MinusCircle,
+  Percent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -34,6 +37,8 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
 import {
   useOrders,
@@ -47,6 +52,8 @@ import {
   useUpdatePaymentStatus,
   useCancelOrderWithReason,
   useCloseOrder,
+  useUpdateOrder,
+  useRemoveOrderServiceCharge,
 } from "@/hooks/api";
 import type { Order, MenuItem, OrderStatus, PaymentMethod } from "@/types";
 import type { POSCartLineItem } from "@/types/pos";
@@ -70,7 +77,7 @@ import { MobilePOS } from "@/components/pos/mobilepos";
 import { DesktopPOS } from "@/components/pos/desktoppos";
 
 export default function LiveOrdersPage() {
-  const { restaurantId } = useAuth();
+  const { restaurantId, user } = useAuth();
   const { data: restaurant } = useRestaurant(restaurantId);
   
   // Pagination state
@@ -96,6 +103,8 @@ export default function LiveOrdersPage() {
   const createOrder = useCreateOrder(restaurantId);
   const updatePaymentStatus = useUpdatePaymentStatus(restaurantId);
   const cancelWithReason = useCancelOrderWithReason(restaurantId);
+  const updateOrder = useUpdateOrder(restaurantId);
+  const removeServiceCharge = useRemoveOrderServiceCharge(restaurantId);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isBillingOpen, setIsBillingOpen] = useState(false);
@@ -123,16 +132,46 @@ export default function LiveOrdersPage() {
   const [cancelReason, setCancelReason] = useState("");
   const closeOrder = useCloseOrder(restaurantId);
 
+  const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "platform_admin";
+
+  // POS optional fields
+  const [cookingNote, setCookingNote] = useState("");
+  const [discountAmount, setDiscountAmount] = useState<string>("");
+  const [waiveServiceCharge, setWaiveServiceCharge] = useState(false);
+
+  // Bill preview discount editor (admin only)
+  const [billDiscountDraft, setBillDiscountDraft] = useState<string>("");
+  const [billDiscountDialogOpen, setBillDiscountDialogOpen] = useState(false);
+  const [billDiscountMode, setBillDiscountMode] = useState<"amount" | "percent">("amount");
+  const [billDiscountPercent, setBillDiscountPercent] = useState("");
+
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // Sync bill preview discount editor with selected order
+  useEffect(() => {
+    if (!selectedOrder) {
+      setBillDiscountDraft("");
+      setBillDiscountDialogOpen(false);
+      setBillDiscountMode("amount");
+      setBillDiscountPercent("");
+      return;
+    }
+    const current = Math.max(0, parseFloat(selectedOrder.discountAmount || "0") || 0);
+    setBillDiscountDraft(current > 0 ? String(current) : "");
+    // Keep dialog closed by default when switching orders
+    setBillDiscountDialogOpen(false);
+    setBillDiscountMode("amount");
+    setBillDiscountPercent("");
+  }, [selectedOrder?.id]);
 
   // Extract orders and pagination info
   const orders = ordersData?.orders ?? [];
@@ -152,6 +191,7 @@ export default function LiveOrdersPage() {
 
   const currency = restaurant?.currency || "₹";
   const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
+  const serviceRatePct = parseFloat(restaurant?.taxRateService || "0");
 
   // Set initial active category
   useMemo(() => {
@@ -300,6 +340,10 @@ export default function LiveOrdersPage() {
   };
 
   const handleSendToKitchen = async () => {
+    if (orderMethod !== "dine-in" && waiveServiceCharge) {
+      // Service charge is only relevant for dine-in orders.
+      setWaiveServiceCharge(false);
+    }
     if (manualCart.length === 0) {
       toast.error("Please add items to the order");
       return;
@@ -322,6 +366,7 @@ export default function LiveOrdersPage() {
       const order = await createOrder.mutateAsync({
         tableId: orderMethod === "dine-in" ? selectedTableId : undefined,
         orderType: orderTypeMap[orderMethod] as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
+        waiveServiceCharge: orderMethod === "dine-in" ? waiveServiceCharge : false,
         items: manualCart.map((item) => ({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
@@ -331,16 +376,39 @@ export default function LiveOrdersPage() {
         assignedWaiterId: selectedWaiterId || undefined,
         paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
         paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+        notes: cookingNote.trim() || undefined,
       });
+
+      // Apply discount (admin only) after order creation
+      const discountNum = parseFloat(discountAmount || "0");
+      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+        try {
+          const updated = await updateOrder.mutateAsync({
+            orderId: order.id,
+            data: { discountAmount: discountNum },
+          });
+          // Ensure any open bill/details will show updated discountAmount
+          setSelectedOrder(updated);
+        } catch {
+          // If discount update fails, keep the order but warn
+          toast.error("Order created, but failed to apply discount");
+        }
+      }
 
       toast.success(
        `Order ${paymentMethod !== 'due' ? 'placed and paid' : 'sent to kitchen'}! ${orderMethod === 'dine-in' ? `Table ${selectedTableId}` : ''} - ${manualCart.length} items`,
       );
 
+      // Refresh list so bill details reflects latest discount
+      await refetch();
+
       setManualCart([]);
       setSelectedTableId("1");
       setSelectedWaiterId(null);
-      setPaymentMethod("due"); 
+      setPaymentMethod("due");
+      setCookingNote("");
+      setDiscountAmount("");
+      setWaiveServiceCharge(false);
       setIsNewOrderOpen(false);
       setShowMobilePOS(false);
       refetch();
@@ -397,6 +465,51 @@ export default function LiveOrdersPage() {
       case "DUE":
       default:
         return <XCircle className="w-3 h-3" />;
+    }
+  };
+
+  const applyBillDiscount = async () => {
+    if (!selectedOrder) return;
+    if (!isAdmin) {
+      toast.error("Only admins can apply discounts");
+      return;
+    }
+
+    const discountNum = parseFloat(billDiscountDraft || "0");
+    if (Number.isNaN(discountNum) || discountNum < 0) {
+      toast.error("Please enter a valid discount amount");
+      return;
+    }
+
+    try {
+      const updated = await updateOrder.mutateAsync({
+        orderId: selectedOrder.id,
+        data: { discountAmount: discountNum },
+      });
+      setSelectedOrder(updated);
+      await refetch();
+    } catch {
+      // toast handled in hook
+    }
+  };
+
+  const removeBillDiscount = async () => {
+    if (!selectedOrder) return;
+    if (!isAdmin) {
+      toast.error("Only admins can remove discounts");
+      return;
+    }
+
+    try {
+      const updated = await updateOrder.mutateAsync({
+        orderId: selectedOrder.id,
+        data: { discountAmount: 0 },
+      });
+      setSelectedOrder(updated);
+      setBillDiscountDraft("");
+      await refetch();
+    } catch {
+      // toast handled in hook
     }
   };
 
@@ -461,6 +574,8 @@ export default function LiveOrdersPage() {
     setManualCart([]);
     setSelectedWaiterId(null);
     setSelectedTableId("1");
+    setCookingNote("");
+    setDiscountAmount("");
     setSearchQuery("");
     setIsSearchOpen(false);
     setActiveCategory(menuData?.categories?.[0]?.id || "");
@@ -555,6 +670,9 @@ export default function LiveOrdersPage() {
           </div>
         ) : (
           <MobilePOS
+            serviceRatePct={serviceRatePct}
+            waiveServiceCharge={waiveServiceCharge}
+            onToggleWaiveServiceCharge={setWaiveServiceCharge}
             categories={menuData?.categories || []}
             menuItems={menuData?.items || []}
             activeCategory={activeCategory}
@@ -563,6 +681,11 @@ export default function LiveOrdersPage() {
             waiterName={selectedWaiterId}
             diningType={orderMethod}
             paymentMethod={paymentMethod}
+            cookingNote={cookingNote}
+            onCookingNoteChange={setCookingNote}
+            showDiscount={isAdmin}
+            discountAmount={discountAmount}
+            onDiscountAmountChange={setDiscountAmount}
             onCategoryChange={setActiveCategory}
             onAddItem={addToManualCart}
             onDecrementLineItem={decrementLineItem}
@@ -571,7 +694,10 @@ export default function LiveOrdersPage() {
             onPlusForCustomizableItem={handlePlusForCustomizableItem}
             onTableChange={setSelectedTableId}
             onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
-            onDiningTypeChange={setOrderMethod}
+            onDiningTypeChange={(type) => {
+              setOrderMethod(type);
+              if (type !== "dine-in") setWaiveServiceCharge(false);
+            }}
             onPaymentMethodChange={setPaymentMethod}
             onSendToKitchen={handleSendToKitchen}
             onSave={handleSave}
@@ -635,6 +761,8 @@ export default function LiveOrdersPage() {
                   setSelectedWaiterId(null);
                   setSelectedTableId("1");
                   setManualCart([]);
+                  setCookingNote("");
+                  setDiscountAmount("");
                   setSearchQuery("");
                   setIsSearchOpen(false);
                 }
@@ -649,6 +777,9 @@ export default function LiveOrdersPage() {
                 </Button>
               </DialogTrigger>
               <DesktopPOS
+                serviceRatePct={serviceRatePct}
+                waiveServiceCharge={waiveServiceCharge}
+                onToggleWaiveServiceCharge={setWaiveServiceCharge}
                 categories={menuData?.categories || []}
                 menuItems={menuData?.items || []}
                 activeCategory={activeCategory}
@@ -657,6 +788,11 @@ export default function LiveOrdersPage() {
                 selectedWaiterId={selectedWaiterId}
                 orderMethod={orderMethod}
                 paymentMethod={paymentMethod}
+                cookingNote={cookingNote}
+                onCookingNoteChange={setCookingNote}
+                showDiscount={isAdmin}
+                discountAmount={discountAmount}
+                onDiscountAmountChange={setDiscountAmount}
                 customizingItem={customizingItem}
                 searchQuery={searchQuery}
                 isSearchOpen={isSearchOpen}
@@ -668,7 +804,10 @@ export default function LiveOrdersPage() {
                 onPlusForCustomizableItem={handlePlusForCustomizableItem}
                 onTableChange={setSelectedTableId}
                 onWaiterChange={(value: string) => setSelectedWaiterId(value === "none" ? null : value)}
-                onOrderMethodChange={setOrderMethod}
+                onOrderMethodChange={(method) => {
+                  setOrderMethod(method);
+                  if (method !== "dine-in") setWaiveServiceCharge(false);
+                }}
                 onPaymentMethodChange={setPaymentMethod}
                 onSendToKitchen={handleSendToKitchen}
                 onSave={handleSave}
@@ -1026,14 +1165,205 @@ export default function LiveOrdersPage() {
                         {currency}{(parseFloat(selectedOrder.gstAmount) / 2).toFixed(2)}
                       </span>
                     </div>
-                    {selectedOrder.serviceTaxAmount && parseFloat(selectedOrder.serviceTaxAmount) > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Service Tax</span>
-                        <span className="font-medium">
-                          {currency}{parseFloat(selectedOrder.serviceTaxAmount).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                    {selectedOrder.orderType === "DINE_IN" &&
+                      selectedOrder.serviceTaxAmount &&
+                      parseFloat(selectedOrder.serviceTaxAmount) > 0 && (
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Service Charge</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-red-600 hover:text-red-700"
+                              title="Remove service charge"
+                              disabled={removeServiceCharge.isPending}
+                              onClick={async () => {
+                                if (!selectedOrder) return;
+                                try {
+                                  const updated = await removeServiceCharge.mutateAsync({
+                                    orderId: selectedOrder.id,
+                                  });
+                                  setSelectedOrder(updated);
+                                  await refetch();
+                                } catch {
+                                  // toast handled by mutation
+                                }
+                              }}
+                            >
+                              {removeServiceCharge.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MinusCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                          <span className="font-medium">
+                            {currency}{parseFloat(selectedOrder.serviceTaxAmount).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+
+                    {(() => {
+                      const currentDiscount = Math.max(0, parseFloat(selectedOrder.discountAmount || "0") || 0);
+                      const draftNum = parseFloat(billDiscountDraft || "0");
+                      const hasDraft = billDiscountDraft.trim().length > 0;
+                      const canApply =
+                        isAdmin &&
+                        !updateOrder.isPending &&
+                        hasDraft &&
+                        !Number.isNaN(draftNum) &&
+                        draftNum >= 0;
+
+                      const showDiscountRow = currentDiscount > 0 || isAdmin;
+                      if (!showDiscountRow) return null;
+
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">Discount</span>
+                              {isAdmin && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  title="Edit discount"
+                                  onClick={() => setBillDiscountDialogOpen(true)}
+                                >
+                                  <Percent className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+
+                            <span className={cn("font-medium", currentDiscount > 0 && "text-green-700")}>
+                              {currentDiscount > 0 ? `- ${currency}${currentDiscount.toFixed(2)}` : `${currency}0.00`}
+                            </span>
+                          </div>
+
+                          {/* Discount dialog (admin only) */}
+                          {isAdmin && (
+                            <Dialog
+                              open={billDiscountDialogOpen}
+                              onOpenChange={setBillDiscountDialogOpen}
+                            >
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Discount</DialogTitle>
+                                </DialogHeader>
+
+                                <div className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Label>Discount Type</Label>
+                                    <RadioGroup
+                                      value={billDiscountMode}
+                                      onValueChange={(v) => setBillDiscountMode(v as "amount" | "percent")}
+                                      className="flex gap-4"
+                                    >
+                                      <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="amount" id="bill_disc_amount" />
+                                        <Label htmlFor="bill_disc_amount">Amount</Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="percent" id="bill_disc_percent" />
+                                        <Label htmlFor="bill_disc_percent">Percent</Label>
+                                      </div>
+                                    </RadioGroup>
+                                  </div>
+
+                                  {billDiscountMode === "amount" ? (
+                                    <div className="space-y-2">
+                                      <Label>Discount Amount (optional)</Label>
+                                      <Input
+                                        value={billDiscountDraft}
+                                        onChange={(e) => setBillDiscountDraft(e.target.value)}
+                                        placeholder="0"
+                                        inputMode="decimal"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <Label>Discount Percent (optional)</Label>
+                                      <Input
+                                        value={billDiscountPercent}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          setBillDiscountPercent(v);
+
+                                          const base = Math.max(
+                                            0,
+                                            parseFloat(selectedOrder.totalAmount) + currentDiscount,
+                                          );
+                                          const pct = Math.max(0, Math.min(100, parseFloat(v || "0") || 0));
+                                          const amt = (base * pct) / 100;
+                                          setBillDiscountDraft(amt ? amt.toFixed(2) : "");
+                                        }}
+                                        placeholder="0"
+                                        inputMode="decimal"
+                                      />
+                                      <p className="text-xs text-muted-foreground">
+                                        Applies on total ({currency}{(Math.max(0, parseFloat(selectedOrder.totalAmount) + currentDiscount)).toFixed(2)}). Amount: {currency}
+                                        {(() => {
+                                          const base = Math.max(0, parseFloat(selectedOrder.totalAmount) + currentDiscount);
+                                          const pct = Math.max(0, Math.min(100, parseFloat(billDiscountPercent || "0") || 0));
+                                          return ((base * pct) / 100 || 0).toFixed(2);
+                                        })()}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-between gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={updateOrder.isPending}
+                                      onClick={() => {
+                                        setBillDiscountPercent("");
+                                        setBillDiscountDraft("");
+                                      }}
+                                    >
+                                      Clear
+                                    </Button>
+
+                                    <div className="flex gap-2">
+                                      {currentDiscount > 0 && (
+                                        <Button
+                                          type="button"
+                                          variant="destructive"
+                                          disabled={updateOrder.isPending}
+                                          onClick={async () => {
+                                            await removeBillDiscount();
+                                            setBillDiscountDialogOpen(false);
+                                          }}
+                                        >
+                                          Remove
+                                        </Button>
+                                      )}
+                                      <Button
+                                        type="button"
+                                        disabled={!canApply}
+                                        onClick={async () => {
+                                          await applyBillDiscount();
+                                          setBillDiscountDialogOpen(false);
+                                        }}
+                                      >
+                                        {updateOrder.isPending ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          "Apply"
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <Separator />
                     <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm sm:text-base font-bold">
                       <span>Total</span>

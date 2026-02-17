@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -11,6 +12,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ArrowLeft,
   Grid3x3,
@@ -21,6 +28,9 @@ import {
   Printer,
   ChefHat,
   Loader2,
+  StickyNote,
+  Percent,
+  MinusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -28,7 +38,24 @@ import type { MenuItem, Table } from "@/types";
 import type { POSCartLineItem } from "@/types/pos";
 import { getCustomizationSummary } from "@/components/menu/Customizedorderitemdisplay";
 
+type POSMode = "full" | "waiter";
+
 interface MobilePOSProps {
+  /** Hide the table selector (useful when table is pre-selected, e.g. Floor Map). */
+  hideTableSelect?: boolean;
+  /** Hide the order type selector (useful when order type is fixed, e.g. Floor Map dine-in). */
+  hideOrderTypeSelect?: boolean;
+  /**
+   * - `full`: Live Orders POS (includes waiter, type, payment, save/print, discount, service charge)
+   * - `waiter`: Waiter terminal POS (keeps only waiter-needed controls)
+   */
+  mode?: POSMode;
+  /** Header title shown in the mobile POS top bar. */
+  title?: string;
+
+  serviceRatePct?: number;
+  waiveServiceCharge?: boolean;
+  onToggleWaiveServiceCharge?: (waive: boolean) => void;
   categories: any[];
   menuItems: MenuItem[];
   activeCategory: string;
@@ -37,6 +64,14 @@ interface MobilePOSProps {
   waiterName: string | null;
   diningType: "dine-in" | "takeaway" | "delivery";
   paymentMethod: "cash" | "card" | "upi" | "due";
+
+  // Optional fields
+  cookingNote?: string;
+  onCookingNoteChange?: (note: string) => void;
+  showDiscount?: boolean;
+  discountAmount?: string;
+  onDiscountAmountChange?: (value: string) => void;
+
   onCategoryChange: (categoryId: string) => void;
   onAddItem: (item: MenuItem) => void;
   /** Decrement/removes a specific cart line. */
@@ -48,12 +83,12 @@ interface MobilePOSProps {
   /** Called when user presses + for an item that already exists and has customization. */
   onPlusForCustomizableItem: (item: MenuItem) => void;
   onTableChange: (tableId: string) => void;
-  onWaiterChange: (waiterId: string) => void;
-  onDiningTypeChange: (type: "dine-in" | "takeaway" | "delivery") => void;
-  onPaymentMethodChange: (method: "cash" | "card" | "upi" | "due") => void;
+  onWaiterChange?: (waiterId: string) => void;
+  onDiningTypeChange?: (type: "dine-in" | "takeaway" | "delivery") => void;
+  onPaymentMethodChange?: (method: "cash" | "card" | "upi" | "due") => void;
   onSendToKitchen: () => void;
-  onSave: () => void;
-  onSaveAndPrint: () => void;
+  onSave?: () => void;
+  onSaveAndPrint?: () => void;
   onClose: () => void;
   currency: string;
   gstRate: number;
@@ -63,6 +98,10 @@ interface MobilePOSProps {
 }
 
 export function MobilePOS({
+  mode = "full",
+  title = "New Order",
+  hideTableSelect = false,
+  hideOrderTypeSelect = false,
   categories,
   menuItems,
   activeCategory,
@@ -71,6 +110,11 @@ export function MobilePOS({
   waiterName,
   diningType,
   paymentMethod,
+  cookingNote = "",
+  onCookingNoteChange,
+  showDiscount = false,
+  discountAmount = "",
+  onDiscountAmountChange,
   onCategoryChange,
   onAddItem,
   onDecrementLineItem,
@@ -90,8 +134,17 @@ export function MobilePOS({
   tables,
   staff,
   isLoading,
+  serviceRatePct = 0,
+  waiveServiceCharge = false,
+  onToggleWaiveServiceCharge,
 }: MobilePOSProps) {
+  const isWaiterMode = mode === "waiter";
+
   const [activeView, setActiveView] = useState<"items" | "order">("items");
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"amount" | "percent">("amount");
+  const [discountPercent, setDiscountPercent] = useState("");
 
   const filteredItems = menuItems.filter((item: any) => item.categoryId === activeCategory && item.isAvailable);
   const totalItems = cartItems.reduce((sum, li) => sum + li.quantity, 0);
@@ -101,7 +154,18 @@ export function MobilePOS({
 
   const cgst = subtotal * (gstRate / 2);
   const sgst = subtotal * (gstRate / 2);
-  const total = subtotal + cgst + sgst;
+
+  const serviceCharge =
+    !isWaiterMode && diningType === "dine-in" && !waiveServiceCharge
+      ? subtotal * (Math.max(0, serviceRatePct) / 100)
+      : 0;
+
+  const discountNum = Math.max(0, parseFloat(discountAmount || "0") || 0);
+  const totalBeforeDiscount = subtotal + cgst + sgst + serviceCharge;
+  const total = Math.max(
+    0,
+    totalBeforeDiscount - (!isWaiterMode && showDiscount ? discountNum : 0)
+  );
 
   const hasItems = cartItems.length > 0;
 
@@ -118,7 +182,7 @@ export function MobilePOS({
           <ArrowLeft className="size-5" />
         </Button>
         <div className="flex-1">
-          <p className="text-primary-foreground font-semibold text-base">New Order</p>
+          <p className="text-primary-foreground font-semibold text-base">{title}</p>
         </div>
       </div>
 
@@ -391,6 +455,35 @@ export function MobilePOS({
                     <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
                     <span className="text-gray-900 font-medium">{currency}{sgst.toFixed(2)}</span>
                   </div>
+
+                  {!isWaiterMode && diningType === "dine-in" && serviceCharge > 0 && (
+                    <div className="flex justify-between text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-600">
+                          Service Charge{serviceRatePct > 0 ? ` (${serviceRatePct.toFixed(0)}%)` : ""}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-red-600 hover:text-red-700"
+                          title="Remove service charge"
+                          onClick={() => onToggleWaiveServiceCharge?.(true)}
+                        >
+                          <MinusCircle className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <span className="text-gray-900 font-medium">{currency}{serviceCharge.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {!isWaiterMode && showDiscount && discountNum > 0 && (
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-gray-600">Discount</span>
+                      <span className="text-gray-900 font-medium">-{currency}{discountNum.toFixed(2)}</span>
+                    </div>
+                  )}
+
                   <Separator className="my-0.5" />
                   <div className="flex justify-between items-center pt-0.5">
                     <span className="font-semibold text-gray-900 text-[11px]">Total</span>
@@ -401,28 +494,38 @@ export function MobilePOS({
                 </div>
               </div>
 
-              {/* Three Dropdowns */}
+              {/* Controls */}
               <div className="px-2 py-1.5 border-b border-gray-200">
-                <div className="grid grid-cols-3 gap-1">
-                  <div>
+                <div className={cn(
+                  "grid gap-1 items-end",
+                  isWaiterMode
+                    ? "grid-cols-[1fr_auto]"
+                    : hideTableSelect || hideOrderTypeSelect
+                      ? "grid-cols-[1fr_1fr_auto]"
+                      : "grid-cols-[1fr_1fr_1fr_auto]"
+                )}>
+                  {!hideTableSelect && (
+                  <div className="min-w-0">
                     <Label className="text-[8px] text-gray-600 mb-0.5 block">Table</Label>
                     <Select value={tableNumber} onValueChange={onTableChange}>
                       <SelectTrigger className="text-[10px] h-6 px-1.5">
                         <SelectValue placeholder="Table" />
                       </SelectTrigger>
                       <SelectContent>
-                        {tables?.filter((t: Table) => 
-                          t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE"
-                        ).map((table: Table) => (
-                          <SelectItem key={table.id} value={table.id}>
-                            T{table.tableNumber}
-                          </SelectItem>
-                        ))}
+                        {tables
+                          ?.filter((t: Table) => t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE")
+                          .map((table: Table) => (
+                            <SelectItem key={table.id} value={table.id}>
+                              T{table.tableNumber}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
 
-                  <div>
+                  {!isWaiterMode && (
+                  <div className="min-w-0">
                     <Label className="text-[8px] text-gray-600 mb-0.5 block">Waiter</Label>
                     <Select value={waiterName || "none"} onValueChange={onWaiterChange}>
                       <SelectTrigger className="text-[10px] h-6 px-1.5">
@@ -434,19 +537,18 @@ export function MobilePOS({
                           ?.filter((s: any) => s.role === "WAITER" && s.isActive)
                           .map((waiter: any) => (
                             <SelectItem key={waiter.id} value={waiter.id}>
-                              {waiter.fullName.split(' ')[0]}
+                              {waiter.fullName.split(" ")[0]}
                             </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
 
-                  <div>
+                  {!hideOrderTypeSelect && !isWaiterMode && (
+                  <div className="min-w-0">
                     <Label className="text-[8px] text-gray-600 mb-0.5 block">Type</Label>
-                    <Select
-                      value={diningType}
-                      onValueChange={onDiningTypeChange}
-                    >
+                    <Select value={diningType} onValueChange={onDiningTypeChange}>
                       <SelectTrigger className="text-[10px] h-6 px-1.5">
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
@@ -457,15 +559,151 @@ export function MobilePOS({
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
+
+                  {/* Options */}
+                  <div className="flex flex-col items-end justify-end gap-0.5 pb-[2px]">
+                    <div className="flex items-end justify-end gap-1">
+                      <div className="space-y-1 flex flex-col items-center">
+                        <span className="text-[7px] text-gray-600 font-medium leading-none">Note</span>
+                        <Button
+                          type="button"
+                          variant={cookingNote.trim() ? "default" : "outline"}
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setNoteDialogOpen(true)}
+                          title="Cooking note"
+                        >
+                          <StickyNote className="h-3 w-3" />
+                        </Button>
+                      </div>
+
+                      {!isWaiterMode && showDiscount && (
+                        <div className="space-y-1 flex flex-col items-center">
+                        <span className="text-[7px] text-gray-600 font-medium leading-none">Disc</span>
+                          <Button
+                            type="button"
+                            variant={discountAmount.trim() ? "default" : "outline"}
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setDiscountDialogOpen(true)}
+                            title="Discount"
+                          >
+                            <Percent className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Dialogs */}
+                <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Cooking Note</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                      <Label>Note (optional)</Label>
+                      <Input
+                        value={cookingNote}
+                        onChange={(e) => onCookingNoteChange?.(e.target.value)}
+                        placeholder="E.g. less spicy"
+                      />
+                      <div className="flex justify-end">
+                        <Button type="button" onClick={() => setNoteDialogOpen(false)}>
+                          Done
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={discountDialogOpen} onOpenChange={setDiscountDialogOpen}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Discount</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Discount Type</Label>
+                        <RadioGroup
+                          value={discountMode}
+                          onValueChange={(v) => setDiscountMode(v as "amount" | "percent")}
+                          className="flex gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="amount" id="m_disc_amount" />
+                            <Label htmlFor="m_disc_amount">Amount</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="percent" id="m_disc_percent" />
+                            <Label htmlFor="m_disc_percent">Percent</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      {discountMode === "amount" ? (
+                        <div className="space-y-2">
+                          <Label>Discount Amount (optional)</Label>
+                          <Input
+                            value={discountAmount}
+                            onChange={(e) => onDiscountAmountChange?.(e.target.value)}
+                            placeholder="0"
+                            inputMode="decimal"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label>Discount Percent (optional)</Label>
+                          <Input
+                            value={discountPercent}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setDiscountPercent(v);
+                              const pct = Math.max(0, Math.min(100, parseFloat(v || "0") || 0));
+                              const amt = (totalBeforeDiscount * pct) / 100;
+                              onDiscountAmountChange?.(amt ? amt.toFixed(2) : "");
+                            }}
+                            placeholder="0"
+                            inputMode="decimal"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Applies on total ({currency}{(subtotal + cgst + sgst + serviceCharge).toFixed(2)}). Amount: {currency}
+                            {(((totalBeforeDiscount * (parseFloat(discountPercent || "0") || 0)) / 100) || 0).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setDiscountPercent("");
+                            onDiscountAmountChange?.("");
+                          }}
+                        >
+                          Clear
+                        </Button>
+                        <Button type="button" onClick={() => setDiscountDialogOpen(false)}>
+                          Done
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
               </div>
 
               {/* Payment Method */}
+              {!isWaiterMode && (
               <div className="px-2 py-1.5 border-b border-gray-200">
                 <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
                 <div className="grid grid-cols-4 gap-1">
                   <Button
-                    onClick={() => onPaymentMethodChange("cash")}
+                    onClick={() => onPaymentMethodChange?.("cash")}
                     variant={paymentMethod === "cash" ? "default" : "outline"}
                     size="sm"
                     className={cn(
@@ -478,7 +716,7 @@ export function MobilePOS({
                     Cash
                   </Button>
                   <Button
-                    onClick={() => onPaymentMethodChange("card")}
+                    onClick={() => onPaymentMethodChange?.("card")}
                     variant={paymentMethod === "card" ? "default" : "outline"}
                     size="sm"
                     className={cn(
@@ -491,7 +729,7 @@ export function MobilePOS({
                     Card
                   </Button>
                   <Button
-                    onClick={() => onPaymentMethodChange("upi")}
+                    onClick={() => onPaymentMethodChange?.("upi")}
                     variant={paymentMethod === "upi" ? "default" : "outline"}
                     size="sm"
                     className={cn(
@@ -504,7 +742,7 @@ export function MobilePOS({
                     UPI
                   </Button>
                   <Button
-                    onClick={() => onPaymentMethodChange("due")}
+                    onClick={() => onPaymentMethodChange?.("due")}
                     variant={paymentMethod === "due" ? "default" : "outline"}
                     size="sm"
                     className={cn(
@@ -518,12 +756,27 @@ export function MobilePOS({
                   </Button>
                 </div>
               </div>
+              )}
 
               {/* Action Buttons */}
               <div className="px-2 py-1.5">
+                {isWaiterMode ? (
+                  <Button
+                    onClick={onSendToKitchen}
+                    disabled={!hasItems || isLoading}
+                    className="w-full h-10 text-sm flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ChefHat className="size-4" />
+                    )}
+                    <span className="text-sm font-semibold">Send to Kitchen</span>
+                  </Button>
+                ) : (
                 <div className="grid grid-cols-3 gap-1">
                   <Button
-                    onClick={onSave}
+                    onClick={onSave!}
                     variant="outline"
                     disabled={!hasItems}
                     className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
@@ -532,7 +785,7 @@ export function MobilePOS({
                     <span className="text-[8px] font-semibold mt-0.5">Save</span>
                   </Button>
                   <Button
-                    onClick={onSaveAndPrint}
+                    onClick={onSaveAndPrint!}
                     variant="outline"
                     disabled={!hasItems}
                     className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
@@ -553,6 +806,7 @@ export function MobilePOS({
                     <span className="text-[8px] font-semibold mt-0.5">Kitchen</span>
                   </Button>
                 </div>
+                )}
               </div>
             </div>
           </div>

@@ -423,6 +423,58 @@ export function useCreateOrder(restaurantId: string | null) {
   });
 }
 
+export function useUpdateOrder(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      data,
+    }: {
+      orderId: string;
+      data: {
+        guestName?: string;
+        guestPhone?: string;
+        notes?: string;
+        discountAmount?: number;
+      };
+    }) =>
+      api
+        .put<{ order: Order }>(`/api/restaurants/${restaurantId}/orders/${orderId}`, data)
+        .then((r) => r.order),
+    onSuccess: () => {
+      if (restaurantId) {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+      }
+      toast.success("Order updated");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update order"),
+  });
+}
+
+export function useRemoveOrderServiceCharge(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId }: { orderId: string }) =>
+      api
+        .patch<{ order: Order }>(
+          `/api/restaurants/${restaurantId}/orders/${orderId}/service-charge/remove`,
+          {},
+        )
+        .then((r) => r.order),
+    onSuccess: () => {
+      if (restaurantId) {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+      }
+      toast.success("Service charge removed");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to remove service charge"),
+  });
+}
+
 export function useUpdateOrderStatus(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
@@ -952,6 +1004,7 @@ export function useTransactionDetail(restaurantId: string | null, transactionId:
           discountAmount: string;
           taxRateGst?: string | null;
           taxRateService?: string | null;
+          roundOff?: string | null | undefined;
           order: {
             id: string;
             orderType: string;

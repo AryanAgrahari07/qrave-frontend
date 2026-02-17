@@ -2,9 +2,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Utensils, Plus, Loader2, RefreshCw, Edit2, Trash2, User, Receipt, DollarSign, CreditCard, QrCode } from "lucide-react";
+import { Utensils, Plus, Loader2, RefreshCw, Edit2, Trash2, User, Receipt, DollarSign, CreditCard, QrCode, MinusCircle, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { 
   Dialog, 
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
 import { 
   useTables, 
@@ -33,6 +34,8 @@ import {
   useOrders,
   useUpdatePaymentStatus,
   useCloseOrder,
+  useUpdateOrder,
+  useRemoveOrderServiceCharge,
 } from "@/hooks/api";
 import type { Table, TableStatus, MenuItem, Order, PaymentMethod } from "@/types";
 import type { POSCartLineItem, POSCustomizationSelection } from "@/types/pos";
@@ -67,6 +70,8 @@ export default function FloorMapPage() {
   const createOrder = useCreateOrder(restaurantId);
   const updatePaymentStatus = useUpdatePaymentStatus(restaurantId);
   const closeOrder = useCloseOrder(restaurantId);
+  const updateOrder = useUpdateOrder(restaurantId);
+  const removeServiceCharge = useRemoveOrderServiceCharge(restaurantId);
   
   // Filter waiters only and check if user is admin/owner
   const waiters = staff?.filter((s) => s.role === "WAITER" && s.isActive) || [];
@@ -90,6 +95,12 @@ export default function FloorMapPage() {
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi" | "due">("due");
+
+  // FloorMap order options (match Live Orders create, but table/type are fixed)
+  const [selectedWaiterIdForOrder, setSelectedWaiterIdForOrder] = useState<string | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<string>("");
+  const [waiveServiceCharge, setWaiveServiceCharge] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -99,8 +110,15 @@ export default function FloorMapPage() {
   const [isBillDialogOpen, setIsBillDialogOpen] = useState(false);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<Order | null>(null);
 
+  // Bill preview discount editor (admin only)
+  const [billDiscountDraft, setBillDiscountDraft] = useState<string>("");
+  const [billDiscountDialogOpen, setBillDiscountDialogOpen] = useState(false);
+  const [billDiscountMode, setBillDiscountMode] = useState<"amount" | "percent">("amount");
+  const [billDiscountPercent, setBillDiscountPercent] = useState("");
+
   const currency = restaurant?.currency || "₹";
   const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
+  const serviceRatePct = parseFloat(restaurant?.taxRateService || "0");
 
   // Detect mobile screen size
   useEffect(() => {
@@ -199,9 +217,12 @@ export default function FloorMapPage() {
   // POS Handlers
   const handlePlaceOrder = (table: Table) => {
     setSelectedTableForOrder(table);
+    setSelectedWaiterIdForOrder(table.assignedWaiterId || null);
     setManualCart([]);
     setPaymentMethod("due");
-    
+    setDiscountAmount("");
+    setWaiveServiceCharge(false);
+
     if (isMobile) {
       setShowMobilePOS(true);
     } else {
@@ -353,7 +374,7 @@ export default function FloorMapPage() {
         "due": "DUE",
       };
 
-      await createOrder.mutateAsync({
+      const created = await createOrder.mutateAsync({
         tableId: selectedTableForOrder.id,
         orderType: "DINE_IN",
         items: manualCart.map((item) => ({
@@ -362,10 +383,25 @@ export default function FloorMapPage() {
           variantId: item.variantId,
           modifierIds: item.modifierIds,
         })),
-        assignedWaiterId: selectedTableForOrder.assignedWaiterId || undefined,
+        assignedWaiterId: selectedWaiterIdForOrder || undefined,
+        waiveServiceCharge,
         paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
         paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
       });
+
+      // Apply discount (admin only) after order creation (backend create schema doesn't accept discountAmount)
+      const discountNum = parseFloat(discountAmount || "0");
+      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+        try {
+          await updateOrder.mutateAsync({
+            orderId: created.id,
+            data: { discountAmount: discountNum },
+          });
+          await refetch();
+        } catch {
+          toast.error("Order created, but failed to apply discount");
+        }
+      }
 
       toast.success(
         `Order ${paymentMethod !== 'due' ? 'placed and paid' : 'sent to kitchen'}! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
@@ -387,6 +423,9 @@ export default function FloorMapPage() {
     setShowMobilePOS(false);
     setManualCart([]);
     setSelectedTableForOrder(null);
+    setSelectedWaiterIdForOrder(null);
+    setDiscountAmount("");
+    setWaiveServiceCharge(false);
     setSearchQuery("");
     setIsSearchOpen(false);
     setActiveCategory(menuData?.categories?.[0]?.id || "");
@@ -395,6 +434,67 @@ export default function FloorMapPage() {
   const handleViewBill = (order: Order) => {
     setSelectedOrderForBill(order);
     setIsBillDialogOpen(true);
+  };
+
+  // Sync bill preview discount editor with selected bill order
+  useEffect(() => {
+    if (!selectedOrderForBill) {
+      setBillDiscountDraft("");
+      setBillDiscountDialogOpen(false);
+      setBillDiscountMode("amount");
+      setBillDiscountPercent("");
+      return;
+    }
+    const current = Math.max(0, parseFloat(selectedOrderForBill.discountAmount || "0") || 0);
+    setBillDiscountDraft(current > 0 ? String(current) : "");
+    setBillDiscountDialogOpen(false);
+    setBillDiscountMode("amount");
+    setBillDiscountPercent("");
+  }, [selectedOrderForBill?.id]);
+
+  const applyBillDiscount = async () => {
+    if (!selectedOrderForBill) return;
+    if (!isAdmin) {
+      toast.error("Only admins can apply discounts");
+      return;
+    }
+
+    const discountNum = parseFloat(billDiscountDraft || "0");
+    if (Number.isNaN(discountNum) || discountNum < 0) {
+      toast.error("Please enter a valid discount amount");
+      return;
+    }
+
+    try {
+      const updated = await updateOrder.mutateAsync({
+        orderId: selectedOrderForBill.id,
+        data: { discountAmount: discountNum },
+      });
+      setSelectedOrderForBill(updated);
+      await refetch();
+    } catch {
+      // toast handled in hook
+    }
+  };
+
+  const removeBillDiscount = async () => {
+    if (!selectedOrderForBill) return;
+    if (!isAdmin) {
+      toast.error("Only admins can remove discounts");
+      return;
+    }
+
+    try {
+      const updated = await updateOrder.mutateAsync({
+        orderId: selectedOrderForBill.id,
+        data: { discountAmount: 0 },
+      });
+      setSelectedOrderForBill(updated);
+      setBillDiscountDraft("");
+      await refetch();
+    } catch {
+      // toast handled in hook
+    }
   };
 
   const handlePayment = async (order: Order, method: PaymentMethod) => {
@@ -567,12 +667,14 @@ export default function FloorMapPage() {
           </div>
         ) : (
           <MobilePOS
+            hideTableSelect
+            hideOrderTypeSelect
             categories={menuData?.categories || []}
             menuItems={menuData?.items || []}
             activeCategory={activeCategory}
             cartItems={manualCart}
             tableNumber={selectedTableForOrder?.id || ""}
-            waiterName={selectedTableForOrder?.assignedWaiterId || null}
+            waiterName={selectedWaiterIdForOrder}
             diningType="dine-in"
             paymentMethod={paymentMethod}
             onCategoryChange={setActiveCategory}
@@ -581,8 +683,14 @@ export default function FloorMapPage() {
             onIncrementLineItem={incrementLineItem}
             getMenuItemQuantity={getMenuItemQuantity}
             onPlusForCustomizableItem={handlePlusForCustomizableItem}
-            onTableChange={() => {}} // Table is pre-selected
-            onWaiterChange={() => {}} // Waiter is pre-assigned
+            onTableChange={() => {}} // Table fixed from floor map
+            onWaiterChange={async (id) => {
+              const waiterId = id === "none" ? null : id;
+              setSelectedWaiterIdForOrder(waiterId);
+              if (selectedTableForOrder) {
+                await handleAssignWaiter(selectedTableForOrder.id, waiterId);
+              }
+            }}
             onDiningTypeChange={() => {}} // Always dine-in
             onPaymentMethodChange={setPaymentMethod}
             onSendToKitchen={handleSendToKitchen}
@@ -594,6 +702,12 @@ export default function FloorMapPage() {
             tables={tables}
             staff={staff}
             isLoading={createOrder.isPending}
+            serviceRatePct={serviceRatePct}
+            waiveServiceCharge={waiveServiceCharge}
+            onToggleWaiveServiceCharge={setWaiveServiceCharge}
+            showDiscount={isAdmin}
+            discountAmount={discountAmount}
+            onDiscountAmountChange={setDiscountAmount}
           />
         )}
       </>
@@ -926,12 +1040,14 @@ export default function FloorMapPage() {
           }}
         >
           <DesktopPOS
+            hideTableSelect
+            hideOrderTypeSelect
             categories={menuData?.categories || []}
             menuItems={menuData?.items || []}
             activeCategory={activeCategory}
             manualCart={manualCart}
             selectedTableId={selectedTableForOrder?.id || ""}
-            selectedWaiterId={selectedTableForOrder?.assignedWaiterId || null}
+            selectedWaiterId={selectedWaiterIdForOrder}
             orderMethod="dine-in"
             paymentMethod={paymentMethod}
             customizingItem={customizingItem}
@@ -943,8 +1059,14 @@ export default function FloorMapPage() {
             onIncrementLineItem={incrementLineItem}
             getMenuItemQuantity={getMenuItemQuantity}
             onPlusForCustomizableItem={handlePlusForCustomizableItem}
-            onTableChange={() => {}} // Table is pre-selected
-            onWaiterChange={() => {}} // Waiter is pre-assigned
+            onTableChange={() => {}} // Table fixed from floor map
+            onWaiterChange={async (id) => {
+              const waiterId = id === "none" ? null : id;
+              setSelectedWaiterIdForOrder(waiterId);
+              if (selectedTableForOrder) {
+                await handleAssignWaiter(selectedTableForOrder.id, waiterId);
+              }
+            }}
             onOrderMethodChange={() => {}} // Always dine-in
             onPaymentMethodChange={setPaymentMethod}
             onSendToKitchen={handleSendToKitchen}
@@ -959,6 +1081,12 @@ export default function FloorMapPage() {
             tables={tables}
             staff={staff}
             isLoading={createOrder.isPending}
+            serviceRatePct={serviceRatePct}
+            waiveServiceCharge={waiveServiceCharge}
+            onToggleWaiveServiceCharge={setWaiveServiceCharge}
+            showDiscount={isAdmin}
+            discountAmount={discountAmount}
+            onDiscountAmountChange={setDiscountAmount}
           />
         </Dialog>
       )}
@@ -1047,6 +1175,191 @@ export default function FloorMapPage() {
                     {currency}{(parseFloat(selectedOrderForBill.gstAmount) / 2).toFixed(2)}
                   </span>
                 </div>
+
+                {selectedOrderForBill.orderType === "DINE_IN" &&
+                  selectedOrderForBill.serviceTaxAmount &&
+                  parseFloat(selectedOrderForBill.serviceTaxAmount) > 0 && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Service Charge</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-600 hover:text-red-700"
+                          title="Remove service charge"
+                          disabled={removeServiceCharge.isPending}
+                          onClick={async () => {
+                            try {
+                              const updated = await removeServiceCharge.mutateAsync({
+                                orderId: selectedOrderForBill.id,
+                              });
+                              setSelectedOrderForBill(updated);
+                              await refetch();
+                            } catch {
+                              // toast handled by mutation
+                            }
+                          }}
+                        >
+                          {removeServiceCharge.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MinusCircle className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <span className="font-medium">
+                        {currency}{parseFloat(selectedOrderForBill.serviceTaxAmount).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                {(() => {
+                  const currentDiscount = Math.max(0, parseFloat(selectedOrderForBill.discountAmount || "0") || 0);
+                  const draftNum = parseFloat(billDiscountDraft || "0");
+                  const hasDraft = billDiscountDraft.trim().length > 0;
+                  const canApply =
+                    isAdmin &&
+                    !updateOrder.isPending &&
+                    hasDraft &&
+                    !Number.isNaN(draftNum) &&
+                    draftNum >= 0;
+
+                  const showDiscountRow = currentDiscount > 0 || isAdmin;
+                  if (!showDiscountRow) return null;
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Discount</span>
+                          {isAdmin && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              title="Edit discount"
+                              onClick={() => setBillDiscountDialogOpen(true)}
+                            >
+                              <Percent className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <span className={cn("font-medium", currentDiscount > 0 && "text-green-700")}>
+                          {currentDiscount > 0 ? `- ${currency}${currentDiscount.toFixed(2)}` : `${currency}0.00`}
+                        </span>
+                      </div>
+
+                      {isAdmin && (
+                        <Dialog open={billDiscountDialogOpen} onOpenChange={setBillDiscountDialogOpen}>
+                          <DialogContent className="max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Discount</DialogTitle>
+                            </DialogHeader>
+
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label>Discount Type</Label>
+                                <RadioGroup
+                                  value={billDiscountMode}
+                                  onValueChange={(v) => setBillDiscountMode(v as "amount" | "percent")}
+                                  className="flex gap-4"
+                                >
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="amount" id="fm_bill_disc_amount" />
+                                    <Label htmlFor="fm_bill_disc_amount">Amount</Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="percent" id="fm_bill_disc_percent" />
+                                    <Label htmlFor="fm_bill_disc_percent">Percent</Label>
+                                  </div>
+                                </RadioGroup>
+                              </div>
+
+                              {billDiscountMode === "amount" ? (
+                                <div className="space-y-2">
+                                  <Label>Discount Amount (optional)</Label>
+                                  <Input
+                                    value={billDiscountDraft}
+                                    onChange={(e) => setBillDiscountDraft(e.target.value)}
+                                    placeholder="0"
+                                    inputMode="decimal"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Label>Discount Percent (optional)</Label>
+                                  <Input
+                                    value={billDiscountPercent}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setBillDiscountPercent(v);
+                                      const base = Math.max(
+                                        0,
+                                        parseFloat(selectedOrderForBill.totalAmount) + currentDiscount,
+                                      );
+                                      const pct = Math.max(0, Math.min(100, parseFloat(v || "0") || 0));
+                                      const amt = (base * pct) / 100;
+                                      setBillDiscountDraft(amt ? amt.toFixed(2) : "");
+                                    }}
+                                    placeholder="0"
+                                    inputMode="decimal"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="flex justify-between gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={updateOrder.isPending}
+                                  onClick={() => {
+                                    setBillDiscountPercent("");
+                                    setBillDiscountDraft("");
+                                  }}
+                                >
+                                  Clear
+                                </Button>
+
+                                <div className="flex gap-2">
+                                  {currentDiscount > 0 && (
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      disabled={updateOrder.isPending}
+                                      onClick={async () => {
+                                        await removeBillDiscount();
+                                        setBillDiscountDialogOpen(false);
+                                      }}
+                                    >
+                                      Remove
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    disabled={!canApply}
+                                    onClick={async () => {
+                                      await applyBillDiscount();
+                                      setBillDiscountDialogOpen(false);
+                                    }}
+                                  >
+                                    {updateOrder.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      "Apply"
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <Separator />
                 <div className="flex justify-between text-base font-bold">
                   <span>Total</span>
