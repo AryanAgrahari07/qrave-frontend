@@ -10,6 +10,8 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import {
   useTables,
   useQueueActive,
@@ -24,6 +26,7 @@ import {
   useAddOrderItems,
   useRemoveOrderItem,
   useUpdateOrder,
+  useUpdateOrderItemStatus,
 } from "@/hooks/api";
 import type { Table, QueueEntry, MenuItem, MenuCategory, Order, OrderItem, OrderStatus } from "@/types";
 import {
@@ -78,11 +81,12 @@ export default function WaiterTerminalPage() {
   const seatGuest = useSeatGuest(restaurantId);
   const callNext = useCallNextGuest(restaurantId);
   const updateOrderStatus = useUpdateOrderStatus(restaurantId);
+  const updateOrderItemStatus = useUpdateOrderItemStatus(restaurantId);
   const addOrderItems = useAddOrderItems(restaurantId);
   const removeOrderItem = useRemoveOrderItem(restaurantId);
   const updateOrder = useUpdateOrder(restaurantId);
 
-  const [language, setLanguage] = useState<"en" | "es" | "hi">("en");
+  const { t, language } = useLanguage();
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
 
   // POS cart lines (same structure as Live Orders POS)
@@ -236,81 +240,6 @@ export default function WaiterTerminalPage() {
     }
   }, [orders, user?.id]);
 
-  const t = {
-    en: {
-      title: "Waiter Terminal",
-      floor: "Floor Map",
-      orders: "Active Orders",
-      queue: "Guest Queue",
-      seat: "Seat Party",
-      tables: "Tables",
-      available: "Available",
-      occupied: "Occupied",
-      order: "New Order",
-      add: "Add to Order",
-      confirm: "Send to Kitchen",
-      items: "Items",
-      callNext: "Call Next",
-      noQueue: "No guests waiting",
-      noTables: "No tables configured",
-      noOrders: "No active orders",
-      editOrder: "Edit Order",
-      addItems: "Add Items",
-      markServed: "Mark Served",
-      ready: "Ready to Serve",
-      preparing: "Preparing",
-      pending: "New",
-    },
-    es: {
-      title: "Terminal del Camarero",
-      floor: "Mapa del Piso",
-      orders: "Pedidos Activos",
-      queue: "Cola de Invitados",
-      seat: "Sentar Grupo",
-      tables: "Mesas",
-      available: "Disponible",
-      occupied: "Ocupado",
-      order: "Nuevo Pedido",
-      add: "Agregar",
-      confirm: "Enviar a Cocina",
-      items: "Artículos",
-      callNext: "Llamar Siguiente",
-      noQueue: "Sin invitados esperando",
-      noTables: "Sin mesas configuradas",
-      noOrders: "Sin pedidos activos",
-      editOrder: "Editar Pedido",
-      addItems: "Agregar Items",
-      markServed: "Marcar Servido",
-      ready: "Listo para Servir",
-      preparing: "Preparando",
-      pending: "Nuevo",
-    },
-    hi: {
-      title: "वेटर टर्मिनल",
-      floor: "फ्लोर मैप",
-      orders: "एक्टिव ऑर्डर",
-      queue: "मेहमानों की सूची",
-      seat: "बैठाएं",
-      tables: "मेज़",
-      available: "उपलब्ध",
-      occupied: "भरा हुआ",
-      order: "नया ऑर्डर",
-      add: "जोड़ें",
-      confirm: "किचन भेजें",
-      items: "सामान",
-      callNext: "अगला बुलाएं",
-      noQueue: "कोई मेहमान इंतज़ार में नहीं",
-      noTables: "कोई टेबल नहीं",
-      noOrders: "कोई ऑर्डर नहीं",
-      editOrder: "ऑर्डर बदलें",
-      addItems: "आइटम जोड़ें",
-      markServed: "सर्व किया",
-      ready: "सर्व के लिए तैयार",
-      preparing: "बन रहा है",
-      pending: "नया",
-    }
-  }[language];
-
   const handleLogout = async () => {
     await logout();
     setLocation("/auth");
@@ -366,10 +295,11 @@ export default function WaiterTerminalPage() {
       }
 
       const isVeg = item.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+      const nameToUse = (item as any).nameTranslations?.[language] || item.name;
       const newLine: POSCartLineItem = {
         lineId: makeLineId(item.id),
         menuItemId: item.id,
-        name: item.name,
+        name: nameToUse,
         unitPrice: parseFloat(item.price as any),
         quantity: 1,
         isVeg,
@@ -424,11 +354,12 @@ export default function WaiterTerminalPage() {
     }
 
     const isVeg = customizingItem.dietaryTags?.some((tag) => tag.toLowerCase() === "veg");
+    const nameToUse = (customizingItem as any).nameTranslations?.[language] || customizingItem.name;
 
     const cartLine: POSCartLineItem = {
       lineId: makeLineId(customizingItem.id),
       menuItemId: customizingItem.id,
-      name: customizingItem.name,
+      name: nameToUse,
       unitPrice: price,
       quantity: selection.quantity,
       variantId: selection.variantId,
@@ -648,10 +579,10 @@ export default function WaiterTerminalPage() {
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
-      case "PENDING": return <Badge variant="destructive" className="animate-pulse">{t.pending}</Badge>;
-      case "PREPARING": return <Badge variant="secondary" className="bg-blue-100 text-blue-700">{t.preparing}</Badge>;
+      case "PENDING": return <Badge variant="destructive" className="animate-pulse">{t("waiter.pending")}</Badge>;
+      case "PREPARING": return <Badge variant="secondary" className="bg-blue-100 text-blue-700">{t("waiter.preparing")}</Badge>;
       case "READY": return <Badge variant="default" className="bg-green-600 text-white animate-pulse">READY</Badge>;
-      case "SERVED": return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">{t.ready}</Badge>;
+      case "SERVED": return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">{t("waiter.ready")}</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
@@ -668,7 +599,7 @@ export default function WaiterTerminalPage() {
   const filteredMenuItems = useMemo(() => {
     if (!menuData?.items) return [];
 
-    let items = menuData.items;
+    let items = menuData.items as MenuItem[];
 
     // Filter by category if not searching
     if (!searchQuery && activeCategory) {
@@ -677,10 +608,13 @@ export default function WaiterTerminalPage() {
       );
     } else if (searchQuery) {
       // Filter by search query across all categories
+      const query = searchQuery.toLowerCase();
       items = items.filter(
-        (item: MenuItem) =>
-          item.isAvailable &&
-          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        (item: MenuItem) => {
+          if (!item.isAvailable) return false;
+          const translatedName = item.nameTranslations?.[language] || item.name;
+          return translatedName.toLowerCase().includes(query) || item.name.toLowerCase().includes(query);
+        }
       );
     }
 
@@ -823,7 +757,7 @@ export default function WaiterTerminalPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-heading font-bold text-slate-900">{t.title}</h1>
+            <h1 className="text-2xl font-heading font-bold text-slate-900">{t("waiter.title")}</h1>
             <p className="text-slate-500 text-sm">{restaurant?.name || "Restaurant"} • {user?.fullName || user?.email}</p>
           </div>
 
@@ -836,20 +770,7 @@ export default function WaiterTerminalPage() {
               <RefreshCw className="w-4 h-4 mr-1" /> Refresh
             </Button>
 
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg shadow-sm border border-slate-200">
-              <Languages className="w-4 h-4 text-slate-400 ml-1" />
-              {(["en", "es", "hi"] as const).map((l) => (
-                <Button
-                  key={l}
-                  variant={language === l ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setLanguage(l)}
-                  className="uppercase text-xs font-bold h-7 px-2"
-                >
-                  {l}
-                </Button>
-              ))}
-            </div>
+            <LanguageSelector className="bg-white" />
 
             <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-destructive">
               <LogOut className="w-5 h-5" />
@@ -879,10 +800,10 @@ export default function WaiterTerminalPage() {
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "floor" | "orders")} className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
             <TabsTrigger value="floor" className="flex items-center gap-2">
-              <LayoutGrid className="w-4 h-4" /> {t.floor}
+              <LayoutGrid className="w-4 h-4" /> {t("waiter.floor")}
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2 relative">
-              <Utensils className="w-4 h-4" /> {t.orders}
+              <Utensils className="w-4 h-4" /> {t("waiter.orders")}
               {readyOrdersCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
                   {readyOrdersCount}
@@ -898,8 +819,8 @@ export default function WaiterTerminalPage() {
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex gap-4 text-sm">
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500" /> {t.available}</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-slate-400" /> {t.occupied}</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500" /> {t("waiter.available")}</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-slate-400" /> {t("waiter.occupied")}</span>
                   </div>
                 </div>
 
@@ -953,7 +874,7 @@ export default function WaiterTerminalPage() {
                 ) : (
                   <div className="text-center py-12 border-2 border-dashed rounded-xl">
                     <LayoutGrid className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
-                    <p className="text-muted-foreground">{t.noTables}</p>
+                    <p className="text-muted-foreground">{t("waiter.noTables")}</p>
                   </div>
                 )}
               </div>
@@ -962,11 +883,11 @@ export default function WaiterTerminalPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary" /> {t.queue}
+                    <Users className="w-4 h-4 text-primary" /> {t("waiter.queue")}
                   </h2>
                   <Button size="sm" variant="outline" onClick={handleCallNext} disabled={callNext.isPending || waitingGuests.length === 0}>
                     {callNext.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                    {t.callNext}
+                    {t("waiter.callNext")}
                   </Button>
                 </div>
 
@@ -1016,7 +937,7 @@ export default function WaiterTerminalPage() {
                   ) : (
                     <div className="text-center py-6 text-muted-foreground text-sm">
                       <Users className="w-6 h-6 mx-auto mb-1 opacity-20" />
-                      <p>{t.noQueue}</p>
+                      <p>{t("waiter.noQueue")}</p>
                     </div>
                   )}
                 </div>
@@ -1029,7 +950,7 @@ export default function WaiterTerminalPage() {
             {activeOrders.length === 0 ? (
               <div className="text-center py-16 border-2 border-dashed rounded-xl">
                 <Utensils className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                <p className="text-lg font-medium text-muted-foreground">{t.noOrders}</p>
+                <p className="text-lg font-medium text-muted-foreground">{t("waiter.noOrders")}</p>
                 <p className="text-sm text-muted-foreground">Orders will appear here</p>
               </div>
             ) : (
@@ -1037,7 +958,7 @@ export default function WaiterTerminalPage() {
                 {activeOrders.map((order: Order) => (
                   <Card key={order.id} className={cn(
                     "overflow-hidden transition-all",
-                    order.status === "READY" && "ring-2 ring-green-500 bg-green-50/50 animate-pulse",
+                    order.status === "READY" && "ring-2 ring-green-500 bg-green-50/50",
                     order.status === "SERVED" && "ring-1 ring-green-300 bg-green-50/30"
                   )}>
                     <CardHeader className={cn(
@@ -1062,14 +983,26 @@ export default function WaiterTerminalPage() {
                     <CardContent className="p-4 space-y-3">
                       {/* Order Items */}
                       <div className="space-y-1 max-h-32 overflow-y-auto">
-                        {order.items?.map((item) => (
-                          <CustomizedOrderItemDisplay
-                            key={item.id}
-                            item={item as any}
-                            currency={currency}
-                            compact={true}
-                          />
-                        ))}
+                        {order.items?.map((item) => {
+                          const nameToUse = (item as any).itemNameTranslations?.[language] || item.itemName;
+
+                          return (
+                            <CustomizedOrderItemDisplay
+                              key={item.id}
+                              item={{ ...item, itemName: nameToUse } as any}
+                              currency={currency}
+                              compact={true}
+                              onMarkDelivered={() => {
+                                updateOrderItemStatus.mutate({
+                                  orderId: order.id,
+                                  orderItemId: item.id,
+                                  status: "SERVED",
+                                });
+                              }}
+                              isUpdating={updateOrderItemStatus.isPending && updateOrderItemStatus.variables?.orderItemId === item.id}
+                            />
+                          );
+                        })}
                       </div>
 
                       {/* Total */}

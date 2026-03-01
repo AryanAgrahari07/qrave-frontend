@@ -8,11 +8,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { CheckCircle2, Languages, Utensils, Timer, Loader2, RefreshCw, AlertCircle, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { useKitchenOrders, useKitchenStartOrder, useKitchenCompleteOrder, useRestaurant } from "@/hooks/api";
 import type { Order, OrderItem } from "@/types";
 import { differenceInMinutes } from "date-fns";
@@ -43,7 +44,9 @@ export default function KitchenKDSPage() {
       if (prev.size === 0) return prev;
       const visible = new Set(allVisibleItemIds);
       const next = new Set<string>();
-      for (const id of prev) if (visible.has(id)) next.add(id);
+      prev.forEach(id => {
+        if (visible.has(id)) next.add(id);
+      });
       return next.size === prev.size ? prev : next;
     });
   }, [allVisibleItemIds]);
@@ -62,53 +65,8 @@ export default function KitchenKDSPage() {
     setLocation("/auth");
   };
 
-  const [language, setLanguage] = useState<"en" | "es" | "hi">("en");
+  const { t, language } = useLanguage();
   const [section, setSection] = useState<"active" | "ready">("active");
-  const [languageDialogOpen, setLanguageDialogOpen] = useState(false);
-
-  const t = {
-    en: {
-      title: "Kitchen Display (KDS)",
-      active: "Active Orders",
-      prepare: "Start Preparing",
-      ready: "Mark Ready",
-      table: "Table",
-      noOrders: "No active orders",
-      allDone: "Kitchen is all caught up!",
-      mins: "min",
-      new: "NEW",
-      preparing: "COOKING",
-    },
-    es: {
-      title: "Pantalla de Cocina",
-      active: "Pedidos Activos",
-      prepare: "Empezar",
-      ready: "Listo",
-      table: "Mesa",
-      noOrders: "Sin pedidos activos",
-      allDone: "¡La cocina está al día!",
-      mins: "min",
-      new: "NUEVO",
-      preparing: "COCINANDO",
-    },
-    hi: {
-      title: "किचन डिस्प्ले",
-      active: "एक्टिव ऑर्डर",
-      prepare: "शुरू करें",
-      ready: "तैयार",
-      table: "टेबल",
-      noOrders: "कोई ऑर्डर नहीं",
-      allDone: "किचन खाली है!",
-      mins: "मिनट",
-      new: "नया",
-      preparing: "बन रहा",
-    }
-  }[language];
-
-  const handleLanguageSelect = (l: "en" | "es" | "hi") => {
-    setLanguage(l);
-    setLanguageDialogOpen(false);
-  };
 
   const handleStartOrder = async (orderId: string) => {
     try {
@@ -183,7 +141,7 @@ export default function KitchenKDSPage() {
             <CardTitle className="text-base font-semibold flex items-center gap-2 leading-tight flex-wrap">
               {order.table?.tableNumber ? (
                 <>
-                  {t.table} {order.table.tableNumber}
+                  {t("kitchen.table")} {order.table.tableNumber}
                 </>
               ) : (
                 order.guestName || `#${order.id.slice(-4)}`
@@ -193,7 +151,7 @@ export default function KitchenKDSPage() {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-gray-600 text-xs mt-0.5">
               <Timer className="w-4 h-4" />
               <span className={cn(mins > 15 && "text-yellow-700 font-bold")}>
-                {mins} {t.mins}
+                {mins} {t("kitchen.mins")}
               </span>
               <span className="text-gray-400">•</span>
               <span className="uppercase text-xs">{order.orderType}</span>
@@ -213,14 +171,20 @@ export default function KitchenKDSPage() {
               order.status === "READY" && "bg-green-600"
             )}
           >
-            {order.status === "PENDING" ? t.new : order.status === "READY" ? "READY" : t.preparing}
+            {order.status === "PENDING" ? t("kitchen.new") : order.status === "READY" ? t("kitchen.ready") : t("kitchen.preparing")}
           </Badge>
         </CardHeader>
 
         <CardContent className="pt-3 px-3 pb-3 space-y-3">
           <div className="space-y-2 min-h-[120px] max-h-[180px] sm:max-h-[200px] overflow-y-auto">
-            {order.items?.map((item: OrderItem) => {
-              const checked = checkedItemIds.has(item.id);
+            {order.items?.filter((item: OrderItem) => item.status !== "SERVED").sort((a: OrderItem, b: OrderItem) => {
+              const statusOrder = { "PENDING": 0, "PREPARING": 1, "READY": 2, "SERVED": 3 };
+              const aVal = statusOrder[a.status as keyof typeof statusOrder] ?? 4;
+              const bVal = statusOrder[b.status as keyof typeof statusOrder] ?? 4;
+              return aVal - bVal;
+            }).map((item: OrderItem) => {
+              const strikeThrough = item.status === "SERVED" || item.status === "READY";
+              const checked = strikeThrough || checkedItemIds.has(item.id);
 
               const hasCustomization = !!(
                 item.variantName ||
@@ -231,35 +195,53 @@ export default function KitchenKDSPage() {
                 <div
                   key={item.id}
                   className={cn(
-                    "flex items-start justify-between gap-3 border-b border-gray-200 pb-2",
-                    hasCustomization && "bg-blue-50 p-2 rounded-none border border-blue-200",
-                    checked && "opacity-60"
+                    "flex items-start justify-between gap-3 border-b border-gray-200 pb-2 relative",
+                    hasCustomization && !strikeThrough && "bg-blue-50 p-2 rounded-none border border-blue-200",
+                    strikeThrough && "bg-gray-50 opacity-50",
+                    checked && !strikeThrough && "opacity-60"
                   )}
                 >
                   <div className="flex items-start gap-2 min-w-0 flex-1">
                     <Checkbox
                       checked={checked}
+                      disabled={strikeThrough}
                       onCheckedChange={() => toggleItemChecked(item.id)}
                       className="mt-1"
                       aria-label={`Mark ${item.itemName} as done`}
                     />
 
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <p
-                        className={cn(
-                          "font-semibold text-sm whitespace-normal break-words",
-                          checked && "line-through"
+                    <div className="min-w-0 flex-1 space-y-0.5 mt-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p
+                          className={cn(
+                            "font-semibold text-sm whitespace-normal break-words",
+                            checked && "line-through"
+                          )}
+                        >
+                          {item.itemNameTranslations?.[language] || item.itemName}
+                        </p>
+                        {item.status === "PENDING" && order.status !== "PENDING" && (
+                          <Badge variant="destructive" className="px-1 py-0 text-[9px] h-4">{t("kitchen.new")}</Badge>
                         )}
-                      >
-                        {item.itemName}
-                      </p>
+                        {item.status === "PREPARING" && (
+                          <Badge variant="secondary" className="px-1 py-0 text-[9px] h-4 bg-blue-100 text-blue-700">PREPARING</Badge>
+                        )}
+                        {item.status === "READY" && (
+                          <Badge variant="default" className="px-1 py-0 text-[9px] h-4 bg-green-600">READY</Badge>
+                        )}
+                        {item.status === "SERVED" && (
+                          <Badge variant="outline" className="px-1 py-0 text-[9px] h-4 text-gray-500">SERVED</Badge>
+                        )}
+                      </div>
 
                       {item.variantName && (
                         <div className={cn("flex items-center gap-2", checked && "line-through")}>
                           <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">
                             SIZE
                           </span>
-                          <span className="text-xs text-blue-900 font-medium">{item.variantName}</span>
+                          <span className="text-xs text-blue-900 font-medium">
+                            {item.variantNameTranslations?.[language] || item.variantName}
+                          </span>
                         </div>
                       )}
 
@@ -269,10 +251,12 @@ export default function KitchenKDSPage() {
                             ADD-ONS
                           </span>
                           <div className="pl-2 space-y-0.5">
-                            {item.selectedModifiers.map((mod, idx) => (
+                            {item.selectedModifiers.map((mod: any, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                                <span className="text-yellow-900">{mod.name}</span>
+                                <span className="text-yellow-900">
+                                  {mod.nameTranslations?.[language] || mod.name}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -318,7 +302,7 @@ export default function KitchenKDSPage() {
                 ) : (
                   <Utensils className="w-5 h-5 mr-2" />
                 )}
-                {t.prepare}
+                {t("kitchen.prepare")}
               </Button>
             ) : order.status === "PREPARING" ? (
               <Button
@@ -331,12 +315,12 @@ export default function KitchenKDSPage() {
                 ) : (
                   <CheckCircle2 className="w-5 h-5 mr-2" />
                 )}
-                {t.ready}
+                {t("kitchen.ready")}
               </Button>
             ) : (
               <div className="w-full h-11 flex items-center justify-center bg-green-50 border-2 border-green-200 rounded-none font-semibold text-sm text-green-800">
                 <CheckCircle2 className="w-5 h-5 mr-2" />
-                READY FOR PICKUP
+                {t("kitchen.readyForPickup").toUpperCase()}
               </div>
             )}
           </div>
@@ -358,10 +342,10 @@ export default function KitchenKDSPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6">
         <div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
-            <Utensils className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-primary" /> {t.title}
+            <Utensils className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-primary" /> {t("kitchen.title")}
           </h1>
           <p className="text-gray-600">
-            {restaurant?.name || "Restaurant"} • {user?.fullName || user?.email} • {activeOrders.length} {t.active}
+            {restaurant?.name || "Restaurant"} • {user?.fullName || user?.email} • {activeOrders.length} {t("kitchen.active")}
           </p>
         </div>
 
@@ -375,35 +359,7 @@ export default function KitchenKDSPage() {
             <RefreshCw className="w-4 h-4" />
           </Button>
 
-          <Dialog open={languageDialogOpen} onOpenChange={setLanguageDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="bg-white border-gray-300 hover:bg-gray-50"
-                aria-label="Change language"
-              >
-                <Languages className="w-4 h-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Language</DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-1 gap-2">
-                {(["en", "es", "hi"] as const).map((l) => (
-                  <Button
-                    key={l}
-                    variant={language === l ? "default" : "outline"}
-                    onClick={() => handleLanguageSelect(l)}
-                    className="justify-start uppercase"
-                  >
-                    {l}
-                  </Button>
-                ))}
-              </div>
-            </DialogContent>
-          </Dialog>
+          <LanguageSelector className="bg-white text-black" />
 
           <Button
             variant="outline"
@@ -444,8 +400,8 @@ export default function KitchenKDSPage() {
       {activeOrders.length === 0 && readyOrders.length === 0 ? (
         <div className="text-center py-32">
           <CheckCircle2 className="w-20 h-20 mx-auto mb-6 text-green-500 opacity-50" />
-          <p className="text-2xl font-bold text-gray-700">{t.noOrders}</p>
-          <p className="text-gray-600 mt-2">{t.allDone}</p>
+          <p className="text-2xl font-bold text-gray-700">{t("kitchen.noOrders")}</p>
+          <p className="text-gray-600 mt-2">{t("kitchen.allDone")}</p>
         </div>
       ) : (
         <div className="space-y-4">

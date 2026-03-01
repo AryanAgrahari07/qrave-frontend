@@ -42,7 +42,7 @@ export interface Restaurant {
   name: string;
   slug: string;
   type?: string;
-  
+
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
@@ -80,6 +80,8 @@ export interface MenuCategory {
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
+  nameTranslations?: Record<string, string>;
+  descriptionTranslations?: Record<string, string>;
 }
 
 export interface MenuItem {
@@ -95,7 +97,9 @@ export interface MenuItem {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-  
+  nameTranslations?: Record<string, string>;
+  descriptionTranslations?: Record<string, string>;
+
   // Customization options (loaded when needed)
   variants?: Variant[];
   modifierGroups?: ModifierGroup[];
@@ -141,13 +145,16 @@ export interface OrderItem {
   orderId: string;
   menuItemId: string;
   itemName: string;
+  itemNameTranslations?: Record<string, string>;
   unitPrice: string;
   quantity: number;
   totalPrice: string;
+  status: OrderStatus;
   notes?: string;
   createdAt: string;
   selectedVariantId?: string | null;
   variantName?: string | null;
+  variantNameTranslations?: Record<string, string>;
   variantPrice?: string | null;
   selectedModifiers?: Array<{
     id: string;
@@ -159,7 +166,7 @@ export interface OrderItem {
   customizationAmount?: string | null;
 }
 
-export type paymentStatus = "PAID" | "DUE" | "PARTIALLY_PAID" ;
+export type paymentStatus = "PAID" | "DUE" | "PARTIALLY_PAID";
 export type PaymentMethod = "CASH" | "CARD" | "UPI" | "DUE";
 
 export interface Order {
@@ -418,7 +425,8 @@ export interface Variant {
   menuItemId: string;
   restaurantId: string;
   variantName: string;
-  price: number ;
+  variantNameTranslations?: Record<string, string>;
+  price: number;
   isDefault: boolean;
   isAvailable: boolean;
   sortOrder?: number;
@@ -431,6 +439,7 @@ export interface Modifier {
   modifierGroupId: string;
   restaurantId: string;
   name: string;
+  nameTranslations?: Record<string, string>;
   price: number;
   isDefault: boolean;
   isAvailable: boolean;

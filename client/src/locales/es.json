@@ -1,0 +1,39 @@
+{
+  "waiter": {
+    "title": "Terminal de Camarero",
+    "floor": "Plano de Planta",
+    "orders": "Pedidos Activos",
+    "queue": "Línea de Espera",
+    "seat": "Asignar Mesa",
+    "tables": "Mesas",
+    "available": "Disponible",
+    "occupied": "Ocupada",
+    "order": "Nuevo Pedido",
+    "add": "Añadir al Pedido",
+    "confirm": "Enviar a Cocina",
+    "items": "Artículos",
+    "callNext": "Llamar Siguiente",
+    "noQueue": "No hay invitados en espera",
+    "noTables": "No hay mesas configuradas",
+    "noOrders": "No hay pedidos activos",
+    "editOrder": "Editar Pedido",
+    "addItems": "Añadir",
+    "markServed": "Entregado",
+    "ready": "Listo",
+    "preparing": "Cocina",
+    "pending": "Nuevo"
+  },
+  "kitchen": {
+    "title": "Pantalla de Cocina",
+    "active": "Pedidos Activos",
+    "prepare": "Preparar",
+    "ready": "Marcar Listo",
+    "table": "Mesa",
+    "noOrders": "No hay pedidos",
+    "allDone": "¡Cocina libre!",
+    "mins": "min",
+    "new": "NUEVO",
+    "preparing": "COCINANDO",
+    "readyForPickup": "LISTO PARA RECOGER"
+  }
+}

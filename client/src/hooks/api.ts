@@ -89,7 +89,7 @@ const queryKeys = {
   states: (countryCode: string | null, search: string) => ["states", countryCode, search] as const,
   cities: (stateCode: string | null, search: string) => ["cities", stateCode, search] as const,
   currencies: (search: string) => ["currencies", search] as const,
-  analytics: (restaurantId: string | null, timeframe: string) => 
+  analytics: (restaurantId: string | null, timeframe: string) =>
     ["analytics", restaurantId, timeframe] as const,
   dashboard: {
     all: ["dashboard"] as const,
@@ -101,9 +101,9 @@ const queryKeys = {
     recentOrders: (restaurantId: string | null, limit?: number) => ["dashboard", restaurantId, "recent-orders", limit] as const,
   },
   extraction: {
-    job: (restaurantId: string | null, jobId: string | null) => 
+    job: (restaurantId: string | null, jobId: string | null) =>
       ["extraction-job", restaurantId, jobId] as const,
-    jobs: (restaurantId: string | null) => 
+    jobs: (restaurantId: string | null) =>
       ["extraction-jobs", restaurantId] as const,
   },
 };
@@ -349,11 +349,11 @@ export function useOrders(restaurantId: string | null, opts?: { status?: string;
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.offset) params.set("offset", String(opts.offset));
   const q = params.toString();
-  
+
   return useQuery({
     queryKey: queryKeys.orders(restaurantId, opts),
     queryFn: () =>
-      api.get<{ 
+      api.get<{
         orders: Order[];
         pagination?: {
           total: number;
@@ -492,6 +492,21 @@ export function useUpdateOrderStatus(restaurantId: string | null) {
   });
 }
 
+export function useUpdateOrderItemStatus(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, orderItemId, status }: { orderId: string; orderItemId: string; status: OrderStatus }) =>
+      api.patch<{ item: any }>(`/api/restaurants/${restaurantId}/orders/${orderId}/items/${orderItemId}/status`, { status }).then((r) => r.item),
+    onSuccess: () => {
+      if (restaurantId) {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update item status"),
+  });
+}
+
 export function useCancelOrder(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
@@ -514,16 +529,16 @@ export function useCancelOrder(restaurantId: string | null) {
 export function useAddOrderItems(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ 
-      orderId, 
+    mutationFn: ({
+      orderId,
       items,
       paymentMethod = "DUE",
       paymentStatus = "DUE"
-    }: { 
-      orderId: string; 
-      items: Array<{ 
-        menuItemId: string; 
-        quantity: number; 
+    }: {
+      orderId: string;
+      items: Array<{
+        menuItemId: string;
+        quantity: number;
         notes?: string;
         variantId?: string;
         modifierIds?: string[];
@@ -532,8 +547,8 @@ export function useAddOrderItems(restaurantId: string | null) {
       paymentStatus?: "PAID" | "DUE";
     }) =>
       api.post<{ order: Order; newItems: unknown[] }>(
-        `/api/restaurants/${restaurantId}/orders/${orderId}/items`, 
-        { 
+        `/api/restaurants/${restaurantId}/orders/${orderId}/items`,
+        {
           items,
           paymentMethod,
           paymentStatus
@@ -681,14 +696,14 @@ export function useAssignWaiterToTable(restaurantId: string | null) {
           prev.map((t) =>
             t.id === tableId
               ? {
-                  ...t,
-                  assignedWaiterId: staffId,
-                  // Clear old waiter object; server will return enriched waiter on success
-                  assignedWaiter: staffId ? t.assignedWaiter : null,
-                  // If assigning to an AVAILABLE table, mimic backend behavior (it switches to OCCUPIED)
-                  currentStatus:
-                    staffId && t.currentStatus === "AVAILABLE" ? "OCCUPIED" : t.currentStatus,
-                }
+                ...t,
+                assignedWaiterId: staffId,
+                // Clear old waiter object; server will return enriched waiter on success
+                assignedWaiter: staffId ? t.assignedWaiter : null,
+                // If assigning to an AVAILABLE table, mimic backend behavior (it switches to OCCUPIED)
+                currentStatus:
+                  staffId && t.currentStatus === "AVAILABLE" ? "OCCUPIED" : t.currentStatus,
+              }
               : t,
           ),
         );
@@ -928,12 +943,12 @@ export function useQRStats(restaurantId: string | null) {
 // 3. Removed unnecessary refetch intervals for static data
 
 export function useTransactions(
-  restaurantId: string | null, 
-  opts?: { 
-    limit?: number; 
-    offset?: number; 
-    fromDate?: string; 
-    toDate?: string; 
+  restaurantId: string | null,
+  opts?: {
+    limit?: number;
+    offset?: number;
+    fromDate?: string;
+    toDate?: string;
     paymentMethod?: string;
     search?: string;
   }
@@ -950,7 +965,7 @@ export function useTransactions(
   return useQuery({
     queryKey: queryKeys.transactions(restaurantId, opts),
     queryFn: () =>
-      api.get<{ 
+      api.get<{
         transactions: Array<{
           id: string;
           billNumber: string;
@@ -968,15 +983,15 @@ export function useTransactions(
               tableNumber: string;
             } | null;
           } | null;
-        }>; 
-        pagination: { 
-          total: number; 
-          limit: number; 
-          offset: number; 
+        }>;
+        pagination: {
+          total: number;
+          limit: number;
+          offset: number;
           hasMore: boolean;
           totalPages: number;
           currentPage: number;
-        } 
+        }
       }>(`/api/restaurants/${restaurantId}/transactions${q ? `?${q}` : ""}`),
     enabled: !!restaurantId,
     // OPTIMIZATION: Remove aggressive refetch for historical data
@@ -991,7 +1006,7 @@ export function useTransactionDetail(restaurantId: string | null, transactionId:
   return useQuery({
     queryKey: ["transaction-detail", restaurantId, transactionId],
     queryFn: () =>
-      api.get<{ 
+      api.get<{
         transaction: {
           id: string;
           billNumber: string;
@@ -1037,9 +1052,9 @@ export function useTransactionDetail(restaurantId: string | null, transactionId:
 
 export function useExportTransactionsCSV(restaurantId: string | null) {
   return useMutation({
-    mutationFn: async (opts?: { 
-      fromDate?: string; 
-      toDate?: string; 
+    mutationFn: async (opts?: {
+      fromDate?: string;
+      toDate?: string;
       paymentMethod?: string;
     }) => {
       const params = new URLSearchParams();
@@ -1105,7 +1120,7 @@ export function useRecentTransactions(restaurantId: string | null, limit: number
   return useQuery({
     queryKey: ["transactions-recent", restaurantId, limit],
     queryFn: () =>
-      api.get<{ 
+      api.get<{
         transactions: Array<{
           id: string;
           billNumber: string;
@@ -1118,7 +1133,7 @@ export function useRecentTransactions(restaurantId: string | null, limit: number
           staffName?: string;
         }>
       }>(`/api/restaurants/${restaurantId}/transactions/recent?limit=${limit}`)
-      .then(r => r.transactions),
+        .then(r => r.transactions),
     enabled: !!restaurantId,
     // OPTIMIZATION: Cache for 30 seconds - recent bills don't change that often
     staleTime: 30000,
@@ -1132,17 +1147,17 @@ export function useRecentTransactions(restaurantId: string | null, limit: number
 export function useUpdatePaymentStatus(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ 
-      orderId, 
-      paymentStatus, 
-      paymentMethod 
-    }: { 
-      orderId: string; 
+    mutationFn: ({
+      orderId,
+      paymentStatus,
+      paymentMethod
+    }: {
+      orderId: string;
       paymentStatus: "DUE" | "PAID" | "PARTIALLY_PAID";
       paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE";
     }) =>
       api.patch<{ order: Order; message: string }>(
-        `/api/restaurants/${restaurantId}/orders/${orderId}/payment-status`, 
+        `/api/restaurants/${restaurantId}/orders/${orderId}/payment-status`,
         { paymentStatus, paymentMethod }
       ).then((r) => r.order), // ✅ Return the order, not the whole response
     onSuccess: async (updatedOrder) => { // ✅ Receive the updated order
@@ -1159,10 +1174,10 @@ export function useUpdatePaymentStatus(restaurantId: string | null) {
         await qc.invalidateQueries({ queryKey: ["analytics-overview", restaurantId] });
         await qc.invalidateQueries({ queryKey: queryKeys.dashboard.summary(restaurantId) });
         await qc.invalidateQueries({ queryKey: queryKeys.dashboard.orders(restaurantId) });
-        
+
         // Also invalidate the specific order
         await qc.invalidateQueries({ queryKey: ["order", restaurantId, updatedOrder.id] });
-        
+
         console.log("✅ Caches invalidated after payment update");
         console.log("  Updated order paidAmount:", updatedOrder.paid_amount);
       }
@@ -1231,15 +1246,15 @@ export function useDashboardStats(restaurantId: string | null) {
 
   const stats: DashboardStats | null = restaurantId
     ? {
-        totalTables: tables?.length ?? 0,
-        availableTables: tables?.filter((t) => t.currentStatus === "AVAILABLE").length ?? 0,
-        occupiedTables: tables?.filter((t) => t.currentStatus === "OCCUPIED").length ?? 0,
-        totalOrders: orderStats?.totalOrders ?? 0,
-        pendingOrders: orderStats?.pendingOrders ?? 0,
-        preparingOrders: orderStats?.preparingOrders ?? 0,
-        todayRevenue: orderStats?.totalRevenue ?? "0.00",
-        queueWaiting: queueStats?.totalWaiting ?? 0,
-      }
+      totalTables: tables?.length ?? 0,
+      availableTables: tables?.filter((t) => t.currentStatus === "AVAILABLE").length ?? 0,
+      occupiedTables: tables?.filter((t) => t.currentStatus === "OCCUPIED").length ?? 0,
+      totalOrders: orderStats?.totalOrders ?? 0,
+      pendingOrders: orderStats?.pendingOrders ?? 0,
+      preparingOrders: orderStats?.preparingOrders ?? 0,
+      todayRevenue: orderStats?.totalRevenue ?? "0.00",
+      queueWaiting: queueStats?.totalWaiting ?? 0,
+    }
     : null;
 
   return {
@@ -1286,8 +1301,7 @@ export function useStates(countryCode: string | null, search: string) {
     queryFn: () =>
       api
         .get<{ states: LocationOption[] }>(
-          `/api/meta/states${countryCode ? `?country=${encodeURIComponent(countryCode)}` : ""}${
-            search ? `${countryCode ? "&" : "?"}q=${encodeURIComponent(search)}` : ""
+          `/api/meta/states${countryCode ? `?country=${encodeURIComponent(countryCode)}` : ""}${search ? `${countryCode ? "&" : "?"}q=${encodeURIComponent(search)}` : ""
           }`,
         )
         .then((r) => r.states ?? []),
@@ -1301,8 +1315,7 @@ export function useCities(countryCode: string | null, stateCode: string | null, 
     queryFn: () =>
       api
         .get<{ cities: LocationOption[] }>(
-          `/api/meta/cities?country=${encodeURIComponent(countryCode || "")}&state=${encodeURIComponent(stateCode || "")}${
-            search ? `&q=${encodeURIComponent(search)}` : ""
+          `/api/meta/cities?country=${encodeURIComponent(countryCode || "")}&state=${encodeURIComponent(stateCode || "")}${search ? `&q=${encodeURIComponent(search)}` : ""
           }`,
         )
         .then((r) => r.cities ?? []),
@@ -1494,7 +1507,7 @@ export function useExtractionJobs(restaurantId: string | null, limit?: number) {
 
 export function useCreateExtractionJob(restaurantId: string | null) {
   const qc = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: { imageUrl: string; imageS3Key: string; imageSizeBytes: number }) =>
       api.post<{ job: ExtractionJob }>(`/api/menu/${restaurantId}/extract`, data).then(r => r.job),
@@ -1509,16 +1522,18 @@ export function useCreateExtractionJob(restaurantId: string | null) {
 
 export function useConfirmExtraction(restaurantId: string | null, jobId: string | null, slug: string | null) {
   const qc = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { items: Array<{
-      categoryName: string;
-      name: string;
-      price: number;
-      description?: string;
-      dietaryType?: 'Veg' | 'Non-Veg';
-    }> }) =>
-      api.post<{ 
+    mutationFn: (data: {
+      items: Array<{
+        categoryName: string;
+        name: string;
+        price: number;
+        description?: string;
+        dietaryType?: 'Veg' | 'Non-Veg';
+      }>
+    }) =>
+      api.post<{
         success: boolean;
         itemsCreated: number;
         items: MenuItem[];
@@ -1526,9 +1541,9 @@ export function useConfirmExtraction(restaurantId: string | null, jobId: string 
       }>(`/api/menu/${restaurantId}/extract/${jobId}/confirm`, data),
     onSuccess: async (data) => {
       toast.success(`🎉 Added ${data.itemsCreated} items to your menu!`);
-      
+
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["menu-public"] }),
         qc.invalidateQueries({ queryKey: ["menu-categories"] }),
@@ -1537,12 +1552,12 @@ export function useConfirmExtraction(restaurantId: string | null, jobId: string 
         qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) }),
         qc.invalidateQueries({ queryKey: queryKeys.restaurantBySlug(slug) }),
       ]);
-      
+
       await Promise.all([
         qc.refetchQueries({ queryKey: ["menu-public", slug], type: "active" }),
         qc.refetchQueries({ queryKey: ["menu-categories", restaurantId], type: "active" }),
       ]);
-      
+
       console.log('[Cache] Menu cache invalidated and refetched after extraction confirmation');
     },
     onError: (e: Error) => {
@@ -1741,13 +1756,15 @@ export function usePredefinedLogos(category?: string) {
   return useQuery({
     queryKey: ["predefined-logos", category],
     queryFn: () =>
-      api.get<{ logos: Array<{
-        id: string;
-        name: string;
-        thumbnail: string;
-        url: string;
-        category: string;
-      }> }>(
+      api.get<{
+        logos: Array<{
+          id: string;
+          name: string;
+          thumbnail: string;
+          url: string;
+          category: string;
+        }>
+      }>(
         `/api/logos/templates${category ? `?category=${category}` : ""}`
       ).then(r => r.logos),
   });
@@ -1757,12 +1774,14 @@ export function useRestaurantLogo(restaurantId: string | null) {
   return useQuery({
     queryKey: ["restaurant-logo", restaurantId],
     queryFn: () =>
-      api.get<{ logo: {
-        type: 'predefined' | 'custom';
-        url: string;
-        key?: string;
-        updatedAt: string;
-      } | null }>(
+      api.get<{
+        logo: {
+          type: 'predefined' | 'custom';
+          url: string;
+          key?: string;
+          updatedAt: string;
+        } | null
+      }>(
         `/api/logos/${restaurantId}`
       ).then(r => r.logo),
     enabled: !!restaurantId,

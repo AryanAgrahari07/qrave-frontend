@@ -1,0 +1,39 @@
+{
+  "waiter": {
+    "title": "Waiter Terminal",
+    "floor": "Floor Map",
+    "orders": "Active Orders",
+    "queue": "Guest Queue",
+    "seat": "Seat Party",
+    "tables": "Tables",
+    "available": "Available",
+    "occupied": "Occupied",
+    "order": "New Order",
+    "add": "Add to Order",
+    "confirm": "Send to Kitchen",
+    "items": "Items",
+    "callNext": "Call Next",
+    "noQueue": "No guests waiting",
+    "noTables": "No tables configured",
+    "noOrders": "No active orders",
+    "editOrder": "Edit Order",
+    "addItems": "Add Items",
+    "markServed": "Mark Served",
+    "ready": "Ready to Serve",
+    "preparing": "Preparing",
+    "pending": "New"
+  },
+  "kitchen": {
+    "title": "Kitchen Display (KDS)",
+    "active": "Active Orders",
+    "prepare": "Start Preparing",
+    "ready": "Mark Ready",
+    "table": "Table",
+    "noOrders": "No active orders",
+    "allDone": "Kitchen is all caught up!",
+    "mins": "min",
+    "new": "NEW",
+    "preparing": "COOKING",
+    "readyForPickup": "READY FOR PICKUP"
+  }
+}

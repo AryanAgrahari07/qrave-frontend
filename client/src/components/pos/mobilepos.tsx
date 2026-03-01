@@ -37,6 +37,7 @@ import { useState } from "react";
 import type { MenuItem, Table } from "@/types";
 import type { POSCartLineItem } from "@/types/pos";
 import { getCustomizationSummary } from "@/components/menu/Customizedorderitemdisplay";
+import { useLanguage, getTranslatedName } from "@/context/LanguageContext";
 
 type POSMode = "full" | "waiter";
 
@@ -138,6 +139,7 @@ export function MobilePOS({
   waiveServiceCharge = false,
   onToggleWaiveServiceCharge,
 }: MobilePOSProps) {
+  const { language } = useLanguage();
   const isWaiterMode = mode === "waiter";
 
   const [activeView, setActiveView] = useState<"items" | "order">("items");
@@ -190,22 +192,20 @@ export function MobilePOS({
       <div className="bg-white border-b border-gray-200 flex flex-shrink-0">
         <button
           onClick={() => setActiveView("items")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors ${
-            activeView === "items"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
+          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors ${activeView === "items"
+            ? "text-primary border-b-2 border-primary bg-primary/5"
+            : "text-gray-600"
+            }`}
         >
           <Grid3x3 className="size-5" />
           Items
         </button>
         <button
           onClick={() => setActiveView("order")}
-          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors relative ${
-            activeView === "order"
-              ? "text-primary border-b-2 border-primary bg-primary/5"
-              : "text-gray-600"
-          }`}
+          className={`flex-1 px-4 py-3 font-medium flex items-center justify-center gap-2 transition-colors relative ${activeView === "order"
+            ? "text-primary border-b-2 border-primary bg-primary/5"
+            : "text-gray-600"
+            }`}
         >
           <ShoppingCart className="size-5" />
           Order
@@ -228,13 +228,12 @@ export function MobilePOS({
                   <button
                     key={category.id}
                     onClick={() => onCategoryChange(category.id)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium text-sm ${
-                      activeCategory === category.id
-                        ? "bg-primary text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium text-sm ${activeCategory === category.id
+                      ? "bg-primary text-white shadow-md"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                   >
-                    {category.name}
+                    {getTranslatedName(category as any, language, 'category')}
                   </button>
                 ))}
               </div>
@@ -260,7 +259,7 @@ export function MobilePOS({
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 min-h-[2rem]">
-                              {item.name}
+                              {getTranslatedName(item as any, language)}
                             </h3>
                             {isCustomizable && (
                               <Badge variant="secondary" className="mt-1 text-[9px] px-1.5 py-0 h-4 inline-flex">
@@ -269,9 +268,8 @@ export function MobilePOS({
                             )}
                           </div>
                           <div
-                            className={`size-2.5 rounded-full flex-shrink-0 mt-0.5 ml-1.5 ${
-                              isVeg ? "bg-green-500" : "bg-red-500"
-                            }`}
+                            className={`size-2.5 rounded-full flex-shrink-0 mt-0.5 ml-1.5 ${isVeg ? "bg-green-500" : "bg-red-500"
+                              }`}
                             title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
                           />
                         </div>
@@ -363,13 +361,13 @@ export function MobilePOS({
                         const hasCustomization = !!(li.variantId || (li.modifierIds && li.modifierIds.length > 0));
                         const summary = hasCustomization && menuItem
                           ? getCustomizationSummary({
-                              variantName: li.variantId
-                                ? menuItem.variants?.find((v) => v.id === li.variantId)?.variantName
-                                : undefined,
-                              selectedModifiers: (li.modifierIds || []).flatMap((id) =>
-                                menuItem.modifierGroups?.flatMap((g) => g.modifiers?.filter((m) => m.id === id) || []) || []
-                              ) as any,
-                            } as any)
+                            variantName: li.variantId
+                              ? getTranslatedName(menuItem.variants?.find((v) => v.id === li.variantId) as any, language, 'variant')
+                              : undefined,
+                            selectedModifiers: (li.modifierIds || []).flatMap((id) =>
+                              menuItem.modifierGroups?.flatMap((g) => g.modifiers?.filter((m) => m.id === id) || []) || []
+                            ).map((m: any) => ({ ...m, name: getTranslatedName(m, language, 'modifier') })) as any,
+                          } as any)
                           : "";
 
                         return (
@@ -380,14 +378,13 @@ export function MobilePOS({
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 flex-1 min-w-0 w-0">
                                 <div
-                                  className={`size-2.5 rounded-full flex-shrink-0 ${
-                                    isVeg ? "bg-green-500" : "bg-red-500"
-                                  }`}
+                                  className={`size-2.5 rounded-full flex-shrink-0 ${isVeg ? "bg-green-500" : "bg-red-500"
+                                    }`}
                                 />
                                 <div className="min-w-0 w-full">
                                   <div className="flex items-center gap-1.5">
                                     <span className="font-medium text-gray-900 text-xs truncate block max-w-[140px] sm:max-w-[220px]">
-                                      {li.name}
+                                      {menuItem ? getTranslatedName(menuItem as any, language) : li.name}
                                     </span>
                                     {hasCustomization && (
                                       <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
@@ -505,60 +502,60 @@ export function MobilePOS({
                       : "grid-cols-[1fr_1fr_1fr_auto]"
                 )}>
                   {!hideTableSelect && (
-                  <div className="min-w-0">
-                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Table</Label>
-                    <Select value={tableNumber} onValueChange={onTableChange}>
-                      <SelectTrigger className="text-[10px] h-6 px-1.5">
-                        <SelectValue placeholder="Table" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tables
-                          ?.filter((t: Table) => t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE")
-                          .map((table: Table) => (
-                            <SelectItem key={table.id} value={table.id}>
-                              T{table.tableNumber}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="min-w-0">
+                      <Label className="text-[8px] text-gray-600 mb-0.5 block">Table</Label>
+                      <Select value={tableNumber} onValueChange={onTableChange}>
+                        <SelectTrigger className="text-[10px] h-6 px-1.5">
+                          <SelectValue placeholder="Table" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tables
+                            ?.filter((t: Table) => t.currentStatus === "OCCUPIED" || t.currentStatus === "AVAILABLE")
+                            .map((table: Table) => (
+                              <SelectItem key={table.id} value={table.id}>
+                                T{table.tableNumber}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
 
                   {!isWaiterMode && (
-                  <div className="min-w-0">
-                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Waiter</Label>
-                    <Select value={waiterName || "none"} onValueChange={onWaiterChange}>
-                      <SelectTrigger className="text-[10px] h-6 px-1.5">
-                        <SelectValue placeholder="Waiter" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {staff
-                          ?.filter((s: any) => s.role === "WAITER" && s.isActive)
-                          .map((waiter: any) => (
-                            <SelectItem key={waiter.id} value={waiter.id}>
-                              {waiter.fullName.split(" ")[0]}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="min-w-0">
+                      <Label className="text-[8px] text-gray-600 mb-0.5 block">Waiter</Label>
+                      <Select value={waiterName || "none"} onValueChange={onWaiterChange}>
+                        <SelectTrigger className="text-[10px] h-6 px-1.5">
+                          <SelectValue placeholder="Waiter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {staff
+                            ?.filter((s: any) => s.role === "WAITER" && s.isActive)
+                            .map((waiter: any) => (
+                              <SelectItem key={waiter.id} value={waiter.id}>
+                                {waiter.fullName.split(" ")[0]}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
 
                   {!hideOrderTypeSelect && !isWaiterMode && (
-                  <div className="min-w-0">
-                    <Label className="text-[8px] text-gray-600 mb-0.5 block">Type</Label>
-                    <Select value={diningType} onValueChange={onDiningTypeChange}>
-                      <SelectTrigger className="text-[10px] h-6 px-1.5">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dine-in">Dine-in</SelectItem>
-                        <SelectItem value="takeaway">Takeaway</SelectItem>
-                        <SelectItem value="delivery">Delivery</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="min-w-0">
+                      <Label className="text-[8px] text-gray-600 mb-0.5 block">Type</Label>
+                      <Select value={diningType} onValueChange={onDiningTypeChange}>
+                        <SelectTrigger className="text-[10px] h-6 px-1.5">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dine-in">Dine-in</SelectItem>
+                          <SelectItem value="takeaway">Takeaway</SelectItem>
+                          <SelectItem value="delivery">Delivery</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
 
                   {/* Options */}
@@ -580,7 +577,7 @@ export function MobilePOS({
 
                       {!isWaiterMode && showDiscount && (
                         <div className="space-y-1 flex flex-col items-center">
-                        <span className="text-[7px] text-gray-600 font-medium leading-none">Disc</span>
+                          <span className="text-[7px] text-gray-600 font-medium leading-none">Disc</span>
                           <Button
                             type="button"
                             variant={discountAmount.trim() ? "default" : "outline"}
@@ -699,63 +696,63 @@ export function MobilePOS({
 
               {/* Payment Method */}
               {!isWaiterMode && (
-              <div className="px-2 py-1.5 border-b border-gray-200">
-                <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
-                <div className="grid grid-cols-4 gap-1">
-                  <Button
-                    onClick={() => onPaymentMethodChange?.("cash")}
-                    variant={paymentMethod === "cash" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
-                      paymentMethod === "cash"
-                        ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100 border-2"
-                    )}
-                  >
-                    Cash
-                  </Button>
-                  <Button
-                    onClick={() => onPaymentMethodChange?.("card")}
-                    variant={paymentMethod === "card" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
-                      paymentMethod === "card"
-                        ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100 border-2"
-                    )}
-                  >
-                    Card
-                  </Button>
-                  <Button
-                    onClick={() => onPaymentMethodChange?.("upi")}
-                    variant={paymentMethod === "upi" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
-                      paymentMethod === "upi"
-                        ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100 border-2"
-                    )}
-                  >
-                    UPI
-                  </Button>
-                  <Button
-                    onClick={() => onPaymentMethodChange?.("due")}
-                    variant={paymentMethod === "due" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
-                      paymentMethod === "due"
-                        ? "bg-primary hover:bg-primary/90"
-                        : "hover:bg-gray-100 border-2"
-                    )}
-                  >
-                    Due
-                  </Button>
+                <div className="px-2 py-1.5 border-b border-gray-200">
+                  <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
+                  <div className="grid grid-cols-4 gap-1">
+                    <Button
+                      onClick={() => onPaymentMethodChange?.("cash")}
+                      variant={paymentMethod === "cash" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                        paymentMethod === "cash"
+                          ? "bg-primary hover:bg-primary/90"
+                          : "hover:bg-gray-100 border-2"
+                      )}
+                    >
+                      Cash
+                    </Button>
+                    <Button
+                      onClick={() => onPaymentMethodChange?.("card")}
+                      variant={paymentMethod === "card" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                        paymentMethod === "card"
+                          ? "bg-primary hover:bg-primary/90"
+                          : "hover:bg-gray-100 border-2"
+                      )}
+                    >
+                      Card
+                    </Button>
+                    <Button
+                      onClick={() => onPaymentMethodChange?.("upi")}
+                      variant={paymentMethod === "upi" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                        paymentMethod === "upi"
+                          ? "bg-primary hover:bg-primary/90"
+                          : "hover:bg-gray-100 border-2"
+                      )}
+                    >
+                      UPI
+                    </Button>
+                    <Button
+                      onClick={() => onPaymentMethodChange?.("due")}
+                      variant={paymentMethod === "due" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                        paymentMethod === "due"
+                          ? "bg-primary hover:bg-primary/90"
+                          : "hover:bg-gray-100 border-2"
+                      )}
+                    >
+                      Due
+                    </Button>
+                  </div>
                 </div>
-              </div>
               )}
 
               {/* Action Buttons */}
@@ -774,38 +771,38 @@ export function MobilePOS({
                     <span className="text-sm font-semibold">Send to Kitchen</span>
                   </Button>
                 ) : (
-                <div className="grid grid-cols-3 gap-1">
-                  <Button
-                    onClick={onSave!}
-                    variant="outline"
-                    disabled={!hasItems}
-                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
-                  >
-                    <Save className="size-3" />
-                    <span className="text-[8px] font-semibold mt-0.5">Save</span>
-                  </Button>
-                  <Button
-                    onClick={onSaveAndPrint!}
-                    variant="outline"
-                    disabled={!hasItems}
-                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
-                  >
-                    <Printer className="size-3" />
-                    <span className="text-[8px] font-semibold mt-0.5">Print</span>
-                  </Button>
-                  <Button
-                    onClick={onSendToKitchen}
-                    disabled={!hasItems || isLoading}
-                    className="h-9 text-xs flex flex-col items-center justify-center gap-0 bg-primary hover:bg-primary/90 text-white"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="size-3 animate-spin" />
-                    ) : (
-                      <ChefHat className="size-3" />
-                    )}
-                    <span className="text-[8px] font-semibold mt-0.5">Kitchen</span>
-                  </Button>
-                </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <Button
+                      onClick={onSave!}
+                      variant="outline"
+                      disabled={!hasItems}
+                      className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
+                    >
+                      <Save className="size-3" />
+                      <span className="text-[8px] font-semibold mt-0.5">Save</span>
+                    </Button>
+                    <Button
+                      onClick={onSaveAndPrint!}
+                      variant="outline"
+                      disabled={!hasItems}
+                      className="h-9 text-xs flex flex-col items-center justify-center gap-0 hover:bg-gray-100"
+                    >
+                      <Printer className="size-3" />
+                      <span className="text-[8px] font-semibold mt-0.5">Print</span>
+                    </Button>
+                    <Button
+                      onClick={onSendToKitchen}
+                      disabled={!hasItems || isLoading}
+                      className="h-9 text-xs flex flex-col items-center justify-center gap-0 bg-primary hover:bg-primary/90 text-white"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <ChefHat className="size-3" />
+                      )}
+                      <span className="text-[8px] font-semibold mt-0.5">Kitchen</span>
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

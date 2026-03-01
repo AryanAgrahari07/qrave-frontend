@@ -37,7 +37,7 @@ export function ItemCustomizationContent({
     setQuantity(1);
     const defaultVariant = menuItem.variants?.find(v => v.isDefault);
     setSelectedVariantId(defaultVariant?.id);
-    
+
     const defaultModifiers = new Set<string>();
     menuItem.modifierGroups?.forEach(group => {
       group.modifiers?.forEach(mod => {
@@ -128,152 +128,152 @@ export function ItemCustomizationContent({
       {/* Content - Same as before but without Dialog wrapper */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
-            {/* Variants Section */}
-            {menuItem.variants && menuItem.variants.length > 0 && (
-              <div className="space-y-2 sm:space-y-3">
-                <Label className="text-sm sm:text-base font-bold">
-                  Size / Portion <span className="text-destructive">*</span>
-                </Label>
-                <RadioGroup
-                  value={selectedVariantId}
-                  onValueChange={setSelectedVariantId}
-                  className="space-y-1.5 sm:space-y-2"
-                >
-                  {menuItem.variants
-                    .filter(v => v.isAvailable)
-                    .map((variant) => (
-                      <div
-                        key={variant.id}
-                        className={cn(
-                          "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
-                          selectedVariantId === variant.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        )}
-                        onClick={() => setSelectedVariantId(variant.id)}
-                      >
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                          <RadioGroupItem value={variant.id} id={variant.id} className="shrink-0" />
-                          <Label
-                            htmlFor={variant.id}
-                            className="cursor-pointer font-medium text-sm sm:text-base truncate"
-                          >
-                            {variant.variantName}
-                            {variant.isDefault && (
-                              <Badge variant="outline" className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
-                                Popular
-                              </Badge>
-                            )}
-                          </Label>
-                        </div>
-                        <span className="font-bold text-primary text-sm sm:text-base shrink-0 ml-2">
-                          {currency}{parseFloat(variant.price as any).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                </RadioGroup>
-              </div>
-            )}
-
-            {/* Modifier Groups Section */}
-            {menuItem.modifierGroups && menuItem.modifierGroups.length > 0 && (
-              <>
-                {menuItem.variants && menuItem.variants.length > 0 && <Separator className="my-3 sm:my-4" />}
-                
-                {menuItem.modifierGroups.map((group) => {
-                  const availableModifiers = group.modifiers?.filter(m => m.isAvailable) || [];
-                  if (availableModifiers.length === 0) return null;
-
-                  return (
-                    <div key={group.id} className="space-y-2 sm:space-y-3">
-                      <div>
-                        <Label className="text-sm sm:text-base font-bold">
-                          {group.name}
-                          {group.isRequired && (
-                            <span className="text-destructive ml-1">*</span>
+          {/* Variants Section */}
+          {menuItem.variants && menuItem.variants.length > 0 && (
+            <div className="space-y-2 sm:space-y-3">
+              <Label className="text-sm sm:text-base font-bold">
+                Size / Portion <span className="text-destructive">*</span>
+              </Label>
+              <RadioGroup
+                value={selectedVariantId}
+                onValueChange={setSelectedVariantId}
+                className="space-y-1.5 sm:space-y-2"
+              >
+                {menuItem.variants
+                  .filter(v => v.isAvailable)
+                  .map((variant) => (
+                    <div
+                      key={variant.id}
+                      className={cn(
+                        "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
+                        selectedVariantId === variant.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      )}
+                      onClick={() => setSelectedVariantId(variant.id)}
+                    >
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                        <RadioGroupItem value={variant.id} id={variant.id} className="shrink-0" />
+                        <Label
+                          htmlFor={variant.id}
+                          className="cursor-pointer font-medium text-sm sm:text-base truncate"
+                        >
+                          {variant.variantName}
+                          {variant.isDefault && (
+                            <Badge variant="outline" className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
+                              Popular
+                            </Badge>
                           )}
                         </Label>
-                        {group.description && (
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
-                            {group.description}
-                          </p>
-                        )}
-                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                          {group.selectionType === "SINGLE" ? (
-                            "Choose one"
-                          ) : (
-                            <>
-                              Choose {group.minSelections || 0}
-                              {group.maxSelections ? ` to ${group.maxSelections}` : "+"}
-                            </>
-                          )}
-                        </p>
                       </div>
-
-                      <div className="space-y-1.5 sm:space-y-2">
-                        {availableModifiers.map((modifier) => {
-                          const isSelected = selectedModifierIds.has(modifier.id);
-                          const modPrice = parseFloat(modifier.price as any);
-
-                          return (
-                            <div
-                              key={modifier.id}
-                              className={cn(
-                                "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
-                                isSelected
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50"
-                              )}
-                              onClick={() => handleModifierToggle(modifier.id, group)}
-                            >
-                              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                {group.selectionType === "SINGLE" ? (
-                                  <RadioGroupItem
-                                    value={modifier.id}
-                                    id={modifier.id}
-                                    checked={isSelected}
-                                    className="pointer-events-none shrink-0"
-                                  />
-                                ) : (
-                                  <Checkbox
-                                    id={modifier.id}
-                                    checked={isSelected}
-                                    className="pointer-events-none shrink-0"
-                                  />
-                                )}
-                                <Label
-                                  htmlFor={modifier.id}
-                                  className="cursor-pointer font-medium text-sm sm:text-base truncate"
-                                >
-                                  {modifier.name}
-                                  {modifier.isDefault && (
-                                    <Badge variant="outline" className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
-                                      Popular
-                                    </Badge>
-                                  )}
-                                </Label>
-                              </div>
-                              {modPrice > 0 && (
-                                <span className="font-bold text-xs sm:text-sm shrink-0 ml-2">
-                                  +{currency}{modPrice.toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <span className="font-bold text-primary text-sm sm:text-base shrink-0 ml-2">
+                        {currency}{parseFloat(variant.price as any).toFixed(2)}
+                      </span>
                     </div>
-                  );
-                })}
-              </>
-            )}
+                  ))}
+              </RadioGroup>
+            </div>
+          )}
 
-            {!hasCustomization && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <p>No customization options available for this item.</p>
-              </div>
-            )}
-          </div>
+          {/* Modifier Groups Section */}
+          {menuItem.modifierGroups && menuItem.modifierGroups.length > 0 && (
+            <>
+              {menuItem.variants && menuItem.variants.length > 0 && <Separator className="my-3 sm:my-4" />}
+
+              {menuItem.modifierGroups.map((group) => {
+                const availableModifiers = group.modifiers?.filter(m => m.isAvailable) || [];
+                if (availableModifiers.length === 0) return null;
+
+                return (
+                  <div key={group.id} className="space-y-2 sm:space-y-3">
+                    <div>
+                      <Label className="text-sm sm:text-base font-bold">
+                        {group.name}
+                        {group.isRequired && (
+                          <span className="text-destructive ml-1">*</span>
+                        )}
+                      </Label>
+                      {group.description && (
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                          {group.description}
+                        </p>
+                      )}
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
+                        {group.selectionType === "SINGLE" ? (
+                          "Choose one"
+                        ) : (
+                          <>
+                            Choose {group.minSelections || 0}
+                            {group.maxSelections ? ` to ${group.maxSelections}` : "+"}
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 sm:space-y-2">
+                      {availableModifiers.map((modifier) => {
+                        const isSelected = selectedModifierIds.has(modifier.id);
+                        const modPrice = parseFloat(modifier.price as any);
+
+                        return (
+                          <div
+                            key={modifier.id}
+                            className={cn(
+                              "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
+                              isSelected
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() => handleModifierToggle(modifier.id, group)}
+                          >
+                            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                              {group.selectionType === "SINGLE" ? (
+                                <RadioGroupItem
+                                  value={modifier.id}
+                                  id={modifier.id}
+                                  checked={isSelected}
+                                  className="pointer-events-none shrink-0"
+                                />
+                              ) : (
+                                <Checkbox
+                                  id={modifier.id}
+                                  checked={isSelected}
+                                  className="pointer-events-none shrink-0"
+                                />
+                              )}
+                              <Label
+                                htmlFor={modifier.id}
+                                className="cursor-pointer font-medium text-sm sm:text-base truncate"
+                              >
+                                {modifier.name}
+                                {modifier.isDefault && (
+                                  <Badge variant="outline" className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
+                                    Popular
+                                  </Badge>
+                                )}
+                              </Label>
+                            </div>
+                            {modPrice > 0 && (
+                              <span className="font-bold text-xs sm:text-sm shrink-0 ml-2">
+                                +{currency}{modPrice.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {!hasCustomization && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              <p>No customization options available for this item.</p>
+            </div>
+          )}
+        </div>
       </ScrollArea>
 
       {/* Footer */}

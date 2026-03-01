@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { PrinterProvider } from "@/context/PrinterContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import NotFound from "@/pages/not-found";
 
 // Pages
@@ -79,14 +80,16 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <PrinterProvider width={32}>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </PrinterProvider>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <PrinterProvider width={32}>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </PrinterProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

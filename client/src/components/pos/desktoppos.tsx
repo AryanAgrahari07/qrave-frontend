@@ -48,6 +48,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
+import { useLanguage } from "@/context/LanguageContext";
+import { getTranslatedName } from "@/context/LanguageContext";
 
 type POSMode = "full" | "waiter";
 
@@ -163,6 +165,7 @@ export function DesktopPOS({
   waiveServiceCharge = false,
   onToggleWaiveServiceCharge,
 }: DesktopPOSProps) {
+  const { language } = useLanguage();
   const isWaiterMode = mode === "waiter";
 
   const discountNum = Math.max(0, parseFloat(discountAmount || "0") || 0);
@@ -171,7 +174,8 @@ export function DesktopPOS({
     if (!searchQuery && activeCategory) {
       return item.categoryId === activeCategory && item.isAvailable;
     } else if (searchQuery) {
-      return item.isAvailable && item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const translatedName = getTranslatedName(item as any, language);
+      return item.isAvailable && translatedName.toLowerCase().includes(searchQuery.toLowerCase());
     }
     return false;
   });
@@ -287,7 +291,7 @@ export function DesktopPOS({
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             )}
                           >
-                            {category.name}
+                            {getTranslatedName(category as any, language, 'category')}
                           </button>
                         ))}
                       </div>
@@ -359,7 +363,7 @@ export function DesktopPOS({
                           >
                             <div className="flex items-start justify-between mb-2">
                               <h3 className="font-semibold text-gray-900 flex-1 text-xs sm:text-sm line-clamp-2 leading-tight">
-                                {item.name}
+                                {getTranslatedName(item as any, language)}
                               </h3>
                               <div
                                 className={cn(
@@ -751,16 +755,16 @@ export function DesktopPOS({
                                   />
                                   <div className="flex flex-col min-w-0 flex-1">
                                     <span className="font-semibold text-gray-900 text-[10px] md:text-[11px] break-all whitespace-normal block leading-tight">
-                                      {item.name}
+                                      {menuItem ? getTranslatedName(menuItem as any, language) : item.name}
                                     </span>
                                     {selectedVariant && (
                                       <span className="text-[8px] md:text-[9px] text-blue-600 break-all whitespace-normal block leading-tight">
-                                        {selectedVariant.variantName}
+                                        {getTranslatedName(selectedVariant as any, language, 'variant')}
                                       </span>
                                     )}
                                     {selectedModifiers.length > 0 && (
                                       <span className="text-[8px] md:text-[9px] text-amber-600 break-all whitespace-normal block leading-tight">
-                                        + {selectedModifiers.map((m) => m.name).join(", ")}
+                                        + {selectedModifiers.map((m) => getTranslatedName(m as any, language, 'modifier')).join(", ")}
                                       </span>
                                     )}
                                   </div>
