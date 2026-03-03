@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 interface MenuCardUploaderProps {
   restaurantId: string | null;
@@ -63,20 +64,14 @@ export function MenuCardUploader({ restaurantId, onExtractionComplete }: MenuCar
 
     try {
       // Step 1: Get presigned URL
-      const urlResponse = await fetch(`/api/menu/${restaurantId}/menu-card/upload-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const { jobId, uploadUrl, publicUrl, key }: UploadUrlResponse = await api.post(
+        `/api/menu/${restaurantId}/menu-card/upload-url`,
+        {
           fileName: file.name,
           fileSize: file.size,
           contentType: file.type,
-        }),
-      });
-
-      if (!urlResponse.ok) throw new Error("Failed to get upload URL");
-
-      const { jobId, uploadUrl, publicUrl, key }: UploadUrlResponse = await urlResponse.json();
+        },
+      );
       setUploadProgress(20);
 
       // Step 2: Upload to S3
@@ -90,20 +85,14 @@ export function MenuCardUploader({ restaurantId, onExtractionComplete }: MenuCar
       setUploadProgress(50);
 
       // Step 3: Create extraction job
-      const jobResponse = await fetch(`/api/menu/${restaurantId}/extract`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const { job }: ExtractionJobResponse = await api.post(
+        `/api/menu/${restaurantId}/extract`,
+        {
           imageUrl: publicUrl,
           imageS3Key: key,
           imageSizeBytes: file.size,
-        }),
-      });
-
-      if (!jobResponse.ok) throw new Error("Failed to create job");
-
-      const { job }: ExtractionJobResponse = await jobResponse.json();
+        },
+      );
       setUploadProgress(100);
 
       toast.success("🎉 Image uploaded! AI is analyzing your menu...");

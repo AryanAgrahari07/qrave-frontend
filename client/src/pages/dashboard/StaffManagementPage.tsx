@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { UserPlus, Users, UserCircle, ChefHat, Trash2, Loader2, RefreshCw, ShieldCheck, Eye, Mail, Phone, Calendar, Shield } from "lucide-react";
+import { UserPlus, Users, UserCircle, ChefHat, Trash2, Loader2, RefreshCw, ShieldCheck, Eye, Mail, Phone, Calendar, Shield, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type StaffRow = {
   id: string;
+  staffCode?: string | null;
   fullName: string;
   phoneNumber?: string | null;
   email?: string | null;
@@ -39,11 +40,11 @@ function useStaff(restaurantId: string | null) {
 function useCreateStaff(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { displayName: string; role: "admin" | "WAITER" | "KITCHEN"; email: string; phoneNumber?: string; passcode?: string }) => {
+    mutationFn: async (data: { displayName: string; role: "admin" | "WAITER" | "KITCHEN"; email?: string; phoneNumber?: string; passcode?: string }) => {
       const backendData = {
         fullName: data.displayName,
         role: data.role === "admin" ? "ADMIN" : data.role,
-        email: data.email,
+        email: data.email || undefined,
         phoneNumber: data.phoneNumber,
         passcode: data.passcode,
       };
@@ -91,12 +92,12 @@ export default function StaffManagementPage() {
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
 
   const handleSubmit = async () => {
-    if (!formData.displayName || !formData.email) return;
+    if (!formData.displayName) return;
     
     try {
       await createStaff.mutateAsync({
         displayName: formData.displayName,
-        email: formData.email,
+        email: formData.email || undefined,
         phoneNumber: formData.phoneNumber || undefined,
         role: formData.role,
         passcode: formData.passcode || undefined,
@@ -202,9 +203,14 @@ export default function StaffManagementPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm sm:text-base truncate">{s.fullName}</p>
-                        {s.email ? (
-                          <p className="text-[10px] sm:text-xs text-gray-500 truncate">{s.email}</p>
-                        ) : null}
+                        <div className="flex flex-col gap-0.5">
+                          {s.staffCode ? (
+                            <p className="text-[10px] sm:text-xs text-gray-500 truncate">Code: {s.staffCode}</p>
+                          ) : null}
+                          {s.email ? (
+                            <p className="text-[10px] sm:text-xs text-gray-500 truncate">{s.email}</p>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -338,7 +344,7 @@ export default function StaffManagementPage() {
               <Button 
                 onClick={handleSubmit} 
                 className="w-full sm:w-auto h-9 sm:h-10 text-sm" 
-                disabled={createStaff.isPending || !formData.displayName || !formData.email}
+                disabled={createStaff.isPending || !formData.displayName}
               >
                 {createStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Add Staff Member
@@ -386,6 +392,26 @@ export default function StaffManagementPage() {
                         <Badge variant={selectedStaff.isActive ? "outline" : "destructive"} className="text-xs">
                           {selectedStaff.isActive ? "Active" : "Inactive"}
                         </Badge>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Staff Code (Login)</Label>
+                      <div className="flex items-center gap-2">
+                        <p className="font-mono text-sm sm:text-base">{selectedStaff.staffCode || "—"}</p>
+                        {selectedStaff.staffCode ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedStaff.staffCode!);
+                              toast.success("Staff code copied");
+                            }}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   </div>

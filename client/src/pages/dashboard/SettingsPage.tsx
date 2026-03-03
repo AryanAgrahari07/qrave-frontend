@@ -19,6 +19,7 @@ import {
   Layers,
   Check,
   ChevronsUpDown,
+  Crown,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -32,7 +33,9 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { useRestaurant, useUpdateRestaurant, useCountries, useStates, useCities, useCurrencies } from "@/hooks/api";
 import type { RestaurantSettings, LocationOption, CurrencyOption } from "@/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -62,8 +65,15 @@ const SHOP_TYPES = [
 
 export default function SettingsPage() {
   const { restaurantId } = useAuth();
+  const { subscription } = useSubscription();
   const { data: restaurant } = useRestaurant(restaurantId);
   const updateRestaurant = useUpdateRestaurant();
+
+  let daysRemaining = null;
+  if (subscription?.subscriptionValidUntil) {
+    const diff = new Date(subscription.subscriptionValidUntil).getTime() - new Date().getTime();
+    daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 3600 * 24)));
+  }
 
   const [shopType, setShopType] = useState("cafe");
   const [restaurantName, setRestaurantName] = useState("");
@@ -260,6 +270,64 @@ export default function SettingsPage() {
     <DashboardLayout>
       <div className="max-w-4xl w-full mx-auto px-2 sm:px-0 pb-6 sm:pb-8">
         <div className="grid gap-4 sm:gap-6">
+          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-white to-transparent overflow-hidden relative shadow-sm">
+            <div className="absolute -top-6 -right-6 p-4 opacity-[0.03] pointer-events-none">
+              <Crown className="w-48 h-48" />
+            </div>
+            <CardHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-2 sm:pb-4 relative z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Crown className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
+                  Subscription Plan
+                </CardTitle>
+              </div>
+              <CardDescription className="text-sm font-medium text-gray-500">
+                Manage your Qrave plan, billing features, and renewals.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 px-4 sm:px-6 pb-5 sm:pb-6 relative z-10">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 bg-white/80 backdrop-blur-sm rounded-xl border border-primary/10 shadow-sm gap-4 transition-all hover:shadow-md">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-3">
+                    <p className="font-extrabold text-lg sm:text-xl text-gray-900 tracking-tight">
+                      {subscription?.plan || "Trial"} Plan
+                    </p>
+                    {daysRemaining !== null && daysRemaining > 0 ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                        Active
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider">
+                        Expired
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 font-medium flex items-center gap-1.5">
+                    {daysRemaining !== null
+                      ? daysRemaining > 0
+                        ? <><Check className="w-4 h-4 text-green-500" /> {daysRemaining} days remaining in your billing cycle</>
+                        : "Your subscription has expired."
+                      : "No active subscription found"}
+                  </p>
+                </div>
+                <Link href="/admin/subscription-expired">
+                  <Button
+                    className={cn(
+                      "w-full sm:w-auto shadow-sm hover:shadow-md transition-all font-semibold",
+                      daysRemaining === null || daysRemaining <= 0 ? "animate-pulse" : ""
+                    )}
+                    size="lg"
+                  >
+                    {daysRemaining !== null && daysRemaining > 0 ? "Upgrade / Renew" : "Subscribe Now"}
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-4">
               <CardTitle>Business Profile</CardTitle>

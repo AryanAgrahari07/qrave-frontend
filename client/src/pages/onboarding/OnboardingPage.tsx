@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { secureStorage } from "@/lib/secureStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRazorpay } from "@/hooks/useRazorpay";
 
 const STEPS = [
   { id: 1, title: "Account & Restaurant", icon: Store },
@@ -16,11 +20,7 @@ const STEPS = [
   { id: 3, title: "Tables Setup", icon: Palette },
 ];
 
-const PLANS = [
-  { name: "STARTER", displayName: "Starter", price: "Free", features: ["10 Menu Items", "Basic QR Codes", "Email Support"] },
-  { name: "PRO", displayName: "Pro", price: "₹2,999/mo", features: ["Unlimited Items", "Custom Branding", "Analytics Dashboard", "Priority Support"], popular: true },
-  { name: "ENTERPRISE", displayName: "Enterprise", price: "₹9,999/mo", features: ["Multi-location", "API Access", "Dedicated Manager", "Custom Integrations"] },
-];
+
 
 const RESTAURANT_TYPES = ["Restaurant", "Cafe", "Bar", "Fine Dining", "Fast Food", "Food Truck"];
 
@@ -46,6 +46,25 @@ export default function OnboardingPage() {
   const { onboardingComplete } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdData, setCreatedData] = useState<any>(null);
+
+  const queryClient = useQueryClient();
+
+  const isRazorpayLoaded = useRazorpay();
+
+  const { data: serverPlans } = useQuery({
+    queryKey: ["subscriptionPlans"],
+    queryFn: async () => {
+      const res = await api.get<any>("/api/subscriptions/plans");
+      return res;
+    }
+  });
+
+  const PLANS = [
+    { name: "STARTER", displayName: "Starter", price: serverPlans?.STARTER?.amount ? `₹${serverPlans.STARTER.amount}/mo` : "Free", features: ["10 Menu Items", "Basic QR Codes", "Email Support"] },
+    { name: "PRO", displayName: "Pro", price: serverPlans?.PRO?.amount ? `₹${serverPlans.PRO.amount}/mo` : "₹2,999/mo", features: ["Unlimited Items", "Custom Branding", "Analytics Dashboard", "Priority Support"], popular: true },
+    { name: "ENTERPRISE", displayName: "Enterprise", price: serverPlans?.ENTERPRISE?.amount ? `₹${serverPlans.ENTERPRISE.amount}/mo` : "₹9,999/mo", features: ["Multi-location", "API Access", "Dedicated Manager", "Custom Integrations"] },
+  ];
 
   const [formData, setFormData] = useState<OnboardingData>({
     email: "",
@@ -91,45 +110,125 @@ export default function OnboardingPage() {
     setError(null);
 
     try {
-      // Call the quick-start onboarding API
-      const response = await api.post<{
-        success: boolean;
-        user: { id: string; email: string; fullName: string; role: string };
-        restaurant: { id: string; name: string; slug: string };
-        token: string;
-        tables: unknown[];
-        categories: unknown[];
-      }>("/api/onboarding/quick-start", {
-        user: {
-          email: formData.email,
-          password: formData.password,
-          fullName: formData.fullName,
-        },
-        restaurant: {
-          name: formData.restaurantName,
-          slug: formData.slug,
-          type: formData.type,
-          currency: formData.currency,
-          plan: formData.plan,
-        },
-        tableCount: formData.tableCount,
-        useDefaultCategories: true,
-      });
+      let currentData = createdData;
 
-      // Update auth context with new user
-      onboardingComplete({
-        user: response.user,
-        token: response.token,
-        restaurant: response.restaurant,
-      });
+      if (!currentData) {
+        // Call the quick-start onboarding API
+        const isNative = Capacitor.isNativePlatform();
+        const response = await api.post<{
+          success: boolean;
+          user: { id: string; email: string; fullName: string; role: string };
+          restaurant: { id: string; name: string; slug: string };
+          token: string;
+          refreshToken?: string;
+          tables: unknown[];
+          categories: unknown[];
+        }>(isNative ? "/api/onboarding/quick-start?includeRefresh=true" : "/api/onboarding/quick-start", {
+          user: {
+            email: formData.email,
+            password: formData.password,
+            fullName: formData.fullName,
+          },
+          restaurant: {
+            name: formData.restaurantName,
+            slug: formData.slug,
+            type: formData.type,
+            currency: formData.currency,
+            plan: formData.plan,
+          },
+          tableCount: formData.tableCount,
+          useDefaultCategories: true,
+          language: navigator.language.split("-")[0] || "en",
+        });
 
-      toast.success("Welcome to Qrave! Your restaurant is ready.");
-      setLocation("/dashboard");
+        if (isNative && response.refreshToken) {
+          await secureStorage.set("qrave_refresh_token", response.refreshToken);
+        }
+
+        // Update auth context with new user
+        onboardingComplete({
+          user: response.user,
+          token: response.token,
+          refreshToken: response.refreshToken,
+          restaurant: response.restaurant,
+        });
+
+        currentData = response;
+        setCreatedData(response);
+      }
+
+      if (formData.plan !== "STARTER") {
+        if (!isRazorpayLoaded) {
+          toast.error("Failed to load payment gateway. Continuing to dashboard...");
+          setLocation("/dashboard");
+          return;
+        }
+
+        try {
+          setIsSubmitting(true);
+          // Create order
+          const order = await api.post<any>(`/api/subscriptions/${currentData.restaurant.id}/create-order`, { plan: formData.plan });
+
+
+
+          // Open Razorpay Checkout
+          const options = {
+            key: order.keyId,
+            amount: order.amount * 100,
+            currency: order.currency,
+            name: "Qrave",
+            description: `${formData.plan} Subscription`,
+            order_id: order.razorpayOrderId,
+            handler: async (paymentResponse: any) => {
+              try {
+                await api.post(`/api/subscriptions/${currentData.restaurant.id}/verify-payment`, {
+                  razorpayOrderId: paymentResponse.razorpay_order_id,
+                  razorpayPaymentId: paymentResponse.razorpay_payment_id,
+                  razorpaySignature: paymentResponse.razorpay_signature,
+                });
+                toast.success("Welcome to Qrave! Payment successful.");
+                setIsSubmitting(false);
+                queryClient.invalidateQueries({ queryKey: ["subscription"] });
+                setLocation("/dashboard");
+              } catch (err: any) {
+                toast.error(err.message || "Payment verification failed.");
+                setIsSubmitting(false);
+              }
+            },
+            prefill: {
+              name: formData.fullName,
+              email: formData.email,
+            },
+            theme: {
+              color: "#0f172a",
+            },
+            modal: {
+              ondismiss: () => {
+                toast.error("Payment cancelled. You can complete it from the setup page or settings.");
+                setIsSubmitting(false);
+              },
+            },
+          };
+
+          const rzp = new (window as any).Razorpay(options);
+          rzp.on('payment.failed', function (response: any) {
+            toast.error(`Payment failed: ${response.error.description}`);
+            setIsSubmitting(false);
+          });
+          rzp.open();
+        } catch (err: any) {
+          toast.error("Failed to initiate payment.");
+          setIsSubmitting(false);
+        }
+      } else {
+        toast.success("Welcome to Qrave! Your restaurant is ready.");
+        setIsSubmitting(false);
+        setLocation("/dashboard");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create account";
       setError(message);
       toast.error(message);
-    } finally {
       setIsSubmitting(false);
     }
   };

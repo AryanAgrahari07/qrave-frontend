@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,24 +11,44 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [_, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState(""); // email for ADMIN
   const [password, setPassword] = useState("");
+
+  // Staff credentials
+  const [staffCodeDigits, setStaffCodeDigits] = useState("");
+  const [staffPasscode, setStaffPasscode] = useState("");
   const [role, setRole] = useState<"ADMIN" | "WAITER" | "KITCHEN">("ADMIN");
-  const { login, staffLogin, isLoading: authLoading } = useAuth();
+
+  // Reset inputs when switching roles
+  useEffect(() => {
+    setStaffCodeDigits("");
+    setStaffPasscode("");
+  }, [role]);
+  const { login, staffLogin, isLoading: authLoading, user, isReady, restaurantId } = useAuth();
   const isLoading = authLoading;
+
+  // Prevent login page flash if user is already restored from cache.
+  useEffect(() => {
+    if (!isReady) return;
+    if (user) setLocation("/app");
+  }, [isReady, user, setLocation]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { user } =
-        role === "ADMIN"
-          ? await login(email, password)
-          : await staffLogin(email, password); // `password` field used as passcode for staff terminals
+      if (role === "ADMIN") {
+        await login(identifier, password);
+      } else {
+        const prefix = role === "WAITER" ? "W-" : role === "KITCHEN" ? "K-" : "";
+        let finalCode = staffCodeDigits;
+        if (/^\d+$/.test(staffCodeDigits)) {
+          finalCode = `${prefix}${staffCodeDigits}`;
+        }
+        await staffLogin(finalCode, staffPasscode);
+      }
+
       toast.success("Welcome back to Qrave!");
-      const r = user?.role ?? role;
-      if (r === "KITCHEN") setLocation("/kitchen");
-      else if (r === "WAITER") setLocation("/waiter");
-      else setLocation("/dashboard");
+      setLocation("/app");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     }
@@ -61,8 +81,8 @@ export default function LoginPage() {
                   onClick={() => setRole(r.id as any)}
                   className={cn(
                     "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
-                    role === r.id 
-                      ? "border-primary bg-primary/5 text-primary shadow-md" 
+                    role === r.id
+                      ? "border-primary bg-primary/5 text-primary shadow-md"
                       : "border-border text-muted-foreground hover:border-primary/50"
                   )}
                 >
@@ -74,25 +94,78 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="owner@restaurant.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 bg-muted/30" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{role === "ADMIN" ? "Password" : "Passcode"}</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-11 bg-muted/30"
-                placeholder={role === "ADMIN" ? "••••" : "4-digit PIN"}
-                maxLength={role === "ADMIN" ? undefined : 50}
-              />
-            </div>
-            
-            <Button type="submit" className="w-full h-12 text-base font-bold shadow-lg shadow-primary/20" disabled={isLoading}>
+            {role === "ADMIN" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="identifier">Email</Label>
+                  <Input
+                    id="identifier"
+                    type="email"
+                    placeholder="owner@restaurant.com"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    required
+                    className="h-11 bg-muted/30"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-11 bg-muted/30"
+                    placeholder="••••"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="staffCode">Staff Code</Label>
+                  <Input
+                    id="staffCode"
+                    type="text"
+                    placeholder="Enter Staff Code"
+                    value={staffCodeDigits}
+                    onChange={(e) => setStaffCodeDigits(e.target.value)}
+                    required
+                    className="h-11 bg-muted/30"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="staffPasscode">Passcode</Label>
+                  <Input
+                    id="staffPasscode"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="••••"
+                    value={staffPasscode}
+                    onChange={(e) => setStaffPasscode(e.target.value)}
+                    required
+                    maxLength={6}
+                    className="h-11 bg-muted/30"
+                  />
+                </div>
+              </>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full h-12 text-base font-bold shadow-lg shadow-primary/20"
+              disabled={
+                isLoading ||
+                (role === "ADMIN" ? !identifier || !password : !staffCodeDigits || !staffPasscode)
+              }
+            >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : `Sign in as ${role}`}
             </Button>
           </form>
@@ -109,9 +182,9 @@ export default function LoginPage() {
       </div>
 
       <div className="hidden lg:block relative overflow-hidden bg-zinc-900">
-        <img 
-          src={bgImage} 
-          alt="Restaurant Interior" 
+        <img
+          src={bgImage}
+          alt="Restaurant Interior"
           className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />

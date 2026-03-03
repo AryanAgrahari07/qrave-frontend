@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
+import { SubscriptionProvider } from "@/context/SubscriptionContext";
 import { PrinterProvider } from "@/context/PrinterContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import NotFound from "@/pages/not-found";
@@ -28,7 +29,9 @@ import WaiterTerminalPage from "@/pages/dashboard/WaiterTerminalPage";
 import StaffManagementPage from "@/pages/dashboard/StaffManagementPage";
 import PublicMenuPage from "@/pages/public/PublicMenuPage";
 import QueueRegistrationPage from "@/pages/public/QueueRegistrationPage";
+import SubscriptionExpiredPage from "@/pages/admin/SubscriptionExpiredPage";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthGate } from "@/components/AuthGate";
 
 function Router() {
   return (
@@ -37,6 +40,11 @@ function Router() {
       <Route path="/auth" component={LoginPage} />
       <Route path="/signup" component={OnboardingPage} />
       <Route path="/onboarding" component={OnboardingPage} />
+
+      {/* Auto route to role-specific area */}
+      <Route path="/app">
+        {() => <AuthGate />}
+      </Route>
 
       {/* Staff Direct Access Routes - Protected */}
       <Route path="/kitchen">
@@ -54,23 +62,103 @@ function Router() {
         )}
       </Route>
 
-      {/* Dashboard Routes */}
-      <Route path="/dashboard" component={DashboardPage} />
-      <Route path="/dashboard/orders" component={LiveOrdersPage} />
-      <Route path="/dashboard/orders/cancelled" component={CancelledOrdersPage} />
-      <Route path="/dashboard/floor-map" component={FloorMapPage} />
-      <Route path="/dashboard/queue" component={QueuePage} />
-      <Route path="/dashboard/transactions" component={TransactionsPage} />
-      <Route path="/dashboard/staff" component={StaffManagementPage} />
-      <Route path="/dashboard/menu" component={MenuPage} />
-      <Route path="/dashboard/inventory" component={InventoryPage} />
-      <Route path="/dashboard/qr" component={QRCodesPage} />
-      <Route path="/dashboard/analytics" component={AnalyticsPage} />
-      <Route path="/dashboard/settings" component={SettingsPage} />
+      {/* Dashboard Routes (Protected) */}
+      <Route path="/dashboard">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <DashboardPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/orders">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <LiveOrdersPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/orders/cancelled">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <CancelledOrdersPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/floor-map">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <FloorMapPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/queue">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <QueuePage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/transactions">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <TransactionsPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/staff">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <StaffManagementPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/menu">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <MenuPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/inventory">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <InventoryPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/qr">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <QRCodesPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/analytics">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <AnalyticsPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/settings">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
+            <SettingsPage />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Public Routes */}
       <Route path="/r/:slug" component={PublicMenuPage} />
       <Route path="/q/:slug" component={QueueRegistrationPage} />
+
+      <Route path="/admin/subscription-expired">
+        {() => (
+          <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]} requireSubscription={false}>
+            <SubscriptionExpiredPage />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       <Route component={NotFound} />
     </Switch>
@@ -82,12 +170,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
         <AuthProvider>
-          <PrinterProvider width={32}>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </PrinterProvider>
+          <SubscriptionProvider>
+            <PrinterProvider width={32}>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </PrinterProvider>
+          </SubscriptionProvider>
         </AuthProvider>
       </LanguageProvider>
     </QueryClientProvider>

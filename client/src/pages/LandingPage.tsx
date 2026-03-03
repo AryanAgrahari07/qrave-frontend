@@ -10,7 +10,8 @@ import {
   ChevronRight, MousePointer2, Layers, Globe, TrendingUp,
   ChefHat, Timer, Flame
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/context/AuthContext";
 import heroImage from "@/assets/images/hero-dashboard.png";
 import testimonial1 from "@/assets/images/testimonial-1.jpg";
 import testimonial2 from "@/assets/images/testimonial-2.jpg";
@@ -26,6 +27,8 @@ const foodImages = [food1, food2, food3, food4];
 
 export default function LandingPage() {
   const [currentFood, setCurrentFood] = useState(0);
+  const [, setLocation] = useLocation();
+  const { user, isReady } = useAuth();
   const targetRef = useRef(null);
   // const { scrollYProgress } = useScroll({
   //   target: targetRef,
@@ -41,6 +44,12 @@ export default function LandingPage() {
     }, 4000);
     return () => clearInterval(timer);
   }, []);
+
+  // Web instant launch: if already authenticated, jump straight into the app.
+  useEffect(() => {
+    if (!isReady) return;
+    if (user) setLocation("/app");
+  }, [isReady, user, setLocation]);
 
   return (
     <MarketingLayout>

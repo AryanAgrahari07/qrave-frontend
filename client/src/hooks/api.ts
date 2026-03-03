@@ -1063,20 +1063,9 @@ export function useExportTransactionsCSV(restaurantId: string | null) {
       if (opts?.paymentMethod) params.set("paymentMethod", opts.paymentMethod);
       const q = params.toString();
 
-      const response = await fetch(
+      const blob = await api.getBlob(
         `/api/restaurants/${restaurantId}/transactions/export/csv${q ? `?${q}` : ""}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to export CSV");
-      }
-
-      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

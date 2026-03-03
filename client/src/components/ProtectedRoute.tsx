@@ -2,20 +2,22 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
+import { SubscriptionGuard } from "@/components/SubscriptionGuard";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string[];
   redirectTo?: string;
+  requireSubscription?: boolean;
 }
 
-export function ProtectedRoute({ children, requiredRole, redirectTo = "/auth" }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole, redirectTo = "/auth", requireSubscription = true }: ProtectedRouteProps) {
   const [_, setLocation] = useLocation();
   const { user, isReady } = useAuth();
 
   useEffect(() => {
     if (!isReady) return;
-    
+
     if (!user) {
       setLocation(redirectTo);
       return;
@@ -38,5 +40,11 @@ export function ProtectedRoute({ children, requiredRole, redirectTo = "/auth" }:
     return null;
   }
 
-  return <>{children}</>;
+  const content = <>{children}</>;
+
+  if (requireSubscription) {
+    return <SubscriptionGuard>{content}</SubscriptionGuard>;
+  }
+
+  return content;
 }
