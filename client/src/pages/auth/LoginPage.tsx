@@ -39,7 +39,7 @@ export default function LoginPage() {
       if (role === "ADMIN") {
         await login(identifier, password);
       } else {
-        const prefix = role === "WAITER" ? "W" : role === "KITCHEN" ? "K" : "";
+        const prefix = role === "WAITER" ? "W-" : role === "KITCHEN" ? "K-" : "";
         let finalCode = staffCodeDigits;
         if (/^\d+$/.test(staffCodeDigits)) {
           finalCode = `${prefix}${staffCodeDigits}`;
@@ -132,7 +132,7 @@ export default function LoginPage() {
                   <Label htmlFor="staffCode">Staff Code</Label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground font-medium">
-                      {role === "WAITER" ? "W" : "K"}
+                      {role === "WAITER" ? "W-" : "K-"}
                     </div>
                     <Input
                       id="staffCode"
@@ -146,7 +146,7 @@ export default function LoginPage() {
                         setStaffCodeDigits(numericVal);
                       }}
                       required
-                      className="h-11 bg-muted/30 pl-8"
+                      className="h-11 bg-muted/30 pl-9"
                       autoCapitalize="none"
                       autoCorrect="off"
                     />

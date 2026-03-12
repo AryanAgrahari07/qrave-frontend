@@ -3,7 +3,7 @@ import { AlertTriangle, WifiOff } from "lucide-react";
 
 // FE-2: Enhanced offline banner that shows when:
 // 1. navigator.onLine === false (device is offline)
-// 2. A "orderji_ws_disconnected" custom event fires and WS stays down for >30s
+// 2. A "orderzi_ws_disconnected" custom event fires and WS stays down for >30s
 export function OfflineBanner() {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [wsDisconnected, setWsDisconnected] = useState(false);
@@ -31,14 +31,14 @@ export function OfflineBanner() {
             setWsDisconnected(false);
         };
 
-        window.addEventListener("orderji_ws_disconnected", handleWsDisconnect);
-        window.addEventListener("orderji_ws_connected", handleWsConnect);
+        window.addEventListener("orderzi_ws_disconnected", handleWsDisconnect);
+        window.addEventListener("orderzi_ws_connected", handleWsConnect);
 
         return () => {
             window.removeEventListener("online", handleOnline);
             window.removeEventListener("offline", handleOffline);
-            window.removeEventListener("orderji_ws_disconnected", handleWsDisconnect);
-            window.removeEventListener("orderji_ws_connected", handleWsConnect);
+            window.removeEventListener("orderzi_ws_disconnected", handleWsDisconnect);
+            window.removeEventListener("orderzi_ws_connected", handleWsConnect);
             if (wsTimerRef.current) clearTimeout(wsTimerRef.current);
         };
     }, []);
