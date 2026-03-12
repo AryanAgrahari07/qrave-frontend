@@ -150,7 +150,8 @@ async function request<T>(method: string, path: string, data?: unknown, retry = 
       body: data ? JSON.stringify(data) : undefined,
     });
 
-    if (res.status === 401 && retry) {
+    const isAuthEndpoint = path.includes("/auth/login") || path.includes("/auth/register") || path.includes("/auth/staff/login");
+    if (res.status === 401 && retry && !isAuthEndpoint) {
       await refreshAccessToken();
       return request<T>(method, path, data, false);
     }
@@ -209,7 +210,8 @@ export async function apiRequestRaw(
     body: data ? JSON.stringify(data) : undefined,
   });
 
-  if (res.status === 401 && retry) {
+  const isAuthEndpoint = path.includes("/auth/login") || path.includes("/auth/register") || path.includes("/auth/staff/login");
+  if (res.status === 401 && retry && !isAuthEndpoint) {
     await refreshAccessToken();
     return apiRequestRaw(method, path, data, false);
   }
