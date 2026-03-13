@@ -2,18 +2,15 @@
 
 import MarketingLayout from "@/components/layout/MarketingLayout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  ArrowRight, Play, Timer, BarChart3, ShieldCheck, ChefHat, Smartphone
+  ArrowRight, Sparkles, QrCode, ChefHat, BarChart3,
+  Smartphone, Users, Clock, Shield, Zap, Star
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
-import food1 from "@/assets/images/food-indian-1.jpg";
-import food2 from "@/assets/images/food-indian-2.jpg";
-import food3 from "@/assets/images/food-indian-3.jpg";
-import food4 from "@/assets/images/rooftop-indian.jpg";
-import { motion, AnimatePresence } from "framer-motion";
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import dashboardImg from "@assets/../orderzi-video/public/screenshots/dashboard.png";
+import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect, Suspense, lazy, useRef } from "react";
 
 // Lazy-loaded sections for performance
 const FeaturesSection = lazy(() => import("@/components/landing/FeaturesSection"));
@@ -24,33 +21,17 @@ const ContactSection = lazy(() => import("@/components/landing/ContactSection"))
 // Fallback skeleton for lazy sections
 function SectionFallback() {
   return (
-    <div className="w-full h-96 bg-muted/20 animate-pulse flex items-center justify-center border-y border-black">
-      <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    <div className="w-full py-32 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-3 border-primary border-t-transparent animate-spin" />
     </div>
   );
 }
 
-const foodImages = [food1, food2, food3, food4];
+
 
 export default function LandingPage() {
-  const [currentFood, setCurrentFood] = useState(0);
   const [, setLocation] = useLocation();
   const { user, isReady } = useAuth();
-
-  // const { scrollYProgress } = useScroll({
-  //   target: targetRef,
-  //   offset: ["start end", "end start"]
-  // });
-
-  // const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0, 1, 1, 0]);
-  // const scale = useTransform(scrollYProgress, [0, 0.2], [0.8, 1]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentFood((prev) => (prev + 1) % foodImages.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Web instant launch: if already authenticated, jump straight into the app.
   useEffect(() => {
@@ -60,136 +41,202 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-16 sm:pt-28 sm:pb-20 md:pt-32 md:pb-22 lg:pt-40 lg:pb-32 overflow-hidden bg-black text-white">
-        {/* Urgent Background Elements */}
-        <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,0,34,0.15),transparent_50%)]" />
-        <motion.div
-          animate={{ x: [-10, 10, -10], y: [-10, 10, -10] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-          className="absolute -top-40 -left-40 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[500px] md:h-[500px] lg:w-[600px] lg:h-[600px] bg-primary/20 rounded-full blur-[100px] pointer-events-none"
-        />
+      {/* ============ HERO SECTION ============ */}
+      <section className="relative pt-28 pb-20 sm:pt-32 sm:pb-24 md:pt-36 md:pb-28 lg:pt-44 lg:pb-36 overflow-hidden bg-[#080a10]">
+        {/* Animated gradient orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.5, 0.3],
+            }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full"
+            style={{
+              background: "radial-gradient(circle, hsla(352, 70%, 45%, 0.15) 0%, transparent 70%)",
+            }}
+          />
+          <motion.div
+            animate={{
+              scale: [1.2, 1, 1.2],
+              opacity: [0.2, 0.4, 0.2],
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] rounded-full"
+            style={{
+              background: "radial-gradient(circle, hsla(142, 71%, 45%, 0.1) 0%, transparent 70%)",
+            }}
+          />
+          {/* Grid pattern overlay */}
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+              backgroundSize: "60px 60px",
+            }}
+          />
+        </div>
 
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
-          <div className="flex flex-col lg:flex-row items-center gap-10 sm:gap-16 md:gap-20">
+          <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+            {/* Left Content */}
             <motion.div
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.8, ease: "circOut" }}
-              className="w-full lg:w-1/2 space-y-6 sm:space-y-8"
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+              className="w-full lg:w-1/2 space-y-6 sm:space-y-8 text-center lg:text-left"
             >
+              {/* Badge */}
+              <motion.div
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+              >
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.08] text-sm font-medium text-white/70 backdrop-blur-sm">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span>AI-Powered Restaurant OS</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-primary" />
+                </span>
+              </motion.div>
 
+              {/* Heading */}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-7xl font-heading font-black leading-[1.05] tracking-tight text-white">
+                Your Restaurant,{" "}
+                <br className="hidden sm:block" />
+                <span className="relative">
+                  <span className="bg-gradient-to-r from-primary via-red-400 to-primary bg-clip-text text-transparent">
+                    Reimagined.
+                  </span>
+                  <motion.div
+                    className="absolute -bottom-1 left-0 right-0 h-[3px] bg-gradient-to-r from-primary/80 to-primary/20 rounded-full"
+                    initial={{ scaleX: 0, originX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.8, duration: 0.8, ease: "easeOut" }}
+                  />
+                </span>
+              </h1>
 
-              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-heading font-black leading-[0.85] tracking-tighter uppercase">
-                Digital <br />
-                <span className="text-primary animate-pulse">Dining Era.</span>              </h1>
+              {/* Subtitle */}
+              <p className="text-base sm:text-lg md:text-xl text-white/50 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium">
+                From QR menus to live kitchen displays, billing, queue management, and analytics — Orderzi is the all-in-one operating system built for modern Indian restaurants.
+              </p>
 
-              <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/70 leading-relaxed max-w-xl font-medium border-l-4 sm:border-l-6 md:border-l-8 border-white pl-4 sm:pl-6 md:pl-8 italic">
-                From instant billing to orders, inventory, queue management, QR-based Live Menu and mobile POS - everything your restaurant needs is one powerful system. </p>
-
-              <div className="pt-2 sm:pt-4">
-                <p className="text-lg sm:text-xl md:text-2xl text-white font-heading font-bold text-secondary">
-                  Your Business, <span className="text-veg">Got Upgraded</span>
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start pt-2">
                 <Link href="/signup">
-                  <Button size="lg" className="w-full sm:w-auto text-lg sm:text-xl md:text-2xl h-16 sm:h-20 md:h-24 px-8 sm:px-10 md:px-12 rounded-none bg-primary text-white font-black hover:bg-primary/90 transition-all active:scale-95 group uppercase tracking-tighter urgency-shadow">
-                    Get Started NOW <ArrowRight className="ml-2 w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 group-hover:translate-x-2 transition-transform" />
+                  <Button
+                    size="lg"
+                    className="w-full sm:w-auto text-base sm:text-lg h-13 sm:h-14 px-8 sm:px-10 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] group"
+                  >
+                    Start Free Trial
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
                 <Link href="/demo">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto text-lg sm:text-xl md:text-2xl h-16 sm:h-20 md:h-24 px-8 sm:px-10 md:px-12 rounded-none border-2 sm:border-3 md:border-4 border-white text-white bg-transparent hover:bg-white hover:text-secondary transition-all font-black uppercase tracking-tighter group">
-                    Live Demo <Play className="ml-2 w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto text-base sm:text-lg h-13 sm:h-14 px-8 sm:px-10 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold backdrop-blur-sm"
+                  >
+                    <QrCode className="mr-2 w-5 h-5 text-primary" />
+                    Watch Demo
                   </Button>
                 </Link>
               </div>
 
-              {/* <div className="pt-6 sm:pt-8 flex flex-wrap items-center gap-6 sm:gap-8">
-                <div className="flex -space-x-2 sm:-space-x-3">
-                  {[testimonial1, testimonial2, testimonial3].map((img, i) => (
-                    <div key={i} className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-none border-2 sm:border-3 md:border-4 border-secondary overflow-hidden shadow-xl">
-                      <img src={img} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300" />
+              {/* Social proof */}
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-4 justify-center lg:justify-start">
+                <div className="flex -space-x-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-[#080a10] bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white/60 text-xs font-bold"
+                    >
+                      {["VS", "PR", "RD", "AK"][i - 1]}
                     </div>
                   ))}
                 </div>
-                <div className="space-y-0.5">
-                  <div className="flex text-primary">
-                    {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
+                <div className="text-sm text-white/40">
+                  <div className="flex items-center gap-1 text-amber-400/90">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-3.5 h-3.5 fill-current" />
+                    ))}
                   </div>
-                  <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white/60 italic">99.9% Speed Rating</p>
+                  <span className="text-white/50 font-medium">Trusted by restaurants</span>
                 </div>
-              </div> */}
+              </div>
             </motion.div>
 
+            {/* Right — Dashboard Screenshot */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, x: 50 }}
-              animate={{ scale: 1, opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
               className="hidden lg:block w-full lg:w-1/2 relative"
             >
-              <div className="relative rounded-none p-1 sm:p-2 bg-white shadow-[10px_10px_0px_0px_rgba(255,255,255,0.1)] sm:shadow-[15px_15px_0px_0px_rgba(255,255,255,0.1)] md:shadow-[20px_20px_0px_0px_rgba(255,255,255,0.1)]">
-                <div className="relative overflow-hidden bg-background aspect-[4/3]">
-                  <AnimatePresence mode="wait">
-                    <motion.img
-                      key={currentFood}
-                      src={foodImages[currentFood]}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.5 }}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  </AnimatePresence>
+              <div className="relative">
+                {/* Glow behind image */}
+                <div className="absolute -inset-4 sm:-inset-8 bg-gradient-to-br from-primary/20 via-transparent to-green-500/10 rounded-3xl blur-2xl opacity-60" />
 
-                  {/* High Intensity Overlays */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-secondary via-transparent to-transparent opacity-80" />
-
-                  <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 md:p-8">
-                    <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="bg-veg p-4 sm:p-5 md:p-6 rounded-none text-white shadow-2xl relative overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between mb-3 sm:mb-4">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <Timer className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 animate-spin-slow" />
-                          <p className="font-black uppercase tracking-tighter text-sm sm:text-base md:text-lg">Instant Order Sync</p>
-                        </div>
-                        <Badge className="bg-white text-primary border-0 font-black animate-pulse text-xs sm:text-sm">HOT</Badge>
+                {/* Dashboard mockup */}
+                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50 bg-[#0f1117]">
+                  {/* Browser chrome */}
+                  <div className="flex items-center gap-2 px-4 py-3 bg-white/[0.03] border-b border-white/[0.06]">
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500/60" />
+                      <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
+                      <div className="w-3 h-3 rounded-full bg-green-500/60" />
+                    </div>
+                    <div className="flex-1 mx-4">
+                      <div className="bg-white/[0.06] rounded-md h-6 flex items-center px-3 text-xs text-white/30 font-mono max-w-xs mx-auto">
+                        orderzi.com/dashboard
                       </div>
-                      <div className="h-1 w-full bg-white/20 mb-3 sm:mb-4">
-                        <motion.div
-                          animate={{ width: ["0%", "100%"] }}
-                          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                          className="h-full bg-white"
-                        />
-                      </div>
-                      <p className="text-white/80 font-bold uppercase tracking-widest text-[8px] sm:text-[9px] md:text-[10px]">Processing Transaction #QX-092...</p>
-                    </motion.div>
+                    </div>
                   </div>
+                  <img
+                    src={dashboardImg}
+                    alt="Orderzi Dashboard — Real-time restaurant management"
+                    className="w-full"
+                    loading="eager"
+                  />
                 </div>
+
+                {/* Floating notification card */}
+                <motion.div
+                  initial={{ x: 20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 1.2, duration: 0.6 }}
+                  className="absolute -bottom-4 -left-4 sm:-bottom-6 sm:-left-6 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-xl p-3 sm:p-4 shadow-xl hidden sm:flex items-center gap-3"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-veg/20 flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-veg" />
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-semibold">New Order #1847</p>
+                    <p className="text-white/40 text-xs">Table T3 · Just now</p>
+                  </div>
+                </motion.div>
+
+                {/* Floating stat card */}
+                <motion.div
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 1.5, duration: 0.6 }}
+                  className="absolute -top-3 -right-3 sm:-top-5 sm:-right-5 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-xl p-3 sm:p-4 shadow-xl hidden sm:block"
+                >
+                  <p className="text-white/40 text-xs font-medium mb-1">Today's Revenue</p>
+                  <p className="text-white text-lg sm:text-xl font-bold font-heading">₹24,850</p>
+                  <p className="text-veg text-xs font-semibold">↑ 18% vs yesterday</p>
+                </motion.div>
               </div>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Trust Bar - High Contrast Static */}
-      <section className="py-4 sm:py-6 md:py-8 bg-veg text-white overflow-hidden whitespace-nowrap">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-around gap-6 sm:gap-8 md:gap-10 lg:gap-12 font-black italic uppercase text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl tracking-tighter opacity-80">
-            <span>Mumbai Rooftops</span>
-            <span>Delhi Fine Dining</span>
-            <span>Bangalore Cafes</span>
-            <span>Goa Beach Clubs</span>
-            <span>Cloud Kitchen Tech</span>
-          </div>
-        </div>
-      </section>
 
-      {/* Lazy-Loaded Below-The-Fold Sections */}
+
+      {/* ============ LAZY-LOADED SECTIONS ============ */}
       <Suspense fallback={<SectionFallback />}>
         <FeaturesSection />
       </Suspense>
@@ -198,103 +245,73 @@ export default function LandingPage() {
         <FoodShowcaseSection />
       </Suspense>
 
-      {/* Features Grid - Brutalist Urgency */}
-      <section id="features" className="py-16 sm:py-20 md:py-24 lg:py-32 bg-background">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex flex-col lg:flex-row gap-10 sm:gap-12 md:gap-16 lg:gap-20 items-start lg:items-end mb-12 sm:mb-16 md:mb-20 lg:mb-24">
-            <div className="w-full lg:w-1/2">
-              <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-heading font-black leading-[0.9] tracking-tighter uppercase mb-4 sm:mb-6">
-                Turbocharge <br /><span className="text-veg italic">Every Table.</span>
-              </h2>
-            </div>
-            <div className="w-full lg:w-1/2">
-              <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-muted-foreground font-bold leading-relaxed max-w-xl">
-                Legacy systems are slowing you down. Order<span className="text-primary">zi</span> is built for the high-velocity world of modern dining.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-2 sm:border-3 md:border-4 border-secondary">
-            <UrgencyFeatureCard
-              icon={<ChefHat className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10" />}
-              title="Pan-India Ready"
-              description="Built for every kitchen from Mumbai to Bangalore."
-              delay={0}
-            />
-            <UrgencyFeatureCard
-              icon={<Smartphone className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10" />}
-              title="GST Integrated"
-              description="Compliant billing for Indian tax regulations."
-              delay={0.1}
-            />
-            <UrgencyFeatureCard
-              icon={<BarChart3 className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10" />}
-              title="Table Turnover"
-              description="Maximize revenue during peak Indian dining hours."
-              delay={0.2}
-            />
-            <UrgencyFeatureCard
-              icon={<ShieldCheck className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10" />}
-              title="UPI Payments"
-              description="Seamless scan-to-pay for every Indian customer."
-              delay={0.3}
-            />
-          </div>
-        </div>
-      </section>
-
-
       <Suspense fallback={<SectionFallback />}>
         <TestimonialsSection />
       </Suspense>
 
-      {/* CTA Section - The Final Urgency */}
-      <section className="py-24 sm:py-32 md:py-40 lg:py-48 xl:py-60 bg-black text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 animate-pulse" />
+      {/* ============ FINAL CTA SECTION ============ */}
+      <section className="py-20 sm:py-28 md:py-36 bg-[#080a10] text-white relative overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+              backgroundSize: "60px 60px",
+            }}
+          />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+            style={{
+              background: "radial-gradient(circle, hsla(352, 70%, 45%, 0.12) 0%, transparent 70%)",
+            }}
+          />
+        </div>
+
         <div className="container mx-auto px-4 sm:px-6 text-center relative z-10">
-          <h2 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl 2xl:text-[12rem] font-heading font-black tracking-[0.05em] uppercase leading-[0.8] mb-8 sm:mb-10 md:mb-12">
-            ACT <span className="text-primary italic">NOW.</span>
-          </h2>
-          <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-white/50 font-black uppercase tracking-widest mb-10 sm:mb-12 md:mb-16">The 1% are already here. Are you?</p>
-          <Link href="/signup">
-            <Button size="lg" className="w-full sm:w-auto h-20 sm:h-24 md:h-28 lg:h-32 px-10 sm:px-12 md:px-16 lg:px-20 text-xl sm:text-2xl md:text-3xl lg:text-4xl rounded-none bg-primary text-white font-black hover:scale-105 transition-all urgency-shadow shadow-primary/50 uppercase tracking-tighter">
-              Deploy System <ArrowRight className="ml-2 sm:ml-3 md:ml-4 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
-            </Button>
-          </Link>
-          <p className="mt-8 sm:mt-10 md:mt-12 text-[10px] sm:text-xs md:text-sm font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] md:tracking-[0.5em] text-white/30">Limited Deployment Slots Available</p>
+          <motion.div
+            initial={{ y: 30, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="max-w-3xl mx-auto"
+          >
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-black tracking-tight leading-tight mb-6">
+              Ready to Transform{" "}
+              <span className="bg-gradient-to-r from-primary via-red-400 to-primary bg-clip-text text-transparent">
+                Your Restaurant?
+              </span>
+            </h2>
+            <p className="text-base sm:text-lg md:text-xl text-white/40 mb-10 max-w-2xl mx-auto leading-relaxed">
+              Join hundreds of restaurant owners who ditched paper chaos for digital calm. Set up in under 10 minutes. No credit card required.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/signup">
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto text-base sm:text-lg h-14 sm:h-16 px-10 sm:px-14 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] group"
+                >
+                  Get Started Free
+                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+              <Link href="/demo">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto text-base sm:text-lg h-14 sm:h-16 px-10 sm:px-14 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold"
+                >
+                  Book a Demo
+                </Button>
+              </Link>
+            </div>
+            <p className="mt-6 text-sm text-white/25">No credit card · 14-day free trial · Cancel anytime</p>
+          </motion.div>
         </div>
       </section>
 
       <Suspense fallback={<SectionFallback />}>
         <ContactSection />
       </Suspense>
-    </MarketingLayout >
-  );
-}
-
-function UrgencyFeatureCard({ icon, title, description, delay }: { icon: React.ReactNode, title: string, description: string, delay: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
-      className="p-6 sm:p-8 md:p-10 lg:p-12 bg-white dark:bg-black border border-secondary sm:border-2 hover:bg-primary hover:text-white transition-all duration-300 group cursor-pointer"
-    >
-      <div className="mb-4 sm:mb-6 md:mb-8 text-primary group-hover:text-white transition-colors">{icon}</div>
-      <h3 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tighter mb-3 sm:mb-4">{title}</h3>
-      <p className="text-sm sm:text-base md:text-lg font-bold opacity-60 group-hover:opacity-100 leading-tight">{description}</p>
-    </motion.div>
-  );
-}
-
-function StatCard({ icon, number, label, color }: { icon: React.ReactNode, number: string, label: string, color: string }) {
-  return (
-    <div className="p-8 sm:p-10 md:p-12 lg:p-16 border-2 sm:border-3 md:border-4 border-secondary text-center group hover:bg-primary transition-all duration-500">
-      <div className={`mx-auto mb-6 sm:mb-8 md:mb-10 w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 flex items-center justify-center border-2 sm:border-3 md:border-4 border-secondary ${color} group-hover:text-white group-hover:border-white transition-all`}>
-        {icon}
-      </div>
-      <p className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black mb-3 sm:mb-4 tracking-tighter uppercase ${color} group-hover:text-white transition-colors`}>{number}</p>
-      <p className="text-muted-foreground font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] md:tracking-[0.3em] text-[9px] sm:text-[10px] group-hover:text-white/60 transition-colors">{label}</p>
-    </div>
+    </MarketingLayout>
   );
 }
