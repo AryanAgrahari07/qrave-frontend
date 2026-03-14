@@ -148,7 +148,7 @@ export function MenuItemCustomization({
   const [isAddingModifier, setIsAddingModifier] = useState<string | null>(null);
   const [modifierForm, setModifierForm] = useState({
     name: "",
-    price: 0,
+    price: "" as string | number,
     isDefault: false,
   });
 
@@ -251,9 +251,13 @@ export function MenuItemCustomization({
     try {
       await createModifier.mutateAsync({
         groupId,
-        data: modifierForm,
+        data: {
+          name: modifierForm.name,
+          price: Number(modifierForm.price) || 0,
+          isDefault: modifierForm.isDefault,
+        },
       });
-      setModifierForm({ name: "", price: 0, isDefault: false });
+      setModifierForm({ name: "", price: "", isDefault: false });
       setIsAddingModifier(null);
       toast.success("Modifier added!");
       refreshLists();
@@ -536,7 +540,7 @@ export function MenuItemCustomization({
                                         onChange={(e) =>
                                           setModifierForm({
                                             ...modifierForm,
-                                            price: parseFloat(e.target.value) || 0,
+                                            price: e.target.value === "" ? "" : parseFloat(e.target.value),
                                           })
                                         }
                                       />
@@ -545,7 +549,7 @@ export function MenuItemCustomization({
                                       <Button
                                         size="sm"
                                         onClick={() => handleAddModifier(group.id)}
-                                        disabled={!modifierForm.name}
+                                        disabled={!modifierForm.name || modifierForm.price === ""}
                                       >
                                         Add Modifier
                                       </Button>
@@ -554,7 +558,7 @@ export function MenuItemCustomization({
                                         variant="outline"
                                         onClick={() => {
                                           setIsAddingModifier(null);
-                                          setModifierForm({ name: "", price: 0, isDefault: false });
+                                          setModifierForm({ name: "", price: "", isDefault: false });
                                         }}
                                       >
                                         Cancel
@@ -663,7 +667,7 @@ export function MenuItemCustomization({
           <DialogFooter className="px-4 sm:px-6 py-3 sm:py-4 border-t shrink-0">
             <Button
               onClick={editingVariant ? handleUpdateVariant : handleAddVariant}
-              disabled={!variantForm.variantName || !variantForm.price}
+              disabled={!variantForm.variantName || variantForm.price === ""}
               className="w-full"
             >
               {editingVariant ? "Update" : "Add"} Variant
