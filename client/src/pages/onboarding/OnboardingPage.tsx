@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { secureStorage } from "@/lib/secureStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Check, ChevronRight, Store, CreditCard, Palette, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Check, ChevronRight, Store, CreditCard, Palette, Loader2, AlertCircle, ArrowLeft, Mail, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -47,6 +47,15 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdData, setCreatedData] = useState<any>(null);
+
+  // Email OTP verification state
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const lastVerifiedEmail = useRef("");
 
   const queryClient = useQueryClient();
 
@@ -114,6 +123,13 @@ export default function OnboardingPage() {
   const handleChange = (field: keyof OnboardingData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     validateField(field, value);
+    // If email changes after verify, reset verified state
+    if (field === 'email' && value !== lastVerifiedEmail.current) {
+      setEmailVerified(false);
+      setOtpSent(false);
+      setOtpValue("");
+      setOtpError(null);
+    }
   };
 
   // Generate slug from restaurant name
@@ -140,12 +156,45 @@ export default function OnboardingPage() {
     if (step === 1) {
       if (!formData.email || !formData.password || !formData.fullName || !formData.restaurantName || !formData.slug) return false;
       if (Object.keys(fieldErrors).length > 0) return false;
+      if (!emailVerified) return false;
       return true;
     }
     if (step === 2) {
       return !!formData.plan;
     }
     return true;
+  };
+
+  const handleSendOtp = async () => {
+    setIsSendingOtp(true);
+    setOtpError(null);
+    try {
+      await api.post("/api/auth/send-otp", { email: formData.email, purpose: "EMAIL_VERIFY" });
+      setOtpSent(true);
+      toast.success("OTP sent! Check your inbox.");
+    } catch (err: any) {
+      setOtpError(err.message || "Failed to send OTP");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpValue.length !== 6) return;
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      await api.post("/api/auth/verify-otp", { email: formData.email, otp: otpValue, purpose: "EMAIL_VERIFY" });
+      setEmailVerified(true);
+      lastVerifiedEmail.current = formData.email;
+      setOtpSent(false);
+      setOtpValue("");
+      toast.success("Email verified!");
+    } catch (err: any) {
+      setOtpError(err.message || "Invalid OTP. Please try again.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -347,15 +396,70 @@ export default function OnboardingPage() {
                     </div>
                     <div className="space-y-2.5">
                       <Label className="text-sm font-medium">Email Address *</Label>
-                      <Input
-                        type="email"
-                        placeholder="john@restaurant.com"
-                        value={formData.email}
-                        onChange={(e) => handleChange('email', e.target.value)}
-                        onBlur={() => validateField('email', formData.email)}
-                        className={cn("h-11", fieldErrors.email && "border-destructive focus-visible:ring-destructive")}
-                      />
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type="email"
+                            placeholder="john@restaurant.com"
+                            value={formData.email}
+                            onChange={(e) => handleChange('email', e.target.value)}
+                            onBlur={() => validateField('email', formData.email)}
+                            className={cn("h-11 pr-8", fieldErrors.email && "border-destructive focus-visible:ring-destructive", emailVerified && "border-green-500 focus-visible:ring-green-500")}
+                            disabled={emailVerified}
+                          />
+                          {emailVerified && (
+                            <ShieldCheck className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
+                          )}
+                        </div>
+                        {!emailVerified && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-11 px-3 whitespace-nowrap text-xs font-semibold"
+                            disabled={!!fieldErrors.email || !formData.email || isSendingOtp}
+                            onClick={handleSendOtp}
+                          >
+                            {isSendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Mail className="w-3.5 h-3.5 mr-1" />Verify</>}
+                          </Button>
+                        )}
+                      </div>
                       {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
+                      {emailVerified && (
+                        <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Email verified
+                        </p>
+                      )}
+                      {/* OTP input panel */}
+                      {otpSent && !emailVerified && (
+                        <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border space-y-2">
+                          <p className="text-xs text-muted-foreground">Enter the 6-digit code sent to <strong>{formData.email}</strong></p>
+                          <div className="flex gap-2">
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              placeholder="000000"
+                              value={otpValue}
+                              onChange={(e) => { setOtpValue(e.target.value.replace(/\D/g, "")); setOtpError(null); }}
+                              className="h-10 text-center font-mono text-lg tracking-widest"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-10 px-4"
+                              disabled={otpValue.length !== 6 || isVerifyingOtp}
+                              onClick={handleVerifyOtp}
+                            >
+                              {isVerifyingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm"}
+                            </Button>
+                          </div>
+                          {otpError && <p className="text-xs text-destructive">{otpError}</p>}
+                          <button type="button" onClick={handleSendOtp} className="text-xs text-primary hover:underline" disabled={isSendingOtp}>
+                            Resend code
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -582,6 +686,10 @@ export default function OnboardingPage() {
                 </div>
               ) : step === 3 ? (
                 "Complete Setup & Enter Dashboard"
+              ) : step === 1 && !emailVerified ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  Verify your email to continue <ShieldCheck className="w-4 h-4" />
+                </div>
               ) : (
                 <div className="flex items-center">
                   Continue to next step <ChevronRight className="ml-2 w-5 h-5" />

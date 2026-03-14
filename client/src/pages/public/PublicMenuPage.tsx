@@ -54,20 +54,6 @@ const TRANSLATIONS: Record<string, {
     viewDetails: "View Options",
     close: "Close"
   },
-  es: {
-    search: "Buscar platos...",
-    categories: "Categorías",
-    soldOut: "Agotado",
-    popular: "Popular",
-    available: "Disponible",
-    all: "Todo",
-    veg: "Veg",
-    nonVeg: "No-Veg",
-    variants: "Opciones",
-    addOns: "Extras",
-    viewDetails: "Ver Opciones",
-    close: "Cerrar"
-  },
   hi: {
     search: "डिश खोजें...",
     categories: "श्रेणियाँ",
@@ -84,17 +70,32 @@ const TRANSLATIONS: Record<string, {
   }
 };
 
+/**
+ * Returns the translated string for the given language.
+ * Falls back to English, then to the raw fallback value.
+ */
+function getTranslated(
+  translations: Record<string, string> | undefined | null,
+  lang: string,
+  fallback: string
+): string {
+  if (!translations) return fallback;
+  return translations[lang] || translations["en"] || fallback;
+}
+
 // Customization Dialog Component
 function ItemCustomizationDialog({
   item,
   currency,
   t,
+  lang,
   open,
   onOpenChange
 }: {
   item: MenuItem | null;
   currency: string;
   t: typeof TRANSLATIONS.en;
+  lang: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -103,16 +104,21 @@ function ItemCustomizationDialog({
   const hasVariants = item.variants && item.variants.length > 0;
   const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
 
+  const displayName = getTranslated(item.nameTranslations, lang, item.name);
+  const displayDescription = item.description
+    ? getTranslated(item.descriptionTranslations, lang, item.description)
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold pr-8">
-            {item.name}
+            {displayName}
           </DialogTitle>
-          {item.description && (
+          {displayDescription && (
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              {item.description}
+              {displayDescription}
             </p>
           )}
         </DialogHeader>
@@ -132,7 +138,11 @@ function ItemCustomizationDialog({
                   >
                     <div className="flex-1">
                       <span className="text-sm font-medium text-foreground">
-                        {variant.variantName}
+                        {getTranslated(
+                          (variant as any).nameTranslations ?? variant.variantNameTranslations,
+                          lang,
+                          variant.variantName
+                        )}
                       </span>
                       {variant.isDefault && (
                         <Badge className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20">
@@ -156,7 +166,7 @@ function ItemCustomizationDialog({
                 <div key={group.id}>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide flex items-center gap-1">
-                      {group.name}
+                      {getTranslated((group as any).nameTranslations, lang, group.name)}
                       {group.isRequired && (
                         <span className="text-red-500 text-base">*</span>
                       )}
@@ -177,7 +187,7 @@ function ItemCustomizationDialog({
                       >
                         <div className="flex items-center gap-2">
                           <Plus className="w-4 h-4 text-primary flex-shrink-0" />
-                          <span className="text-sm text-foreground">{modifier.name}</span>
+                          <span className="text-sm text-foreground">{getTranslated(modifier.nameTranslations, lang, modifier.name)}</span>
                         </div>
                         <span className="text-sm font-bold text-primary">
                           +{currency}{modifier.price}
@@ -199,17 +209,24 @@ function ItemCustomizationDialog({
 function MenuItemCard({
   item,
   currency,
+  lang,
   t,
   onOpenCustomization
 }: {
   item: MenuItem;
   currency: string;
+  lang: string;
   t: typeof TRANSLATIONS.en;
   onOpenCustomization: (item: MenuItem) => void;
 }) {
   const hasVariants = item.variants && item.variants.length > 0;
   const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
   const hasCustomizations = hasVariants || hasModifiers;
+
+  const displayName = getTranslated(item.nameTranslations, lang, item.name);
+  const displayDesc = item.description
+    ? getTranslated(item.descriptionTranslations, lang, item.description)
+    : null;
 
   return (
     <div className={cn(
@@ -221,7 +238,7 @@ function MenuItemCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
             <h3 className="font-medium text-sm sm:text-base leading-snug group-hover:text-primary transition-colors">
-              {item.name}
+              {displayName}
             </h3>
             {!hasVariants && (
               <span className="text-sm sm:text-base font-semibold text-primary whitespace-nowrap">
@@ -230,9 +247,9 @@ function MenuItemCard({
             )}
           </div>
 
-          {item.description && (
+          {displayDesc && (
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-2 line-clamp-2">
-              {item.description}
+              {displayDesc}
             </p>
           )}
 
@@ -733,7 +750,7 @@ export default function PublicMenuPage() {
                       <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground transition-transform flex-shrink-0" />
                     )}
                     <h2 className="text-sm sm:text-base font-bold truncate">
-                      {category.name}
+                      {getTranslated(category.nameTranslations, lang, category.name)}
                     </h2>
                   </div>
                   <span className="text-[10px] sm:text-xs text-muted-foreground font-medium whitespace-nowrap ml-2">
@@ -749,6 +766,7 @@ export default function PublicMenuPage() {
                         key={item.id}
                         item={item}
                         currency={currency}
+                        lang={lang}
                         t={t}
                         onOpenCustomization={handleOpenCustomization}
                       />
@@ -766,6 +784,7 @@ export default function PublicMenuPage() {
         item={selectedItem}
         currency={currency}
         t={t}
+        lang={lang}
         open={customizationDialogOpen}
         onOpenChange={setCustomizationDialogOpen}
       />
