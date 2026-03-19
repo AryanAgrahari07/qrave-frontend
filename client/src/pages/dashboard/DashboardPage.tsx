@@ -153,7 +153,9 @@ export default function DashboardPage() {
                   cursor={{ fill: 'transparent' }}
                   contentStyle={{
                     borderRadius: '8px',
-                    border: 'none',
+                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'hsl(var(--card))',
+                    color: 'hsl(var(--card-foreground))',
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
                   }}
                 />
@@ -182,12 +184,12 @@ export default function DashboardPage() {
                       className={cn(
                         "aspect-square rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold border-2 transition-all cursor-pointer hover:scale-[1.02] sm:hover:scale-105",
                         table.currentStatus === "OCCUPIED"
-                          ? "bg-red-100 border-red-200 text-red-600"
+                          ? "bg-red-100 border-red-200 text-red-600 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400"
                           : table.currentStatus === "RESERVED"
-                            ? "bg-yellow-100 border-yellow-200 text-yellow-600"
+                            ? "bg-yellow-100 border-yellow-200 text-yellow-600 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-400"
                             : table.currentStatus === "BLOCKED"
-                              ? "bg-gray-100 border-gray-200 text-gray-600"
-                              : "bg-green-100 border-green-200 text-green-600"
+                              ? "bg-gray-100 border-gray-200 text-gray-600 dark:bg-gray-800/50 dark:border-gray-700 dark:text-gray-400"
+                              : "bg-green-100 border-green-200 text-green-600 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400"
                       )}
                       title={`Table ${table.tableNumber} - ${table.currentStatus}`}
                     >
@@ -197,15 +199,15 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex gap-3 sm:gap-4 mt-4 sm:mt-6 text-xs sm:text-sm text-muted-foreground justify-center flex-wrap">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-100 border border-green-200 rounded" />
+                    <div className="w-3 h-3 bg-green-100 border border-green-200 rounded dark:bg-green-900/30 dark:border-green-800" />
                     Available ({tableStats.available_tables})
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-100 border border-red-200 rounded" />
+                    <div className="w-3 h-3 bg-red-100 border border-red-200 rounded dark:bg-red-900/30 dark:border-red-800" />
                     Occupied ({tableStats.occupied_tables})
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded" />
+                    <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded dark:bg-yellow-900/30 dark:border-yellow-800" />
                     Reserved ({tableStats.reserved_tables})
                   </div>
                 </div>

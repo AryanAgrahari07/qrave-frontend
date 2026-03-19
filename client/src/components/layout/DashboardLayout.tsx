@@ -16,11 +16,14 @@ import {
   X,
   Printer,
   Loader2,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useRestaurant } from "@/hooks/api";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
+import { useTheme } from "@/context/ThemeContext";
 import { useState } from "react";
 
 const NAV_LINKS = [
@@ -42,6 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { restaurantId, user, logout } = useAuth();
   const { data: restaurant } = useRestaurant(restaurantId);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { resolvedTheme, toggleTheme } = useTheme();
 
   const {
     isConnected: isPrinterConnected,
@@ -114,41 +118,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Printer (global) */}
           <div className="mt-6 px-2">
-            <div className="p-3 bg-muted/50 rounded-lg border border-border">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Printer className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">Printer</p>
-                    <p className="text-xs text-muted-foreground">
-                      {isPrinterConnected ? "Connected" : "Not connected"}
-                    </p>
-                  </div>
+            <div className={`p-3 rounded-lg border ${isPrinterConnected ? 'bg-green-500/5 border-green-500/20' : 'bg-muted/50 border-border'}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${isPrinterConnected ? 'bg-green-500/15 text-green-500' : 'bg-primary/10 text-primary'}`}>
+                  {isPrinterConnecting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Printer className="w-4 h-4" />}
                 </div>
-
-                <Button
-                  size="sm"
-                  variant={isPrinterConnected ? "outline" : "default"}
-                  className="shrink-0"
-                  onClick={isPrinterConnected ? disconnectPrinter : connectPrinter}
-                  disabled={isPrinterConnecting}
-                >
-                  {isPrinterConnecting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isPrinterConnected ? (
-                    "Disconnect"
-                  ) : (
-                    "Pair"
-                  )}
-                </Button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-none mb-0.5">Printer</p>
+                  <p className={`text-[11px] font-medium ${isPrinterConnected ? 'text-green-500' : 'text-muted-foreground'}`}>
+                    {isPrinterConnecting ? 'Connecting...' : isPrinterConnected ? 'Connected' : 'Not paired'}
+                  </p>
+                </div>
+                {isPrinterConnected && !isPrinterConnecting && (
+                  <button
+                    onClick={disconnectPrinter}
+                    className="shrink-0 text-[11px] font-medium px-2 py-1 rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
-
-              {!isPrinterConnected && (
-                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                  Pair once, then keep this tab open to maintain the connection. (Refreshing will disconnect.)
-                </p>
+              {!isPrinterConnected && !isPrinterConnecting && (
+                <>
+                  <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={connectPrinter}>
+                    Pair Printer
+                  </Button>
+                  <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/60">
+                    Keep this tab open after pairing.
+                  </p>
+                </>
               )}
             </div>
           </div>
@@ -233,44 +233,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Printer (global) */}
           <div className="mt-6 px-2">
-            <div className="p-3 bg-muted/50 rounded-lg border border-border">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Printer className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">Printer</p>
-                    <p className="text-xs text-muted-foreground">
-                      {isPrinterConnected ? "Connected" : "Not connected"}
-                    </p>
-                  </div>
+            <div className={`p-3 rounded-lg border ${isPrinterConnected ? 'bg-green-500/5 border-green-500/20' : 'bg-muted/50 border-border'}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${isPrinterConnected ? 'bg-green-500/15 text-green-500' : 'bg-primary/10 text-primary'}`}>
+                  {isPrinterConnecting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Printer className="w-4 h-4" />}
                 </div>
-
-                <Button
-                  size="sm"
-                  variant={isPrinterConnected ? "outline" : "default"}
-                  className="shrink-0"
-                  onClick={() => {
-                    if (isPrinterConnected) disconnectPrinter();
-                    else connectPrinter();
-                  }}
-                  disabled={isPrinterConnecting}
-                >
-                  {isPrinterConnecting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isPrinterConnected ? (
-                    "Disconnect"
-                  ) : (
-                    "Pair"
-                  )}
-                </Button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-none mb-0.5">Printer</p>
+                  <p className={`text-[11px] font-medium ${isPrinterConnected ? 'text-green-500' : 'text-muted-foreground'}`}>
+                    {isPrinterConnecting ? 'Connecting...' : isPrinterConnected ? 'Connected' : 'Not paired'}
+                  </p>
+                </div>
+                {isPrinterConnected && !isPrinterConnecting && (
+                  <button
+                    onClick={disconnectPrinter}
+                    className="shrink-0 text-[11px] font-medium px-2 py-1 rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
-
-              {!isPrinterConnected && (
-                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                  Pair once, then keep this tab open to maintain the connection. (Refreshing will disconnect.)
-                </p>
+              {!isPrinterConnected && !isPrinterConnecting && (
+                <>
+                  <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={() => { if (isPrinterConnected) disconnectPrinter(); else connectPrinter(); }}>
+                    Pair Printer
+                  </Button>
+                  <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/60">
+                    Keep this tab open after pairing.
+                  </p>
+                </>
               )}
             </div>
           </div>
@@ -304,7 +297,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {location.split('/').pop()?.replace('-', ' ') || 'Dashboard'}
             </h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {restSlug && (
               <Link href={`/r/${restSlug}`}>
                 <Button variant="outline" size="sm" className="hidden sm:flex">
@@ -312,6 +305,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Button>
               </Link>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="h-[18px] w-[18px] transition-transform duration-300 rotate-0" />
+              ) : (
+                <Moon className="h-[18px] w-[18px] transition-transform duration-300 rotate-0" />
+              )}
+            </Button>
             <Avatar className="w-8 h-8 border border-border">
               <AvatarFallback>{(user?.fullName || user?.email || "U").slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>

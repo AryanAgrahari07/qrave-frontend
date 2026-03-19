@@ -184,7 +184,7 @@ export default function LiveOrdersPage() {
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 1024);
     };
 
     checkMobile();
@@ -638,6 +638,129 @@ export default function LiveOrdersPage() {
       refetch();
     } catch (error) {
       // Error handled by mutation / printKOT toast
+    }
+  };
+
+  const handleSaveAndPrintBill = async () => {
+    if (manualCart.length === 0) {
+      toast.error("Please add items to the order");
+      return;
+    }
+
+    if (!isPrinterConnected) {
+      toast.error("Printer not connected, Connect to print Bill");
+      return;
+    }
+
+    try {
+      let order: any;
+
+      if (selectedOrderForEdit) {
+        const response = await addOrderItems.mutateAsync({
+          orderId: selectedOrderForEdit.id,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+        });
+        order = response.order;
+
+        if (isAdmin && response.newItems?.length) {
+          const newItemIds = response.newItems.map((i: any) => i.id);
+          await markOrderItemsServed.mutateAsync({ orderId: selectedOrderForEdit.id, itemIds: newItemIds });
+        }
+
+        toast.success(`Items saved to Order #${order.orderNumber || order.id.slice(-4)}`);
+      } else {
+        const orderTypeMap = {
+          "dine-in": "DINE_IN",
+          "takeaway": "TAKEAWAY",
+          "delivery": "DELIVERY",
+        };
+
+        const paymentStatusMap = {
+          "cash": "PAID",
+          "card": "PAID",
+          "upi": "PAID",
+          "due": "DUE",
+        };
+
+        const result = await createOrder.mutateAsync({
+          tableId: orderMethod === "dine-in" ? selectedTableId : undefined,
+          orderType: orderTypeMap[orderMethod] as "DINE_IN" | "TAKEAWAY" | "DELIVERY",
+          waiveServiceCharge: orderMethod === "dine-in" ? waiveServiceCharge : false,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+          assignedWaiterId: selectedWaiterId || undefined,
+          paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+          paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+          notes: cookingNote.trim() || undefined,
+        });
+
+        order = result.order;
+
+        const discountNum = parseFloat(discountAmount || "0");
+        if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+          try {
+            await updateOrder.mutateAsync({
+              orderId: order.id,
+              data: { discountAmount: discountNum },
+            });
+            // Refetch to get the updated order with discount applied
+            const refreshed = await refetch();
+            const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === order.id);
+            if (updatedOrder) order = updatedOrder;
+          } catch {
+            toast.error("Order created, but failed to apply discount");
+          }
+        }
+
+        const itemsToMark = result.newItems || order.items;
+        if (isAdmin && itemsToMark?.length) {
+          const newItemIds = itemsToMark.filter((i: any) => i.status !== "SERVED").map((i: any) => i.id);
+          if (newItemIds.length > 0) {
+            await markOrderItemsServed.mutateAsync({ orderId: order.id, itemIds: newItemIds });
+          }
+        }
+
+        const tableDisplayNum = tables?.find((t) => t.id === selectedTableId)?.tableNumber || selectedTableId;
+        toast.success(`Order saved! ${orderMethod === "dine-in" ? `Table ${tableDisplayNum}` : ""}`);
+      }
+
+      // Print bill to thermal printer (if connected)
+      if (isPrinterConnected && restaurant) {
+        try {
+          const billData = buildBillDataFromOrder({
+            order,
+            restaurant,
+            currency,
+            restaurantLogo,
+          });
+          await printThermalBill(billData);
+        } catch (printErr) {
+          console.error("Bill print error:", printErr);
+        }
+      }
+
+      await refetch();
+      setManualCart([]);
+      setSelectedTableId("");
+      setSelectedWaiterId(null);
+      setPaymentMethod("due");
+      setCookingNote("");
+      setDiscountAmount("");
+      setWaiveServiceCharge(false);
+      setIsNewOrderOpen(false);
+      setShowMobilePOS(false);
+      setSelectedOrderForEdit(null);
+    } catch (error) {
+      // Error handled by mutation
     }
   };
 
@@ -1112,6 +1235,7 @@ export default function LiveOrdersPage() {
             onSendToKitchen={handleSendToKitchen}
             onSave={handleSave}
             onSaveAndPrint={handleSaveAndPrint}
+            onSaveAndPrintBill={handleSaveAndPrintBill}
             onClose={handleCloseMobilePOS}
             currency={currency}
             gstRate={gstRate}
@@ -1236,6 +1360,7 @@ export default function LiveOrdersPage() {
                 onSendToKitchen={handleSendToKitchen}
                 onSave={handleSave}
                 onSaveAndPrint={handleSaveAndPrint}
+                onSaveAndPrintBill={handleSaveAndPrintBill}
                 onCloseCustomization={() => setCustomizingItem(null)}
                 onAddCustomizedToCart={handleAddCustomizedToCart}
                 onSearchQueryChange={setSearchQuery}
@@ -1961,7 +2086,7 @@ export default function LiveOrdersPage() {
               transactions.data.map((transaction) => (
                 <div
                   key={transaction.id}
-                  className="p-3 rounded-lg border border-border bg-white shadow-sm"
+                  className="p-3 rounded-lg border border-border bg-white dark:bg-card shadow-sm"
                 >
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-bold text-sm">

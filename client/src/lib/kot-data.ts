@@ -16,9 +16,9 @@ export function buildKOTDataFromOrder(opts: {
 
   const now = new Date(order.createdAt ?? Date.now());
 
-  const waiterName = opts.waiterName || order.assignedWaiter?.fullName || order.placedByStaff?.fullName;
+  const waiterName = opts.waiterName || (order as any).assignedWaiter?.fullName || (order as any).placedByStaff?.fullName;
 
-  const tableNoLabel = tableNumber || order.table?.tableNumber;
+  const tableNoLabel = tableNumber || (order as any).table?.tableNumber;
 
   const orderTypeLabel =
     order.orderType === "DINE_IN"

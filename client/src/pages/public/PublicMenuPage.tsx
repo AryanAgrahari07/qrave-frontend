@@ -12,7 +12,10 @@ import {
   Phone,
   Mail,
   Navigation,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 import { Input } from "@/components/ui/input";
 import { useParams } from "wouter";
 import { usePublicMenu } from "@/hooks/api";
@@ -319,6 +322,7 @@ export default function PublicMenuPage() {
   const [customizationDialogOpen, setCustomizationDialogOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const hasInitializedExpansion = useRef(false);
+  const { resolvedTheme, toggleTheme } = useTheme();
 
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   const { data: menuData, isLoading, error } = usePublicMenu(slug ?? null, dietaryFilter);
@@ -661,6 +665,16 @@ export default function PublicMenuPage() {
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-muted/30 flex items-center justify-center text-primary hover:bg-muted/50 transition-colors"
             >
               <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-muted/30 flex items-center justify-center text-primary hover:bg-muted/50 transition-colors"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
+              ) : (
+                <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+              )}
             </button>
           </div>
 

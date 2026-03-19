@@ -78,7 +78,7 @@ export default function AnalyticsPage() {
           {/* </div> */}
 
           <Select value={timeframe} onValueChange={(val: any) => setTimeframe(val)}>
-            <SelectTrigger className="w-[180px] bg-white border-primary/20 shadow-sm">
+            <SelectTrigger className="w-[180px] bg-background border-primary/20 shadow-sm">
               <Calendar className="w-4 h-4 mr-2 text-primary" />
               <SelectValue placeholder="Select timeframe" />
             </SelectTrigger>
@@ -92,7 +92,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-5 mb-4 sm:mb-8">
-          <Card className="shadow-sm border-primary/10 hover:shadow-md transition-shadow bg-gradient-to-br from-white to-slate-50 min-w-0">
+          <Card className="shadow-sm border-primary/10 hover:shadow-md transition-shadow bg-gradient-to-br from-card to-muted/20 min-w-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3 sm:px-6 sm:pt-6">
               <CardTitle className="text-[11px] leading-4 sm:text-sm font-medium text-muted-foreground truncate pr-2">
                 Total Revenue
@@ -240,7 +240,7 @@ export default function AnalyticsPage() {
                   />
                   <Tooltip
                     formatter={(value: any) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
                   <Area
                     type="monotone"
@@ -268,8 +268,8 @@ export default function AnalyticsPage() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={cn(
                         "w-6 h-6 sm:w-8 sm:h-8 shrink-0 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm",
-                        index === 0 ? "bg-yellow-100 text-yellow-700" :
-                          index === 1 ? "bg-slate-100 text-slate-700" : "bg-orange-50 text-orange-700"
+                        index === 0 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500" :
+                          index === 1 ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" : "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-500"
                       )}>
                         {index + 1}
                       </div>
@@ -280,11 +280,11 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                     {dish.trend === "up" ? (
-                      <Badge className="bg-green-100 text-green-700 border-green-200">
+                      <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-500 dark:border-green-800">
                         <ArrowUpRight className="w-3 h-3 mr-1" />
                       </Badge>
                     ) : (
-                      <Badge className="bg-red-100 text-red-700 border-red-200">
+                      <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-500 dark:border-red-800">
                         <ArrowDownRight className="w-3 h-3 mr-1" />
                       </Badge>
                     )}
@@ -321,9 +321,9 @@ export default function AnalyticsPage() {
                     <div className="flex items-center gap-4 min-w-0">
                       <div className={cn(
                         "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
-                        index === 0 ? "bg-yellow-100 text-yellow-700" :
-                        index === 1 ? "bg-slate-100 text-slate-700" :
-                        index === 2 ? "bg-orange-50 text-orange-700" :
+                        index === 0 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500" :
+                        index === 1 ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                        index === 2 ? "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-500" :
                         "bg-muted text-muted-foreground"
                       )}>
                         {index + 1}
@@ -344,12 +344,12 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="shrink-0 flex items-center">
                       {dish.trend === "up" ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-500 dark:border-green-800">
                           <ArrowUpRight className="w-3 h-3 mr-1" />
                           Up
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-500 dark:border-red-800">
                           <ArrowDownRight className="w-3 h-3 mr-1" />
                           Down
                         </Badge>
@@ -381,7 +381,10 @@ export default function AnalyticsPage() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: any) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                  <Tooltip 
+                    formatter={(value: any) => `₹${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
                   <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
                 </PieChart>
               </ResponsiveContainer>

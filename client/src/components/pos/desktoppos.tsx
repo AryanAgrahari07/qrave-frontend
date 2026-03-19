@@ -103,6 +103,7 @@ interface DesktopPOSProps {
   onSendToKitchen: () => void;
   onSave?: () => void;
   onSaveAndPrint?: () => void;
+  onSaveAndPrintBill?: () => void;
   onCloseCustomization: () => void;
   onAddCustomizedToCart: (selection: {
     menuItemId: string;
@@ -153,6 +154,7 @@ export function DesktopPOS({
   onSendToKitchen,
   onSave,
   onSaveAndPrint,
+  onSaveAndPrintBill,
   onCloseCustomization,
   onAddCustomizedToCart,
   onSearchQueryChange,
@@ -282,13 +284,13 @@ export function DesktopPOS({
             </AlertDialogContent>
           </AlertDialog>
 
-          <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
+          <div className="h-full flex flex-col bg-gray-50 dark:bg-background overflow-hidden">
             {/* Main Content Area */}
             <div className="flex flex-1 overflow-hidden min-h-0">
               {/* Left Side - Category & Items */}
-              <div className="flex-[1_1_60%] flex flex-col overflow-hidden bg-white min-w-0 max-w-[60%]">
+              <div className="flex-[1_1_60%] flex flex-col overflow-hidden bg-white dark:bg-card min-w-0 max-w-[60%]">
                 {/* Category Bar with Search */}
-                <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
+                <div className="bg-white dark:bg-card border-b border-gray-200 dark:border-border px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <div className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                       <div className="flex items-center gap-1.5 sm:gap-2 min-w-min pb-1">
@@ -303,7 +305,7 @@ export function DesktopPOS({
                               "px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-[11px] sm:text-xs whitespace-nowrap transition-all flex-shrink-0",
                               activeCategory === category.id && !searchQuery
                                 ? "bg-primary text-white shadow-md"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                : "bg-gray-100 dark:bg-muted text-gray-700 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted/80"
                             )}
                           >
                             {getTranslatedName(category as any, language, 'category')}
@@ -320,10 +322,10 @@ export function DesktopPOS({
                           else setVegFilter("all");
                         }}
                         className={cn(
-                          "flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md border transition-colors bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary/50",
-                          vegFilter === "all" ? "border-gray-200 text-gray-700" :
-                            vegFilter === "veg" ? "border-green-600 bg-green-50" :
-                              "border-red-600 bg-red-50"
+                          "flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md border transition-colors bg-white dark:bg-card hover:bg-gray-50 dark:hover:bg-muted focus:outline-none focus:ring-1 focus:ring-primary/50",
+                          vegFilter === "all" ? "border-gray-200 dark:border-border text-gray-700 dark:text-foreground" :
+                            vegFilter === "veg" ? "border-green-600 bg-green-50 dark:bg-green-900/20" :
+                              "border-red-600 bg-red-50 dark:bg-red-900/20"
                         )}
                         title={`Filter: ${vegFilter === "all" ? "All" : vegFilter === "veg" ? "Veg" : "Non-Veg"} (Click to change)`}
                       >
@@ -391,14 +393,14 @@ export function DesktopPOS({
                           <div
                             key={item.id}
                             className={cn(
-                              "bg-white rounded-xl p-2.5 sm:p-3 hover:shadow-md transition-all flex flex-col",
+                              "bg-white dark:bg-card rounded-xl p-2.5 sm:p-3 hover:shadow-md transition-all flex flex-col",
                               isAdded
                                 ? "border-2 border-primary shadow-md ring-2 ring-primary/20"
-                                : "border-2 border-gray-200 hover:border-primary/30"
+                                : "border-2 border-gray-200 dark:border-border hover:border-primary/30 dark:hover:border-primary/50"
                             )}
                           >
                             <div className="flex items-start justify-between mb-2">
-                              <h3 className="font-semibold text-gray-900 flex-1 text-xs sm:text-sm line-clamp-2 leading-tight">
+                              <h3 className="font-semibold text-gray-900 dark:text-foreground flex-1 text-xs sm:text-sm line-clamp-2 leading-tight">
                                 {getTranslatedName(item as any, language)}
                               </h3>
                               <div
@@ -412,7 +414,7 @@ export function DesktopPOS({
                             </div>
 
                             <div className="mt-auto space-y-2">
-                              <span className="text-sm sm:text-base font-bold text-gray-900 block">
+                              <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-foreground block">
                                 {currency}{item.price}
                               </span>
                               {((item.variants?.length || 0) > 0 || (item.modifierGroups?.length || 0) > 0) && (
@@ -483,56 +485,13 @@ export function DesktopPOS({
                     )}
                   </div>
                 </ScrollArea>
-
-                {/* Action Buttons */}
-                <div className="bg-white border-t border-gray-200 p-2 sm:p-3 flex-shrink-0">
-                  <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-                    {!isWaiterMode && (
-                      <Button
-                        onClick={() => handleActionClick(onSave)}
-                        variant="outline"
-                        disabled={manualCart.length === 0}
-                        size="sm"
-                        className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
-                      >
-                        <Save className="size-3 sm:size-3.5 sm:mr-1.5" />
-                        <span className="hidden sm:inline">Save</span>
-                      </Button>
-                    )}
-                    {!isWaiterMode && (
-                      <Button
-                        onClick={() => handleActionClick(onSaveAndPrint)}
-                        variant="outline"
-                        disabled={manualCart.length === 0}
-                        size="sm"
-                        className="hover:bg-gray-100 text-[11px] sm:text-xs h-8 sm:h-9"
-                      >
-                        <Printer className="size-3 sm:size-3.5 sm:mr-1.5" />
-                        <span className="hidden sm:inline">KOT Print</span>
-                      </Button>
-                    )}
-                    <Button
-                      onClick={() => handleActionClick(onSendToKitchen)}
-                      disabled={manualCart.length === 0 || isLoading}
-                      size="sm"
-                      className="bg-primary hover:bg-primary/90 text-white px-3 sm:px-6 text-[11px] sm:text-xs h-8 sm:h-9"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="size-3 sm:size-3.5 sm:mr-1.5 animate-spin" />
-                      ) : (
-                        <ChefHat className="size-3 sm:size-3.5 sm:mr-1.5" />
-                      )}
-                      <span className="hidden sm:inline">Kitchen</span>
-                    </Button>
-                  </div>
-                </div>
               </div>
 
               {/* Right Side - Order Summary */}
-              <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 border-l border-gray-200 flex flex-col h-full overflow-hidden">
+              <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 dark:bg-muted/10 border-l border-gray-200 dark:border-border flex flex-col h-full overflow-hidden">
                 {/* Header */}
-                <div className="bg-white border-b border-gray-200 p-3 sm:p-4 flex-shrink-0">
-                  <h2 className="text-sm sm:text-base font-bold text-gray-900 mb-3">
+                <div className="bg-white dark:bg-card border-b border-gray-200 dark:border-border p-3 sm:p-4 flex-shrink-0">
+                  <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-foreground mb-3">
                     Order Summary
                   </h2>
 
@@ -545,12 +504,12 @@ export function DesktopPOS({
                     {/* Table */}
                     {!hideTableSelect && (
                       <div className="space-y-1 min-w-0">
-                        <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                        <Label className="text-[10px] text-gray-600 dark:text-muted-foreground font-medium flex items-center gap-1">
                           <UtensilsCrossed className="size-3" />
                           Table
                         </Label>
                         <Select value={selectedTableId} onValueChange={onTableChange}>
-                          <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
+                          <SelectTrigger className="h-8 text-[11px] border-2 dark:border-border dark:bg-card focus:border-primary px-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -569,12 +528,12 @@ export function DesktopPOS({
                     {/* Waiter */}
                     {!isWaiterMode && (
                       <div className="space-y-1 min-w-0">
-                        <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                        <Label className="text-[10px] text-gray-600 dark:text-muted-foreground font-medium flex items-center gap-1">
                           <Users className="size-3" />
                           Waiter
                         </Label>
                         <Select value={selectedWaiterId || "none"} onValueChange={onWaiterChange}>
-                          <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
+                          <SelectTrigger className="h-8 text-[11px] border-2 dark:border-border dark:bg-card focus:border-primary px-2">
                             <SelectValue placeholder="None" />
                           </SelectTrigger>
                           <SelectContent>
@@ -594,12 +553,12 @@ export function DesktopPOS({
                     {/* Type */}
                     {!hideOrderTypeSelect && !isWaiterMode && (
                       <div className="space-y-1 min-w-0">
-                        <Label className="text-[10px] text-gray-600 font-medium flex items-center gap-1">
+                        <Label className="text-[10px] text-gray-600 dark:text-muted-foreground font-medium flex items-center gap-1">
                           <Utensils className="size-3" />
                           Type
                         </Label>
                         <Select value={orderMethod} onValueChange={onOrderMethodChange}>
-                          <SelectTrigger className="h-8 text-[11px] border-2 focus:border-primary px-2">
+                          <SelectTrigger className="h-8 text-[11px] border-2 dark:border-border dark:bg-card focus:border-primary px-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -615,12 +574,12 @@ export function DesktopPOS({
                     <div className="flex flex-col items-end justify-end gap-1 pb-[4px]">
                       <div className="flex items-end justify-end gap-2">
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-[9px] text-gray-600 font-medium">Note</span>
+                          <span className="text-[9px] text-gray-600 dark:text-muted-foreground font-medium">Note</span>
                           <Button
                             type="button"
                             variant={cookingNote.trim() ? "default" : "outline"}
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-7 w-7 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
                             onClick={() => setNoteDialogOpen(true)}
                             title="Cooking note"
                           >
@@ -630,12 +589,12 @@ export function DesktopPOS({
 
                         {!isWaiterMode && showDiscount && (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[9px] text-gray-600 font-medium">Disc</span>
+                            <span className="text-[9px] text-gray-600 dark:text-muted-foreground font-medium">Disc</span>
                             <Button
                               type="button"
                               variant={discountAmount.trim() ? "default" : "outline"}
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-7 w-7 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
                               onClick={() => setDiscountDialogOpen(true)}
                               title="Discount"
                             >
@@ -750,11 +709,11 @@ export function DesktopPOS({
                 {/* Order Items */}
                 <ScrollArea className="flex-1 min-h-0 w-full">
                   <div className="p-2 md:p-3 w-full overflow-hidden">
-                    <h3 className="font-semibold text-gray-900 mb-1.5 text-[11px] md:text-xs">
+                    <h3 className="font-semibold text-gray-900 dark:text-foreground mb-1.5 text-[11px] md:text-xs">
                       Items ({manualCart.length})
                     </h3>
                     {manualCart.length === 0 ? (
-                      <p className="text-gray-500 text-[10px] text-center py-6">
+                      <p className="text-gray-500 dark:text-muted-foreground text-[10px] text-center py-6">
                         No items added
                       </p>
                     ) : (
@@ -777,7 +736,7 @@ export function DesktopPOS({
                           return (
                             <div
                               key={idx}
-                              className="bg-white rounded-md border border-gray-200 p-1.5 md:p-2 w-full overflow-hidden"
+                              className="bg-white dark:bg-card rounded-md border border-gray-200 dark:border-border p-1.5 md:p-2 w-full overflow-hidden"
                             >
                               <div className="flex items-center justify-between gap-1 md:gap-1.5 w-full min-w-0">
                                 <div className="flex items-center gap-1 flex-1 min-w-0 pr-1">
@@ -790,44 +749,44 @@ export function DesktopPOS({
                                     )}
                                   />
                                   <div className="flex flex-col min-w-0 flex-1">
-                                    <span className="font-semibold text-gray-900 text-[10px] md:text-[11px] break-all whitespace-normal block leading-tight">
+                                    <span className="font-semibold text-gray-900 dark:text-foreground text-[10px] md:text-[11px] break-all whitespace-normal block leading-tight">
                                       {menuItem ? getTranslatedName(menuItem as any, language) : item.name}
                                     </span>
                                     {selectedVariant && (
-                                      <span className="text-[8px] md:text-[9px] text-blue-600 break-all whitespace-normal block leading-tight">
+                                      <span className="text-[8px] md:text-[9px] text-blue-600 dark:text-blue-400 break-all whitespace-normal block leading-tight">
                                         {getTranslatedName(selectedVariant as any, language, 'variant')}
                                       </span>
                                     )}
                                     {selectedModifiers.length > 0 && (
-                                      <span className="text-[8px] md:text-[9px] text-amber-600 break-all whitespace-normal block leading-tight">
+                                      <span className="text-[8px] md:text-[9px] text-amber-600 dark:text-amber-500 break-all whitespace-normal block leading-tight">
                                         + {selectedModifiers.map((m) => getTranslatedName(m as any, language, 'modifier')).join(", ")}
                                       </span>
                                     )}
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-end gap-1 flex-shrink-0">
-                                  <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                                  <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-muted rounded-md p-0.5">
                                     <Button
                                       onClick={() => onDecrementLineItem(item.lineId)}
                                       size="sm"
                                       variant="ghost"
-                                      className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
+                                      className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200 dark:hover:bg-muted/80"
                                     >
                                       <Minus className="size-2 md:size-2.5" />
                                     </Button>
-                                    <span className="font-bold text-[9px] md:text-[10px] min-w-[0.75rem] text-center px-0.5">
+                                    <span className="font-bold dark:text-foreground text-[9px] md:text-[10px] min-w-[0.75rem] text-center px-0.5">
                                       {item.quantity}
                                     </span>
                                     <Button
                                       onClick={() => onIncrementLineItem(item.lineId)}
                                       size="sm"
                                       variant="ghost"
-                                      className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200"
+                                      className="h-5 w-5 md:h-6 md:w-6 p-0 hover:bg-gray-200 dark:hover:bg-muted/80"
                                     >
                                       <Plus className="size-2 md:size-2.5" />
                                     </Button>
                                   </div>
-                                  <span className="font-bold text-gray-900 min-w-[2.5rem] md:min-w-[3rem] text-right text-[9px] md:text-[10px]">
+                                  <span className="font-bold text-gray-900 dark:text-foreground min-w-[2.5rem] md:min-w-[3rem] text-right text-[9px] md:text-[10px]">
                                     {currency}{(item.unitPrice * item.quantity).toFixed(2)}
                                   </span>
                                 </div>
@@ -841,23 +800,23 @@ export function DesktopPOS({
                 </ScrollArea>
 
                 {/* Bill Breakdown */}
-                <div className="bg-white border-t border-gray-200 p-2 md:p-3 flex-shrink-0">
-                  <div className="space-y-1 mb-2 md:mb-3">
+                <div className="bg-white dark:bg-card border-t border-gray-200 dark:border-border p-1.5 md:p-2 pb-0 flex-shrink-0">
+                  <div className="space-y-0 mb-1">
                     <div className="flex justify-between text-[9px] md:text-[10px]">
-                      <span className="text-gray-600">Subtotal</span>
-                      <span className="text-gray-900 font-semibold">
+                      <span className="text-gray-600 dark:text-muted-foreground">Subtotal</span>
+                      <span className="text-gray-900 dark:text-foreground font-semibold">
                         {currency}{subtotal.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-[9px] md:text-[10px]">
-                      <span className="text-gray-600">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                      <span className="text-gray-900 font-semibold">
+                      <span className="text-gray-600 dark:text-muted-foreground">CGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                      <span className="text-gray-900 dark:text-foreground font-semibold">
                         {currency}{cgst.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-[9px] md:text-[10px]">
-                      <span className="text-gray-600">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
-                      <span className="text-gray-900 font-semibold">
+                      <span className="text-gray-600 dark:text-muted-foreground">SGST ({(gstRate * 100 / 2).toFixed(1)}%)</span>
+                      <span className="text-gray-900 dark:text-foreground font-semibold">
                         {currency}{sgst.toFixed(2)}
                       </span>
                     </div>
@@ -865,21 +824,21 @@ export function DesktopPOS({
                     {!isWaiterMode && orderMethod === "dine-in" && serviceCharge > 0 && (
                       <div className="flex justify-between text-[9px] md:text-[10px]">
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-600">
+                          <span className="text-gray-600 dark:text-muted-foreground">
                             Service Charge{serviceRatePct > 0 ? ` (${serviceRatePct.toFixed(0)}%)` : ""}
                           </span>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 text-red-600 hover:text-red-700"
+                            className="h-6 w-6 text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400"
                             title="Remove service charge"
                             onClick={() => onToggleWaiveServiceCharge?.(true)}
                           >
                             <MinusCircle className="h-4 w-4" />
                           </Button>
                         </div>
-                        <span className="text-gray-900 font-semibold">
+                        <span className="text-gray-900 dark:text-foreground font-semibold">
                           {currency}{serviceCharge.toFixed(2)}
                         </span>
                       </div>
@@ -887,16 +846,16 @@ export function DesktopPOS({
 
                     {!isWaiterMode && showDiscount && discountNum > 0 && (
                       <div className="flex justify-between text-[9px] md:text-[10px]">
-                        <span className="text-gray-600">Discount</span>
-                        <span className="text-gray-900 font-semibold">
+                        <span className="text-gray-600 dark:text-muted-foreground">Discount</span>
+                        <span className="text-gray-900 dark:text-foreground font-semibold">
                           - {currency}{discountNum.toFixed(2)}
                         </span>
                       </div>
                     )}
 
-                    <Separator className="my-1" />
-                    <div className="flex justify-between items-center pt-0.5">
-                      <span className="font-bold text-gray-900 text-[11px] md:text-xs">Total</span>
+                    <Separator className="my-0.5" />
+                    <div className="flex justify-between items-center pt-0.5 pb-0.5">
+                      <span className="font-bold text-gray-900 dark:text-foreground text-[11px] md:text-xs">Total</span>
                       <span className="font-bold text-base md:text-lg text-primary">
                         {currency}{total.toFixed(2)}
                       </span>
@@ -904,18 +863,18 @@ export function DesktopPOS({
                   </div>
 
                   {!isWaiterMode && (
-                    <div className="px-2 md:p-3 border-b border-gray-200">
-                      <Label className="text-[9px] md:text-[10px] text-gray-600 mb-1 md:mb-1.5 block font-medium">Payment</Label>
-                      <div className="flex gap-1 md:gap-1.5">
+                    <div className="px-1.5 md:px-2 pb-1.5 border-b border-gray-200 dark:border-border">
+                      <Label className="text-[9px] text-gray-500 dark:text-muted-foreground mb-0.5 block font-medium">Payment</Label>
+                      <div className="flex gap-1">
                         <Button
                           onClick={() => onPaymentMethodChange?.("cash")}
                           variant={paymentMethod === "cash" ? "default" : "outline"}
                           size="sm"
                           className={cn(
-                            "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                            "flex-1 h-6 md:h-7 text-[9px] md:text-[10px] font-semibold transition-all active:scale-95",
                             paymentMethod === "cash"
-                              ? "bg-primary hover:bg-primary/90"
-                              : "hover:bg-gray-100 border-2"
+                              ? "bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20"
+                              : "hover:bg-primary/5 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-2 border-gray-200 dark:border-border"
                           )}
                         >
                           Cash
@@ -925,10 +884,10 @@ export function DesktopPOS({
                           variant={paymentMethod === "card" ? "default" : "outline"}
                           size="sm"
                           className={cn(
-                            "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                            "flex-1 h-6 md:h-7 text-[9px] md:text-[10px] font-semibold transition-all active:scale-95",
                             paymentMethod === "card"
-                              ? "bg-primary hover:bg-primary/90"
-                              : "hover:bg-gray-100 border-2"
+                              ? "bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20"
+                              : "hover:bg-primary/5 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-2 border-gray-200 dark:border-border"
                           )}
                         >
                           Card
@@ -938,10 +897,10 @@ export function DesktopPOS({
                           variant={paymentMethod === "upi" ? "default" : "outline"}
                           size="sm"
                           className={cn(
-                            "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                            "flex-1 h-6 md:h-7 text-[9px] md:text-[10px] font-semibold transition-all active:scale-95",
                             paymentMethod === "upi"
-                              ? "bg-primary hover:bg-primary/90"
-                              : "hover:bg-gray-100 border-2"
+                              ? "bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20"
+                              : "hover:bg-primary/5 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-2 border-gray-200 dark:border-border"
                           )}
                         >
                           UPI
@@ -951,10 +910,10 @@ export function DesktopPOS({
                           variant={paymentMethod === "due" ? "default" : "outline"}
                           size="sm"
                           className={cn(
-                            "flex-1 h-7 md:h-8 text-[10px] md:text-[11px] font-semibold",
+                            "flex-1 h-6 md:h-7 text-[9px] md:text-[10px] font-semibold transition-all active:scale-95",
                             paymentMethod === "due"
-                              ? "bg-primary hover:bg-primary/90"
-                              : "hover:bg-gray-100 border-2"
+                              ? "bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20"
+                              : "hover:bg-primary/5 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-2 border-gray-200 dark:border-border"
                           )}
                         >
                           Due
@@ -962,6 +921,70 @@ export function DesktopPOS({
                       </div>
                     </div>
                   )}
+
+                  {/* Action Buttons */}
+                  <div className="p-1.5 md:p-2 flex-shrink-0">
+                    {!isWaiterMode ? (
+                      <div className="grid grid-cols-4 gap-1">
+                        <Button
+                          onClick={() => handleActionClick(onSave)}
+                          variant="outline"
+                          disabled={manualCart.length === 0}
+                          className="h-7 md:h-8 text-[9px] lg:text-[10px] xl:text-[11px] flex items-center justify-center gap-1 hover:bg-gray-100 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-gray-200 dark:border-border px-0"
+                        >
+                          <Save className="size-3 xl:size-3.5" />
+                          <span className="font-semibold leading-none">Save</span>
+                        </Button>
+                        <Button
+                          onClick={() => handleActionClick(onSaveAndPrint)}
+                          variant="outline"
+                          disabled={manualCart.length === 0}
+                          className="h-7 md:h-8 text-[9px] lg:text-[10px] xl:text-[11px] flex items-center justify-center gap-1 hover:bg-gray-100 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground border-gray-200 dark:border-border px-0"
+                        >
+                          <Printer className="size-3 xl:size-3.5" />
+                          <span className="font-semibold leading-none">KOT</span>
+                        </Button>
+                        {onSaveAndPrintBill ? (
+                          <Button
+                            onClick={() => handleActionClick(onSaveAndPrintBill)}
+                            variant="outline"
+                            disabled={manualCart.length === 0}
+                            className="h-7 md:h-8 text-[9px] lg:text-[10px] xl:text-[11px] flex items-center justify-center gap-1 hover:bg-blue-50 dark:bg-card dark:text-blue-400 dark:hover:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-600 px-0"
+                          >
+                            <Printer className="size-3 xl:size-3.5" />
+                            <span className="font-semibold leading-none">Save & print</span>
+                          </Button>
+                        ) : (
+                          <div /> // placeholder
+                        )}
+                        <Button
+                          onClick={() => handleActionClick(onSendToKitchen)}
+                          disabled={manualCart.length === 0 || isLoading}
+                          className="h-7 md:h-8 text-[9px] lg:text-[10px] xl:text-[11px] flex items-center justify-center gap-1 bg-primary hover:bg-primary/90 text-white px-0"
+                        >
+                          {isLoading ? (
+                            <Loader2 className="size-3 xl:size-3.5 animate-spin" />
+                          ) : (
+                            <ChefHat className="size-3 xl:size-3.5" />
+                          )}
+                          <span className="font-semibold leading-none">Kitchen</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleActionClick(onSendToKitchen)}
+                        disabled={manualCart.length === 0 || isLoading}
+                        className="w-full h-8 text-xs flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <ChefHat className="size-3.5" />
+                        )}
+                        <span className="font-semibold">Send to Kitchen</span>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

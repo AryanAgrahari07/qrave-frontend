@@ -149,47 +149,59 @@
 }
 
 .dark {
-  /* Dark mode - Comfortable for evening/night use */
-  --background: 215 25% 10%;
-  /* Deep slate background */
-  --foreground: 210 20% 95%;
-  /* Soft white text */
+  /* ── Deep Dark Theme (matching reference image) ── */
+  --background: 220 15% 6%;
+  /* Near-black with slight warmth */
+  --foreground: 210 15% 93%;
+  /* Soft off-white text */
 
-  --card: 215 25% 13%;
-  /* Slightly lighter cards */
-  --card-foreground: 210 20% 95%;
+  --card: 220 15% 9%;
+  /* Subtle card elevation */
+  --card-foreground: 210 15% 93%;
 
-  --popover: 215 25% 13%;
-  --popover-foreground: 210 20% 95%;
+  --popover: 220 15% 10%;
+  --popover-foreground: 210 15% 93%;
 
-  --primary: 352 70% 55%;
-  /* Brighter red for dark mode - your brand color */
+  --primary: 352 70% 58%;
+  /* Vibrant brand red for dark mode */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 215 25% 18%;
-  /* Dark grey accent */
-  --secondary-foreground: 210 20% 92%;
+  --veg: 142 60% 42%;
+  --nonveg: 352 70% 58%;
 
-  --muted: 215 25% 16%;
-  /* Muted dark backgrounds */
-  --muted-foreground: 210 15% 55%;
+  --secondary: 220 15% 13%;
+  --secondary-foreground: 210 15% 90%;
 
-  --accent: 215 25% 18%;
+  --muted: 220 15% 11%;
+  /* Muted surfaces */
+  --muted-foreground: 215 12% 50%;
+
+  --accent: 220 15% 13%;
   --accent-foreground: 352 70% 65%;
 
-  --border: 215 25% 22%;
-  /* Subtle dark borders */
-  --input: 215 25% 18%;
-  --ring: 352 70% 55%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
 
-  /* Dark sidebar - even deeper */
-  --sidebar: 215 30% 8%;
-  --sidebar-foreground: 210 20% 92%;
+  --border: 220 15% 14%;
+  /* Subtle but visible borders */
+  --input: 220 15% 13%;
+  --ring: 352 70% 58%;
+
+  /* Charts — brighter for dark backgrounds */
+  --chart-1: 352 70% 58%;
+  --chart-2: 142 60% 50%;
+  --chart-3: 265 55% 62%;
+  --chart-4: 35 80% 60%;
+  --chart-5: 195 70% 52%;
+
+  /* Sidebar — deepest layer */
+  --sidebar: 220 18% 4.5%;
+  --sidebar-foreground: 210 15% 90%;
   --sidebar-primary: 352 70% 58%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 215 25% 14%;
-  --sidebar-accent-foreground: 210 20% 95%;
-  --sidebar-border: 215 25% 18%;
+  --sidebar-accent: 220 15% 10%;
+  --sidebar-accent-foreground: 210 15% 95%;
+  --sidebar-border: 220 15% 12%;
   --sidebar-ring: 352 70% 58%;
 }
 

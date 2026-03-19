@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   UserPlus, LayoutGrid, Users, Languages, MapPin, Check, ShoppingCart, Plus, Minus, X,
   Loader2, RefreshCw, LogOut, Clock, Bell, ChefHat, Utensils, Receipt, Edit2, Trash2,
-  AlertCircle, Grid3x3, ArrowLeft, Search, Save, Printer, UtensilsCrossed
+  AlertCircle, Grid3x3, ArrowLeft, Search, Save, Printer, UtensilsCrossed, Moon, Sun
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useTheme } from "@/context/ThemeContext";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import {
   useTables,
@@ -89,6 +90,7 @@ export default function WaiterTerminalPage() {
   const updateOrder = useUpdateOrder(restaurantId);
 
   const { t, language } = useLanguage();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
 
   // POS cart lines (same structure as Live Orders POS)
@@ -256,6 +258,19 @@ export default function WaiterTerminalPage() {
 
   const toggleTableStatus = async (table: Table) => {
     const newStatus = table.currentStatus === "AVAILABLE" ? "OCCUPIED" : "AVAILABLE";
+
+    if (newStatus === "AVAILABLE") {
+      const hasActiveOrders = orders.some(
+        (o) => (o.tableId === table.id || o.table?.id === table.id) && 
+               !["PAID", "CANCELLED"].includes(o.status)
+      );
+
+      if (hasActiveOrders) {
+        toast.error("Cannot mark table unoccupied while there are active unpaid orders.");
+        return;
+      }
+    }
+
     updateTableStatus.mutate({ tableId: table.id, status: newStatus });
   };
 
@@ -696,7 +711,7 @@ export default function WaiterTerminalPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-background flex items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     );
@@ -751,13 +766,13 @@ export default function WaiterTerminalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-background p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-heading font-bold text-slate-900">{t("waiter.title")}</h1>
-            <p className="text-slate-500 text-sm">{restaurant?.name || "Restaurant"} • {user?.fullName || user?.email}</p>
+            <h1 className="text-2xl font-heading font-bold text-slate-900 dark:text-foreground">{t("waiter.title")}</h1>
+            <p className="text-slate-500 dark:text-muted-foreground text-sm">{restaurant?.name || "Restaurant"} • {user?.fullName || user?.email}</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -767,12 +782,26 @@ export default function WaiterTerminalPage() {
               onClick={handleRefreshAll}
               disabled={isRefetching || isRefreshing}
             >
-              <RefreshCw className={cn("w-4 h-4 mr-1", (isRefetching || isRefreshing) && "animate-spin")} /> Refresh
+              <RefreshCw className={cn("w-4 h-4 mr-1", (isRefetching || isRefreshing) && "animate-spin")} /> 
             </Button>
 
-            <LanguageSelector className="bg-white" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-9 w-9 text-slate-500 dark:text-muted-foreground hover:text-foreground transition-colors"
+              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="h-4 w-4 transition-transform duration-300 rotate-0" />
+              ) : (
+                <Moon className="h-4 w-4 transition-transform duration-300 rotate-0" />
+              )}
+            </Button>
 
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-destructive">
+            <LanguageSelector className="bg-background" />
+
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 dark:text-muted-foreground hover:text-destructive">
               <LogOut className="w-5 h-5" />
             </Button>
           </div>
@@ -780,16 +809,16 @@ export default function WaiterTerminalPage() {
 
         {/* Notification Banner */}
         {notifications.length > 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3 animate-in slide-in-from-top">
-            <Bell className="w-5 h-5 text-green-600 animate-bounce" />
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900/50 rounded-lg p-3 flex items-center gap-3 animate-in slide-in-from-top">
+            <Bell className="w-5 h-5 text-green-600 dark:text-green-500 animate-bounce" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-800">{notifications[0].message}</p>
+              <p className="text-sm font-medium text-green-800 dark:text-green-400">{notifications[0].message}</p>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setNotifications(prev => prev.slice(1))}
-              className="text-green-600 hover:text-green-800"
+              className="text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -825,51 +854,69 @@ export default function WaiterTerminalPage() {
                 </div>
 
                 {tables && tables.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                    {tables.map((table: Table) => (
-                      <div key={table.id} className="relative group">
-                        <div className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="icon"
-                            variant="secondary"
-                            className="h-6 w-6 rounded-full shadow-lg border border-slate-200"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleTableStatus(table);
-                            }}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+                    {tables.map((table: Table) => {
+                      const isOccupied = table.currentStatus === "OCCUPIED";
+                      const isMyTable = table.assignedWaiter?.id === user?.id || table.assignedWaiterId === user?.id;
+
+                      return (
+                        <div key={table.id} className="relative group">
+                          <button
+                            onClick={() => toggleTableStatus(table)}
                             disabled={updateTableStatus.isPending}
+                            className={cn(
+                              "w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95",
+                              !isOccupied
+                                ? "bg-white dark:bg-card border-green-200 dark:border-green-900/50 shadow-sm"
+                                : isMyTable
+                                  ? "bg-red-50 dark:bg-red-950/20 border-primary shadow-inner text-slate-900 dark:text-foreground cursor-pointer hover:bg-red-100 dark:hover:bg-red-950/40 ring-1 ring-primary/20"
+                                  : "bg-slate-100 dark:bg-muted/50 border-slate-300 dark:border-slate-700 shadow-inner text-slate-600 dark:text-muted-foreground cursor-pointer hover:bg-slate-200 dark:hover:bg-muted/80 opacity-80"
+                            )}
                           >
-                            <Check className={cn("w-3 h-3", table.currentStatus === "AVAILABLE" ? "text-slate-400" : "text-green-600")} />
-                          </Button>
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (table.currentStatus === "OCCUPIED") {
-                              handleNewOrderClick(table);
-                            }
-                          }}
-                          className={cn(
-                            "w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95",
-                            table.currentStatus === "AVAILABLE"
-                              ? "bg-white border-green-200 shadow-sm"
-                              : "bg-slate-100 border-primary/50 shadow-inner text-slate-900 cursor-pointer hover:bg-slate-200"
-                          )}
-                        >
-                          <span className="text-2xl font-bold">{table.tableNumber}</span>
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Cap: {table.capacity}</span>
-                          {table.assignedWaiter && (
-                            <span className="text-[9px] font-semibold text-primary mt-0.5 px-1.5 py-0.5 bg-primary/10 rounded">
-                              👤 {table.assignedWaiter.fullName}
+                            <span className={cn(
+                              "text-2xl font-bold", 
+                              !isOccupied || isMyTable ? "dark:text-foreground" : "dark:text-muted-foreground"
+                            )}>
+                              {table.tableNumber}
                             </span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-muted-foreground">Cap: {table.capacity}</span>
+                            
+                            {table.assignedWaiter && (
+                              <span className={cn(
+                                "text-[9px] font-semibold mt-0.5 px-1.5 py-0.5 rounded max-w-[90%] truncate",
+                                isMyTable 
+                                  ? "text-primary bg-primary/10" 
+                                  : "text-slate-600 dark:text-slate-400 bg-slate-200 dark:bg-slate-800"
+                              )}>
+                                👤 {isMyTable ? t("waiter.me") || "Me" : table.assignedWaiter.fullName}
+                              </span>
+                            )}
+                            
+                          </button>
+
+                          {/* Order Button - Bottom Center Overlay */}
+                          {isOccupied && (
+                            <div className="absolute -bottom-0 left-1/2 -translate-x-1/2 flex z-10 translate-y-1/3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleNewOrderClick(table);
+                                }}
+                                className={cn(
+                                  "h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white dark:bg-card border-2 flex items-center justify-center shadow-md hover:shadow-lg transition-all",
+                                  isMyTable
+                                    ? "border-red-400 dark:border-red-500/50 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-500"
+                                    : "border-slate-400 dark:border-slate-500/50 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-500"
+                                )}
+                                title={t("waiter.order") || "Order"}
+                              >
+                                <Plus className={cn("w-4 h-4 sm:w-5 sm:h-5", isMyTable ? "text-red-500" : "text-slate-500")} />
+                              </button>
+                            </div>
                           )}
-                          {table.currentStatus === "OCCUPIED" && (
-                            <Badge variant="outline" className="text-[9px] border-primary text-primary bg-primary/5 mt-1">
-                              <Plus className="w-2 h-2 mr-0.5" /> Order
-                            </Badge>
-                          )}
-                        </button>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-12 border-2 border-dashed rounded-xl">
@@ -957,23 +1004,23 @@ export default function WaiterTerminalPage() {
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activeOrders.map((order: Order) => (
                   <Card key={order.id} className={cn(
-                    "overflow-hidden transition-all",
-                    order.status === "READY" && "ring-2 ring-green-500 bg-green-50/50",
-                    order.status === "SERVED" && "ring-1 ring-green-300 bg-green-50/30"
+                    "overflow-hidden transition-all dark:bg-card dark:border-border",
+                    order.status === "READY" && "ring-2 ring-green-500 bg-green-50/50 dark:bg-green-950/30",
+                    order.status === "SERVED" && "ring-1 ring-green-300 bg-green-50/30 dark:bg-green-950/10"
                   )}>
                     <CardHeader className={cn(
                       "py-3 px-4",
-                      order.status === "PENDING" && "bg-red-50",
-                      order.status === "PREPARING" && "bg-blue-50",
-                      order.status === "READY" && "bg-green-50",
-                      order.status === "SERVED" && "bg-green-50/50"
+                      order.status === "PENDING" && "bg-red-50 dark:bg-red-950/30",
+                      order.status === "PREPARING" && "bg-blue-50 dark:bg-blue-950/30",
+                      order.status === "READY" && "bg-green-50 dark:bg-green-950/30",
+                      order.status === "SERVED" && "bg-green-50/50 dark:bg-green-950/20"
                     )}>
                       <div className="flex justify-between items-start">
                         <div>
-                          <CardTitle className="text-lg">
+                          <CardTitle className="text-lg dark:text-foreground">
                             {order.table?.tableNumber ? `Table ${order.table.tableNumber}` : order.guestName || `#${order.orderNumber ? String(order.orderNumber).padStart(4, "0") : order.id.slice(-4)}`}
                           </CardTitle>
-                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                          <p className="text-xs text-slate-500 dark:text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Clock className="w-3 h-3" /> {getTimeSince(order.createdAt)}
                           </p>
                         </div>

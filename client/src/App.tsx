@@ -9,6 +9,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { SubscriptionProvider } from "@/context/SubscriptionContext";
 import { PrinterProvider } from "@/context/PrinterContext";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import NotFound from "@/pages/not-found";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthGate } from "@/components/AuthGate";
@@ -217,22 +218,24 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <LanguageProvider>
-          <AuthProvider>
-            <SubscriptionProvider>
-              <PrinterProvider width={32}>
-                <TooltipProvider>
-                  <OfflineBanner />
-                  <Toaster />
-                  <SonnerToaster position="top-center" richColors />
-                  <Router />
-                </TooltipProvider>
-              </PrinterProvider>
-            </SubscriptionProvider>
-          </AuthProvider>
-        </LanguageProvider>
-      </QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <LanguageProvider>
+            <AuthProvider>
+              <SubscriptionProvider>
+                <PrinterProvider width={32}>
+                  <TooltipProvider>
+                    <OfflineBanner />
+                    <Toaster />
+                    <SonnerToaster position="top-center" richColors />
+                    <Router />
+                  </TooltipProvider>
+                </PrinterProvider>
+              </SubscriptionProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

@@ -304,7 +304,7 @@ export default function SettingsPage() {
     <DashboardLayout>
       <div className="max-w-4xl w-full mx-auto px-2 sm:px-0 pb-6 sm:pb-8">
         <div className="grid gap-4 sm:gap-6">
-          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-white to-transparent overflow-hidden relative shadow-sm">
+          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-transparent overflow-hidden relative shadow-sm">
             <div className="absolute -top-6 -right-6 p-4 opacity-[0.03] pointer-events-none">
               <Crown className="w-48 h-48" />
             </div>
@@ -313,19 +313,19 @@ export default function SettingsPage() {
                 <div className="p-2 bg-primary/10 rounded-lg">
                   <Crown className="w-5 h-5 text-primary" />
                 </div>
-                <CardTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
+                <CardTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-muted-foreground">
                   Subscription Plan
                 </CardTitle>
               </div>
-              <CardDescription className="text-sm font-medium text-gray-500">
+              <CardDescription className="text-sm font-medium text-muted-foreground">
                 Manage your Order<span className="text-primary">zi</span> plan, billing features, and renewals.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 px-4 sm:px-6 pb-5 sm:pb-6 relative z-10">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 bg-white/80 backdrop-blur-sm rounded-xl border border-primary/10 shadow-sm gap-4 transition-all hover:shadow-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 bg-card/80 backdrop-blur-sm rounded-xl border border-primary/10 shadow-sm gap-4 transition-all hover:shadow-md">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-3">
-                    <p className="font-extrabold text-lg sm:text-xl text-gray-900 tracking-tight">
+                    <p className="font-extrabold text-lg sm:text-xl text-foreground tracking-tight">
                       {subscription?.plan || "Trial"} Plan
                     </p>
                     {isActiveSubscription ? (
@@ -339,7 +339,7 @@ export default function SettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 font-medium flex items-center gap-1.5">
+                  <p className="text-sm text-muted-foreground font-medium flex items-center gap-1.5">
                     {isActiveSubscription
                       ? daysRemaining !== null && daysRemaining > 0
                         ? <><Check className="w-4 h-4 text-green-500" /> {daysRemaining} days remaining in your billing cycle</>

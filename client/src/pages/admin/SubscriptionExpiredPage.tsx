@@ -154,10 +154,10 @@ export default function SubscriptionExpiredPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8 relative">
+        <div className="min-h-screen bg-gray-50 dark:bg-background flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8 relative">
             <Button
                 variant="ghost"
-                className="absolute top-4 left-4 md:top-8 md:left-8 text-gray-500 hover:text-gray-900"
+                className="absolute top-4 left-4 md:top-8 md:left-8 text-gray-500 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground"
                 onClick={() => setLocation("/dashboard")}
             >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -166,13 +166,13 @@ export default function SubscriptionExpiredPage() {
 
             <div className="w-full max-w-4xl space-y-8 mt-8 md:mt-4">
                 <div className="text-center space-y-4">
-                    <div className={cn("mx-auto h-16 w-16 rounded-full flex items-center justify-center", isActive ? "bg-amber-100" : "bg-red-100")}>
-                        {isActive ? <Crown className="h-8 w-8 text-amber-600" /> : <AlertTriangle className="h-8 w-8 text-red-600" />}
+                    <div className={cn("mx-auto h-16 w-16 rounded-full flex items-center justify-center", isActive ? "bg-amber-100 dark:bg-amber-900/30" : "bg-red-100 dark:bg-red-900/30")}>
+                        {isActive ? <Crown className="h-8 w-8 text-amber-600 dark:text-amber-500" /> : <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-500" />}
                     </div>
-                    <h2 className="text-3xl font-extrabold text-gray-900">
+                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-foreground">
                         {isActive ? "Upgrade Plan" : "Subscription Expired"}
                     </h2>
-                    <p className="max-w-xl mx-auto text-lg text-gray-500">
+                    <p className="max-w-xl mx-auto text-lg text-gray-500 dark:text-muted-foreground">
                         {isActive
                             ? `You currently have an active ${subscription?.plan} plan (${daysRemaining} days left). Choose a professional plan to permanently unlock all features or renew your access.`
                             : <span>Your Order<span className="text-primary">zi</span> subscription for this restaurant has expired or is invalid. Please select a plan to renew and regain access to the portal.</span>}
@@ -186,7 +186,7 @@ export default function SubscriptionExpiredPage() {
                     {plans.map((plan) => (
                         <div
                             key={plan.id}
-                            className={`bg-white rounded-2xl shadow-sm border p-6 flex flex-col ${plan.isPopular ? "border-primary ring-1 ring-primary" : "border-gray-200"
+                            className={`bg-white dark:bg-card rounded-2xl shadow-sm border p-6 flex flex-col ${plan.isPopular ? "border-primary ring-1 ring-primary" : "border-gray-200 dark:border-border"
                                 }`}
                         >
                             {plan.isPopular && (
@@ -198,17 +198,17 @@ export default function SubscriptionExpiredPage() {
                             )}
                             <div className="flex items-center space-x-3 mb-4">
                                 {plan.icon}
-                                <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-foreground">{plan.name}</h3>
                             </div>
                             <div className="mb-6">
-                                <span className="text-4xl font-extrabold text-gray-900">₹{plan.price}</span>
-                                <span className="text-base font-medium text-gray-500">/mo</span>
+                                <span className="text-4xl font-extrabold text-gray-900 dark:text-foreground">₹{plan.price}</span>
+                                <span className="text-base font-medium text-gray-500 dark:text-muted-foreground">/mo</span>
                             </div>
                             <ul className="space-y-4 mb-8 flex-1">
                                 {plan.features.map((feature, idx) => (
                                     <li key={idx} className="flex items-start">
                                         <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mr-2" />
-                                        <span className="text-sm text-gray-600">{feature}</span>
+                                        <span className="text-sm text-gray-600 dark:text-card-foreground">{feature}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -226,7 +226,7 @@ export default function SubscriptionExpiredPage() {
                 </div>
 
                 <div className="pt-8 text-center">
-                    <Button variant="ghost" onClick={logout} className="text-gray-500">
+                    <Button variant="ghost" onClick={logout} className="text-gray-500 dark:text-muted-foreground">
                         Log out to switch accounts
                     </Button>
                 </div>

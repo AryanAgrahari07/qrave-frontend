@@ -134,7 +134,7 @@ export default function FloorMapPage() {
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 1024);
     };
 
     checkMobile();
@@ -389,7 +389,7 @@ export default function FloorMapPage() {
         "due": "DUE",
       };
 
-      const created = await createOrder.mutateAsync({
+      const result = await createOrder.mutateAsync({
         tableId: selectedTableForOrder.id,
         orderType: "DINE_IN",
         items: manualCart.map((item) => ({
@@ -404,12 +404,14 @@ export default function FloorMapPage() {
         paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
       });
 
+      const orderResult = result.order || result;
+
       // Apply discount if set
       const discountNum = parseFloat(discountAmount || "0");
       if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
         try {
-          await updateOrder.mutateAsync({
-            orderId: created.id,
+          await (updateOrder.mutateAsync as any)({
+            orderId: orderResult.id,
             data: { discountAmount: discountNum },
           });
         } catch {
@@ -421,11 +423,11 @@ export default function FloorMapPage() {
 
       // Print KOT to thermal printer
       if (restaurant) {
-        const kotData = buildKOTDataFromOrder({ 
-          order: created, 
-          restaurant, 
+        const kotData = buildKOTDataFromOrder({
+          order: orderResult,
+          restaurant,
           tableNumber: selectedTableForOrder.tableNumber,
-          waiterName: waiterDisplay 
+          waiterName: waiterDisplay
         });
         await printKOT(kotData);
       }
@@ -442,6 +444,90 @@ export default function FloorMapPage() {
       refetch();
     } catch (error) {
       // Error handled by mutation / printKOT toast
+    }
+  };
+
+  const handleSaveAndPrintBill = async () => {
+    if (manualCart.length === 0) {
+      toast.error("Please add items to the order");
+      return;
+    }
+
+    if (!selectedTableForOrder) {
+      toast.error("No table selected");
+      return;
+    }
+
+    if (!isPrinterConnected) {
+      toast.error("Printer not connected, Connect to print Bill");
+      return;
+    }
+
+    try {
+      const paymentStatusMap = {
+        "cash": "PAID",
+        "card": "PAID",
+        "upi": "PAID",
+        "due": "DUE",
+      };
+
+      const result = await createOrder.mutateAsync({
+        tableId: selectedTableForOrder.id,
+        orderType: "DINE_IN",
+        items: manualCart.map((item) => ({
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          variantId: item.variantId,
+          modifierIds: item.modifierIds,
+        })),
+        assignedWaiterId: selectedWaiterIdForOrder || undefined,
+        waiveServiceCharge,
+        paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+        paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+      });
+
+      const orderResult = result.order || result;
+
+      const discountNum = parseFloat(discountAmount || "0");
+      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+        try {
+          await (updateOrder.mutateAsync as any)({
+            orderId: orderResult.id,
+            data: { discountAmount: discountNum },
+          });
+        } catch {
+          toast.error("Order created, but failed to apply discount");
+        }
+      }
+
+      toast.success(`Order saved! Table ${selectedTableForOrder.tableNumber}`);
+
+      // Print bill to thermal printer (if connected)
+      if (isPrinterConnected && restaurant) {
+        try {
+          // Fetch the full order for bill data (with discounts applied)
+          await refetch();
+          const billData = buildBillDataFromOrder({
+            order: orderResult,
+            restaurant,
+            currency,
+            restaurantLogo,
+          });
+          await printThermalBill(billData);
+        } catch (printErr) {
+          console.error("Bill print error:", printErr);
+        }
+      }
+
+      setManualCart([]);
+      setPaymentMethod("due");
+      setDiscountAmount("");
+      setIsPOSOpen(false);
+      setShowMobilePOS(false);
+      setSelectedTableForOrder(null);
+      refetch();
+    } catch (error) {
+      // Error handled by mutation
     }
   };
 
@@ -483,7 +569,7 @@ export default function FloorMapPage() {
       const discountNum = parseFloat(discountAmount || "0");
       if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
         try {
-          await updateOrder.mutateAsync({
+          await (updateOrder.mutateAsync as any)({
             orderId: created.id,
             data: { discountAmount: discountNum },
           });
@@ -647,15 +733,15 @@ export default function FloorMapPage() {
   const getStatusColor = (status: TableStatus) => {
     switch (status) {
       case "AVAILABLE":
-        return "bg-white border-green-200 hover:border-green-400 text-green-600";
+        return "bg-card border-green-200 hover:border-green-400 text-green-600 dark:bg-card dark:border-green-900/50 dark:hover:border-green-800 dark:text-green-500";
       case "OCCUPIED":
-        return "bg-red-50/30 border-red-200 text-red-400";
+        return "bg-red-50/30 border-red-200 text-red-400 dark:bg-red-950/20 dark:border-red-900/50 dark:text-red-500";
       case "RESERVED":
-        return "bg-yellow-50/30 border-yellow-200 text-yellow-600";
+        return "bg-yellow-50/30 border-yellow-200 text-yellow-600 dark:bg-yellow-950/20 dark:border-yellow-900/50 dark:text-yellow-500";
       case "BLOCKED":
-        return "bg-gray-50 border-gray-300 text-gray-500";
+        return "bg-gray-50 border-gray-300 text-gray-500 dark:bg-muted/20 dark:border-border dark:text-muted-foreground";
       default:
-        return "bg-white border-gray-200";
+        return "bg-card border-gray-200 dark:bg-card dark:border-border";
     }
   };
 
@@ -675,12 +761,12 @@ export default function FloorMapPage() {
   const getPaymentStatusColor = (paymentStatus?: string) => {
     switch (paymentStatus) {
       case "PAID":
-        return "bg-green-100 text-green-700 border border-green-200";
+        return "bg-green-100 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-500 dark:border-green-900/50";
       case "PARTIALLY_PAID":
-        return "bg-yellow-100 text-yellow-700 border border-yellow-200";
+        return "bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-500 dark:border-yellow-900/50";
       case "DUE":
       default:
-        return "bg-red-100 text-red-600 border border-red-200";
+        return "bg-red-100 text-red-600 border border-red-200 dark:bg-red-950/30 dark:text-red-500 dark:border-red-900/50";
     }
   };
 
@@ -771,7 +857,7 @@ export default function FloorMapPage() {
         </AlertDialog>
 
         {customizingItem ? (
-          <div className="fixed inset-0 z-50 bg-white">
+          <div className="fixed inset-0 z-50 bg-background">
             <ItemCustomizationContent
               menuItem={customizingItem}
               currency={currency}
@@ -810,6 +896,7 @@ export default function FloorMapPage() {
             onSendToKitchen={handleSendToKitchen}
             onSave={handleSave}
             onSaveAndPrint={handleSaveAndPrint}
+            onSaveAndPrintBill={handleSaveAndPrintBill}
             onClose={handleClosePOS}
             currency={currency}
             gstRate={gstRate}
@@ -1104,7 +1191,7 @@ export default function FloorMapPage() {
                               e.stopPropagation();
                               handlePlaceOrder(table);
                             }}
-                            className="h-9 w-9 rounded-full bg-white border-2 border-red-400 flex items-center justify-center shadow-md hover:bg-red-50 hover:border-red-500 hover:shadow-lg transition-all"
+                            className="h-9 w-9 rounded-full bg-white dark:bg-card border-2 border-red-400 dark:border-red-500/50 flex items-center justify-center shadow-md hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-500 hover:shadow-lg transition-all"
                             title="Add Order"
                           >
                             <Plus className="w-4.5 h-4.5 text-red-500" />
@@ -1115,7 +1202,7 @@ export default function FloorMapPage() {
                                 e.stopPropagation();
                                 handleViewBill(tableOrder);
                               }}
-                              className="h-9 w-9 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center shadow-md hover:bg-blue-50 hover:border-blue-500 hover:shadow-lg transition-all"
+                              className="h-9 w-9 rounded-full bg-white dark:bg-card border-2 border-blue-400 dark:border-blue-500/50 flex items-center justify-center shadow-md hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-500 hover:shadow-lg transition-all"
                               title="View Bill"
                             >
                               <Receipt className="w-4.5 h-4.5 text-blue-500" />
@@ -1186,6 +1273,7 @@ export default function FloorMapPage() {
             onSendToKitchen={handleSendToKitchen}
             onSave={handleSave}
             onSaveAndPrint={handleSaveAndPrint}
+            onSaveAndPrintBill={handleSaveAndPrintBill}
             onCloseCustomization={() => setCustomizingItem(null)}
             onAddCustomizedToCart={handleAddCustomizedToCart}
             onSearchQueryChange={setSearchQuery}

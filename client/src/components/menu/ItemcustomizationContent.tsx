@@ -39,8 +39,8 @@ export function ItemCustomizationContent({
     setSelectedVariantId(defaultVariant?.id);
 
     const defaultModifiers = new Set<string>();
-    menuItem.modifierGroups?.forEach(group => {
-      group.modifiers?.forEach(mod => {
+    menuItem.modifierGroups?.forEach((group: any) => {
+      group.modifiers?.forEach((mod: any) => {
         if (mod.isDefault) defaultModifiers.add(mod.id);
       });
     });
@@ -50,7 +50,7 @@ export function ItemCustomizationContent({
   const handleModifierToggle = (modifierId: string, group: any) => {
     const newSelection = new Set(selectedModifierIds);
     if (group.selectionType === "SINGLE") {
-      group.modifiers?.forEach(mod => {
+      group.modifiers?.forEach((mod: any) => {
         if (mod.id !== modifierId) newSelection.delete(mod.id);
       });
       if (newSelection.has(modifierId)) {
@@ -63,7 +63,7 @@ export function ItemCustomizationContent({
         newSelection.delete(modifierId);
       } else {
         const groupModCount = Array.from(newSelection).filter(id =>
-          group.modifiers?.some(m => m.id === id)
+          group.modifiers?.some((m: any) => m.id === id)
         ).length;
         if (group.maxSelections && groupModCount >= group.maxSelections) return;
         newSelection.add(modifierId);
@@ -79,8 +79,8 @@ export function ItemCustomizationContent({
       if (variant) basePrice = parseFloat(variant.price as any);
     }
     let modifiersTotal = 0;
-    menuItem.modifierGroups?.forEach(group => {
-      group.modifiers?.forEach(mod => {
+    menuItem.modifierGroups?.forEach((group: any) => {
+      group.modifiers?.forEach((mod: any) => {
         if (selectedModifierIds.has(mod.id)) {
           modifiersTotal += parseFloat(mod.price as any);
         }
@@ -91,9 +91,9 @@ export function ItemCustomizationContent({
 
   const canAddToCart = () => {
     for (const group of menuItem.modifierGroups || []) {
-      if (group.isRequired) {
+      if ((group as any).isRequired) {
         const groupModCount = Array.from(selectedModifierIds).filter(id =>
-          group.modifiers?.some(m => m.id === id)
+          (group as any).modifiers?.some((m: any) => m.id === id)
         ).length;
         if (groupModCount < (group.minSelections || 1)) return false;
       }

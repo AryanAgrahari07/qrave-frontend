@@ -10,10 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Languages, Utensils, Timer, Loader2, RefreshCw, AlertCircle, LogOut } from "lucide-react";
+import { CheckCircle2, Languages, Utensils, Timer, Loader2, RefreshCw, AlertCircle, LogOut, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useTheme } from "@/context/ThemeContext";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useKitchenOrders, useKitchenStartOrder, useKitchenCompleteOrder, useRestaurant } from "@/hooks/api";
 import type { Order, OrderItem } from "@/types";
@@ -26,6 +27,9 @@ export default function KitchenKDSPage() {
   const { data: orders, isLoading, refetch, isRefetching } = useKitchenOrders(restaurantId);
   const startOrder = useKitchenStartOrder(restaurantId);
   const completeOrder = useKitchenCompleteOrder(restaurantId);
+
+  const { t, language } = useLanguage();
+  const { resolvedTheme, toggleTheme } = useTheme();
 
   // Local-only KDS convenience: allow kitchen staff to tick off items as they prepare them.
   // This is intentionally not persisted to the backend.
@@ -73,7 +77,6 @@ export default function KitchenKDSPage() {
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  const { t, language } = useLanguage();
   const [section, setSection] = useState<"active" | "ready">("active");
 
   const handleStartOrder = async (orderId: string) => {
@@ -128,13 +131,13 @@ export default function KitchenKDSPage() {
       <Card
         key={order.id}
         className={cn(
-          "bg-white border border-black text-black overflow-hidden transition-all shadow-sm ",
+          "bg-white dark:bg-card border border-black dark:border-border text-black dark:text-card-foreground overflow-hidden transition-all shadow-sm",
           "ring-0"
         )}
       >
         <CardHeader
           className={cn(
-            "py-2 px-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between bg-gray-100 border-b border-black",
+            "py-2 px-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between bg-gray-100 dark:bg-muted/30 border-b border-black dark:border-border",
             // Keep header consistently light gray for readability; use a left border as status indicator.
             order.status === "PENDING"
               ? urgent
@@ -156,17 +159,17 @@ export default function KitchenKDSPage() {
               )}
               {urgent && <AlertCircle className="w-5 h-5 text-gray-500" />}
             </CardTitle>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-gray-600 text-xs mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-gray-600 dark:text-muted-foreground text-xs mt-0.5">
               <Timer className="w-4 h-4" />
-              <span className={cn(mins > 15 && "text-yellow-700 font-bold")}>
+              <span className={cn(mins > 15 && "text-yellow-700 dark:text-yellow-500 font-bold")}>
                 {mins} {t("kitchen.mins")}
               </span>
-              <span className="text-gray-400">•</span>
+              <span className="text-gray-400 dark:text-gray-600">•</span>
               <span className="uppercase text-xs">{order.orderType}</span>
               {order.placedByStaff && (
                 <>
-                  <span className="text-gray-400">•</span>
-                  <span className="text-xs text-blue-700">👤 {order.placedByStaff.fullName}</span>
+                  <span className="text-gray-400 dark:text-gray-600">•</span>
+                  <span className="text-xs text-blue-700 dark:text-blue-400">👤 {order.placedByStaff.fullName}</span>
                 </>
               )}
             </div>
@@ -203,9 +206,9 @@ export default function KitchenKDSPage() {
                 <div
                   key={item.id}
                   className={cn(
-                    "flex items-start justify-between gap-3 border-b border-gray-200 pb-2 relative",
-                    hasCustomization && !strikeThrough && "bg-blue-50 p-2 rounded-none border border-blue-200",
-                    strikeThrough && "bg-gray-50 opacity-50",
+                    "flex items-start justify-between gap-3 border-b border-gray-200 dark:border-border pb-2 relative",
+                    hasCustomization && !strikeThrough && "bg-blue-50 dark:bg-blue-950/20 p-2 rounded-none border border-blue-200 dark:border-blue-900/50",
+                    strikeThrough && "bg-gray-50 dark:bg-transparent opacity-50",
                     checked && !strikeThrough && "opacity-60"
                   )}
                 >
@@ -244,10 +247,10 @@ export default function KitchenKDSPage() {
 
                       {item.variantName && (
                         <div className={cn("flex items-center gap-2", checked && "line-through")}>
-                          <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">
+                          <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">
                             SIZE
                           </span>
-                          <span className="text-xs text-blue-900 font-medium">
+                          <span className="text-xs text-blue-900 dark:text-blue-200 font-medium">
                             {item.variantNameTranslations?.[language] || item.variantName}
                           </span>
                         </div>
@@ -255,14 +258,14 @@ export default function KitchenKDSPage() {
 
                       {item.selectedModifiers && item.selectedModifiers.length > 0 && (
                         <div className={cn("space-y-0.5", checked && "line-through")}>
-                          <span className="text-[10px] bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded font-bold">
+                          <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-400 px-1.5 py-0.5 rounded font-bold">
                             ADD-ONS
                           </span>
                           <div className="pl-2 space-y-0.5">
                             {item.selectedModifiers.map((mod: any, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                                <span className="text-yellow-900">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 dark:bg-yellow-500" />
+                                <span className="text-yellow-900 dark:text-yellow-400">
                                   {mod.nameTranslations?.[language] || mod.name}
                                 </span>
                               </div>
@@ -272,15 +275,15 @@ export default function KitchenKDSPage() {
                       )}
 
                       {item.notes && (
-                        <p className={cn("text-xs text-yellow-900 mt-0.5", checked && "line-through")}>
-                          <span className="bg-yellow-100 px-1.5 py-0.5 rounded font-bold text-[10px]">NOTE</span>{" "}
+                        <p className={cn("text-xs text-yellow-900 dark:text-yellow-400 mt-0.5", checked && "line-through")}>
+                          <span className="bg-yellow-100 dark:bg-yellow-900/40 px-1.5 py-0.5 rounded font-bold text-[10px]">NOTE</span>{" "}
                           {item.notes}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <span className="ml-2 w-8 h-8 rounded-none bg-gray-200 text-black flex items-center justify-center text-sm font-bold flex-shrink-0">
+                  <span className="ml-2 w-8 h-8 rounded-none bg-gray-200 dark:bg-muted text-black dark:text-foreground flex items-center justify-center text-sm font-bold flex-shrink-0">
                     {item.quantity}
                   </span>
                 </div>
@@ -289,11 +292,11 @@ export default function KitchenKDSPage() {
           </div>
 
           {order.items?.some((item: OrderItem) => item.variantName || (item.selectedModifiers && item.selectedModifiers.length > 0)) && (
-            <Badge className="bg-blue-50 text-blue-800 border border-blue-200">Customized</Badge>
+            <Badge className="bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50">Customized</Badge>
           )}
 
           {order.notes && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-none p-3 text-sm text-yellow-900">
+            <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 rounded-none p-3 text-sm text-yellow-900 dark:text-yellow-400">
               <strong>Note:</strong> {order.notes}
             </div>
           )}
@@ -326,7 +329,7 @@ export default function KitchenKDSPage() {
                 {t("kitchen.ready")}
               </Button>
             ) : (
-              <div className="w-full h-11 flex items-center justify-center bg-green-50 border-2 border-green-200 rounded-none font-semibold text-sm text-green-800">
+              <div className="w-full h-11 flex items-center justify-center bg-green-50 dark:bg-green-950/30 border-2 border-green-200 dark:border-green-900/50 rounded-none font-semibold text-sm text-green-800 dark:text-green-400">
                 <CheckCircle2 className="w-5 h-5 mr-2" />
                 {t("kitchen.readyForPickup").toUpperCase()}
               </div>
@@ -339,9 +342,9 @@ export default function KitchenKDSPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-200 p-3 sm:p-4 lg:p-6 text-black">
+      <div className="min-h-screen bg-gray-200 dark:bg-background p-3 sm:p-4 lg:p-6 text-black dark:text-foreground">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6">
-          <Skeleton className="h-10 w-64 bg-gray-300" />
+          <Skeleton className="h-10 w-64 bg-gray-300 dark:bg-muted" />
           <div className="flex gap-2">
             <Skeleton className="h-10 w-10 bg-gray-300" />
             <Skeleton className="h-10 w-32 bg-gray-300" />
@@ -349,8 +352,8 @@ export default function KitchenKDSPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <Card key={i} className="bg-white border-gray-300 text-black shadow-sm ring-0">
-              <CardHeader className="py-2 px-3 bg-gray-100 border-b border-gray-200">
+            <Card key={i} className="bg-white dark:bg-card border-gray-300 dark:border-border text-black dark:text-card-foreground shadow-sm ring-0">
+              <CardHeader className="py-2 px-3 bg-gray-100 dark:bg-muted/20 border-b border-gray-200 dark:border-border">
                 <Skeleton className="h-6 w-3/4 mb-1" />
                 <Skeleton className="h-3 w-1/2" />
               </CardHeader>
@@ -368,7 +371,7 @@ export default function KitchenKDSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 text-black p-3 sm:p-4 lg:p-6">
+    <div className="min-h-screen bg-gray-200 dark:bg-background text-black dark:text-foreground p-3 sm:p-4 lg:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6">
         <div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
@@ -385,18 +388,32 @@ export default function KitchenKDSPage() {
             size="icon"
             onClick={handleRefresh}
             disabled={isRefetching || isRefreshing}
-            className="bg-white border-gray-300 hover:bg-gray-50"
+            className="bg-white dark:bg-card border-gray-300 dark:border-border hover:bg-gray-50 dark:hover:bg-muted"
           >
             <RefreshCw className={cn("w-4 h-4", (isRefetching || isRefreshing) && "animate-spin")} />
           </Button>
 
-          <LanguageSelector className="bg-white text-black" />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleTheme}
+            className="h-10 w-10 border border-gray-300 dark:border-border rounded-md text-slate-500 dark:text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-card transition-colors shrink-0 bg-white dark:bg-card"
+            title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {resolvedTheme === "dark" ? (
+              <Sun className="h-4 w-4 transition-transform duration-300 rotate-0" />
+            ) : (
+              <Moon className="h-4 w-4 transition-transform duration-300 rotate-0" />
+            )}
+          </Button>
+
+          <LanguageSelector className="bg-white dark:bg-card text-foreground shrink-0" />
 
           <Button
             variant="outline"
             size="icon"
             onClick={handleLogout}
-            className="bg-white border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700"
+            className="bg-white dark:bg-card border-gray-300 dark:border-border hover:bg-red-50 dark:hover:bg-red-950/50 hover:border-red-300 dark:hover:border-red-900 hover:text-red-700 dark:hover:text-red-400"
           >
             <LogOut className="w-4 h-4" />
           </Button>
@@ -430,16 +447,16 @@ export default function KitchenKDSPage() {
 
       {activeOrders.length === 0 && readyOrders.length === 0 ? (
         <div className="text-center py-32">
-          <CheckCircle2 className="w-20 h-20 mx-auto mb-6 text-green-500 opacity-50" />
-          <p className="text-2xl font-bold text-gray-700">{t("kitchen.noOrders")}</p>
-          <p className="text-gray-600 mt-2">{t("kitchen.allDone")}</p>
+          <CheckCircle2 className="w-20 h-20 mx-auto mb-6 text-green-500 opacity-50 dark:opacity-30" />
+          <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{t("kitchen.noOrders")}</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">{t("kitchen.allDone")}</p>
         </div>
       ) : (
         <div className="space-y-4">
           {section === "ready" ? (
             readyOrders.length > 0 ? (
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-700 mb-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 mb-2">
                   Ready for pickup ({readyOrders.length})
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
@@ -449,7 +466,7 @@ export default function KitchenKDSPage() {
             ) : null
           ) : (
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-700 mb-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 mb-2">
                 Active ({activeOrders.length})
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
