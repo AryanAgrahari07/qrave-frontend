@@ -1,0 +1,1 @@
+import{r as t}from"./index-DgVVZul9.js";function u(r){const e=t.useRef({value:r,previous:r});return t.useMemo(()=>(e.current.value!==r&&(e.current.previous=e.current.value,e.current.value=r),e.current.previous),[r])}var o=t.createContext(void 0);function s(r){const e=t.useContext(o);return r||e||"ltr"}export{s as a,u};

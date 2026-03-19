@@ -444,7 +444,7 @@ export function DesktopPOS({
                                   >
                                     <Minus className="size-4 text-primary" />
                                   </Button>
-                                  <span className="font-bold text-gray-900 min-w-[1.5rem] text-center text-sm">
+                                  <span className="font-bold text-gray-900 dark:text-foreground min-w-[1.5rem] text-center text-sm">
                                     {quantity}
                                   </span>
                                   <Button

@@ -482,3 +482,18 @@ export interface ModifierGroup {
   updatedAt: string;
   modifiers: Modifier[];
 }
+
+export interface InventoryRecipe {
+  id: string;
+  restaurantId: string;
+  menuItemId: string;
+  inventoryItemId: string;
+  quantityPerUnit: string | number; // Note: comes as string from Postgres numeric
+  createdAt: string;
+  updatedAt: string;
+  // Joined fields for display
+  materialName?: string;
+  unit?: string;
+  currentStock?: string | number;
+  menuItemName?: string;
+}

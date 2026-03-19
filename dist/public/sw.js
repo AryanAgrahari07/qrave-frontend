@@ -1,1 +1,435 @@
-if(!self.define){let s,e={};const l=(l,r)=>(l=new URL(l+".js",r).href,e[l]||new Promise(e=>{if("document"in self){const s=document.createElement("script");s.src=l,s.onload=e,document.head.appendChild(s)}else s=l,importScripts(l),e()}).then(()=>{let s=e[l];if(!s)throw new Error(`Module ${l} didn’t register its module`);return s}));self.define=(r,i)=>{const n=s||("document"in self?document.currentScript.src:"")||location.href;if(e[n])return;let u={};const a=s=>l(s,n),t={module:{uri:n},exports:u,require:a};e[n]=Promise.all(r.map(s=>t[s]||a(s))).then(s=>(i(...s),u))}}define(["./workbox-8c29f6e4"],function(s){"use strict";self.skipWaiting(),s.clientsClaim(),s.precacheAndRoute([{url:"registerSW.js",revision:"1872c500de691dce40960bb85481de07"},{url:"index.html",revision:"5f639e466188c95e04bf10a542681240"},{url:"assets/zap-B5s3oNsz.js",revision:null},{url:"assets/WaiterTerminalPage-BZMHUNfp.js",revision:null},{url:"assets/utensils-DqLK5zi1.js",revision:null},{url:"assets/utensils-crossed-BHbpxtrS.js",revision:null},{url:"assets/users-ipawr9KU.js",revision:null},{url:"assets/useRazorpay-vsCKJNNY.js",revision:null},{url:"assets/user-plus-BFLywqYV.js",revision:null},{url:"assets/user-Ei0sDES-.js",revision:null},{url:"assets/trending-up-BpPb1x66.js",revision:null},{url:"assets/trash-2-O1IFenuC.js",revision:null},{url:"assets/TransactionsPage-DSPPKiTF.js",revision:null},{url:"assets/textarea-Bv2OiNlH.js",revision:null},{url:"assets/TestimonialsSection-DL8rGtYz.js",revision:null},{url:"assets/TermsOfServicePage-sUbtHRoa.js",revision:null},{url:"assets/tabs-2NpNcrxG.js",revision:null},{url:"assets/table-CRJcwztv.js",revision:null},{url:"assets/table-B8ZBOFNS.js",revision:null},{url:"assets/sun-CKLsaZMx.js",revision:null},{url:"assets/SubscriptionExpiredPage-CCnCINmE.js",revision:null},{url:"assets/store-DDbYiBCQ.js",revision:null},{url:"assets/StaffSubscriptionExpiredPage-D1lcP-I5.js",revision:null},{url:"assets/StaffManagementPage-D4U5hgZn.js",revision:null},{url:"assets/sparkles-7apjDG3W.js",revision:null},{url:"assets/skeleton-DtIuUAvN.js",revision:null},{url:"assets/shopping-cart-DC87I6AG.js",revision:null},{url:"assets/shield-check-BP2dzS48.js",revision:null},{url:"assets/SettingsPage-CSWlry-N.js",revision:null},{url:"assets/separator-jvoN0VHS.js",revision:null},{url:"assets/send-CfZZYuju.js",revision:null},{url:"assets/select-Dj2OJmFx.js",revision:null},{url:"assets/search-CzgAKcpe.js",revision:null},{url:"assets/scroll-area-BkaOrH2d.js",revision:null},{url:"assets/refresh-cw-DgDuu_hP.js",revision:null},{url:"assets/receipt-4J4C9UFf.js",revision:null},{url:"assets/radio-group-CzWIgHsn.js",revision:null},{url:"assets/QueueRegistrationPage-Dr5zg199.js",revision:null},{url:"assets/QueuePage-B765cMzt.js",revision:null},{url:"assets/QRCodesPage-CSVEhHfa.js",revision:null},{url:"assets/qr-code-DypAKMR4.js",revision:null},{url:"assets/purify.es-C_uT9hQ1.js",revision:null},{url:"assets/PublicMenuPage-BmZmPxpa.js",revision:null},{url:"assets/proxy-DrOv9I1h.js",revision:null},{url:"assets/PrivacyPolicyPage-XzbCOZsC.js",revision:null},{url:"assets/plus-DSDMtpYP.js",revision:null},{url:"assets/phone-DUTrGyFd.js",revision:null},{url:"assets/OnboardingPage-D15lbcM_.js",revision:null},{url:"assets/MenuPage-_srOmsTR.js",revision:null},{url:"assets/map-pin-H88lkTZW.js",revision:null},{url:"assets/mail-BSJ_NZ02.js",revision:null},{url:"assets/LoginPage-VuuP0YGW.js",revision:null},{url:"assets/log-out-BAWklFsc.js",revision:null},{url:"assets/LiveOrdersPage-BNxIHtYG.js",revision:null},{url:"assets/LanguageSelector-DQ2T_YVX.js",revision:null},{url:"assets/LandingPage--M0fwx7v.js",revision:null},{url:"assets/label-84V8Nnrq.js",revision:null},{url:"assets/kot-data-BOfpsrFX.js",revision:null},{url:"assets/KitchenKDSPage-DNmmbUXY.js",revision:null},{url:"assets/key-round-BvOd1iJ8.js",revision:null},{url:"assets/InventoryPage-DwRz7eQs.js",revision:null},{url:"assets/input-DZZAiRcz.js",revision:null},{url:"assets/index.es-CCCCKejq.js",revision:null},{url:"assets/index-Sx0NsB5p.js",revision:null},{url:"assets/index-mqdJO-_k.js",revision:null},{url:"assets/index-Dez3xwQE.css",revision:null},{url:"assets/index-BPL6lvIA.js",revision:null},{url:"assets/html2canvas.esm-CBrSDip1.js",revision:null},{url:"assets/globe-V-tGbtjp.js",revision:null},{url:"assets/formatDistanceToNow-Crqrgwto.js",revision:null},{url:"assets/format-K_dhCO_h.js",revision:null},{url:"assets/FoodShowcaseSection-Co3I6kHc.js",revision:null},{url:"assets/FloorMapPage-BhLIEbZv.js",revision:null},{url:"assets/FeaturesSection-CXGNj8v4.js",revision:null},{url:"assets/eye-Cz6GHRE5.js",revision:null},{url:"assets/external-link-s8_t-xtp.js",revision:null},{url:"assets/en-US-DsS4pHqz.js",revision:null},{url:"assets/download-Cp2EAMk6.js",revision:null},{url:"assets/dollar-sign-Byzku6HI.js",revision:null},{url:"assets/differenceInMilliseconds-Q6T7lIof.js",revision:null},{url:"assets/dialog-l3wByEyB.js",revision:null},{url:"assets/desktoppos-Bs62dL8k.js",revision:null},{url:"assets/DashboardPage-B7VT9dh6.js",revision:null},{url:"assets/DashboardLayout-Dzm76gxt.js",revision:null},{url:"assets/crown-CJ4SFPFP.js",revision:null},{url:"assets/credit-card-CzM1Bz3b.js",revision:null},{url:"assets/copy-B7GoVVZJ.js",revision:null},{url:"assets/ContactSection-CyZNQmPV.js",revision:null},{url:"assets/constants-CzULGhDK.js",revision:null},{url:"assets/clock-TPwTdMIL.js",revision:null},{url:"assets/circle-x-CUZuBZKe.js",revision:null},{url:"assets/circle-minus-VpsGNg6W.js",revision:null},{url:"assets/circle-check-DaNFx8k7.js",revision:null},{url:"assets/chevron-right-BwqRPiL7.js",revision:null},{url:"assets/chevron-left-Dwjr9NKR.js",revision:null},{url:"assets/chevron-down-DRYKdI1A.js",revision:null},{url:"assets/chef-hat-BudINESr.js",revision:null},{url:"assets/checkbox-BpQL9v7W.js",revision:null},{url:"assets/check-viv8cvlA.js",revision:null},{url:"assets/chart-column-B_Oq5pJH.js",revision:null},{url:"assets/CancelledOrdersPage-Btl1twU7.js",revision:null},{url:"assets/calendar-DKyDGWF4.js",revision:null},{url:"assets/bell-BqisDsKR.js",revision:null},{url:"assets/BarChart-Bg3Z65HP.js",revision:null},{url:"assets/badge-CZK8KPVQ.js",revision:null},{url:"assets/arrow-left-CEAmDF0k.js",revision:null},{url:"assets/api-W9wOlqYA.js",revision:null},{url:"assets/AnalyticsPage-DVhYsqXU.js",revision:null},{url:"favicon.png",revision:"6c6d75635e62ca8b93f4ef252e5b5647"},{url:"pwa-192x192.png",revision:"6c6d75635e62ca8b93f4ef252e5b5647"},{url:"pwa-512x512.png",revision:"6c6d75635e62ca8b93f4ef252e5b5647"},{url:"manifest.webmanifest",revision:"3afd52c29c53fff3691594654031ff42"}],{}),s.cleanupOutdatedCaches(),s.registerRoute(new s.NavigationRoute(s.createHandlerBoundToURL("index.html")))});
+/**
+ * Copyright 2018 Google Inc. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// If the loader is already loaded, just stop.
+if (!self.define) {
+  let registry = {};
+
+  // Used for `eval` and `importScripts` where we can't get script URL by other means.
+  // In both cases, it's safe to use a global var because those functions are synchronous.
+  let nextDefineUri;
+
+  const singleRequire = (uri, parentUri) => {
+    uri = new URL(uri + ".js", parentUri).href;
+    return registry[uri] || (
+      
+        new Promise(resolve => {
+          if ("document" in self) {
+            const script = document.createElement("script");
+            script.src = uri;
+            script.onload = resolve;
+            document.head.appendChild(script);
+          } else {
+            nextDefineUri = uri;
+            importScripts(uri);
+            resolve();
+          }
+        })
+      
+      .then(() => {
+        let promise = registry[uri];
+        if (!promise) {
+          throw new Error(`Module ${uri} didn’t register its module`);
+        }
+        return promise;
+      })
+    );
+  };
+
+  self.define = (depsNames, factory) => {
+    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
+    if (registry[uri]) {
+      // Module is already loading or loaded.
+      return;
+    }
+    let exports = {};
+    const require = depUri => singleRequire(depUri, uri);
+    const specialDeps = {
+      module: { uri },
+      exports,
+      require
+    };
+    registry[uri] = Promise.all(depsNames.map(
+      depName => specialDeps[depName] || require(depName)
+    )).then(deps => {
+      factory(...deps);
+      return exports;
+    });
+  };
+}
+define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
+
+  self.skipWaiting();
+  workbox.clientsClaim();
+
+  /**
+   * The precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  workbox.precacheAndRoute([{
+    "url": "registerSW.js",
+    "revision": "1872c500de691dce40960bb85481de07"
+  }, {
+    "url": "index.html",
+    "revision": "527b9467ad82944e9fe63e3233d8ac25"
+  }, {
+    "url": "assets/zap-DYsacEzj.js",
+    "revision": null
+  }, {
+    "url": "assets/WaiterTerminalPage-BZm1347g.js",
+    "revision": null
+  }, {
+    "url": "assets/utensils-crossed-CBMLB8wQ.js",
+    "revision": null
+  }, {
+    "url": "assets/utensils-B-Aw6efP.js",
+    "revision": null
+  }, {
+    "url": "assets/users-Bp-JrhfB.js",
+    "revision": null
+  }, {
+    "url": "assets/useRazorpay-C8oD9Onc.js",
+    "revision": null
+  }, {
+    "url": "assets/user-plus-7sHLJB-I.js",
+    "revision": null
+  }, {
+    "url": "assets/user-B4ygdWGt.js",
+    "revision": null
+  }, {
+    "url": "assets/trending-up-B_af05ri.js",
+    "revision": null
+  }, {
+    "url": "assets/trash-2-UwZPQnRl.js",
+    "revision": null
+  }, {
+    "url": "assets/TransactionsPage-rHLdGSMr.js",
+    "revision": null
+  }, {
+    "url": "assets/textarea-CQMoi_qX.js",
+    "revision": null
+  }, {
+    "url": "assets/TestimonialsSection-D-LjSdY0.js",
+    "revision": null
+  }, {
+    "url": "assets/TermsOfServicePage-DATfZCHP.js",
+    "revision": null
+  }, {
+    "url": "assets/tabs-8AUooV8Y.js",
+    "revision": null
+  }, {
+    "url": "assets/table-DzeXcRRE.js",
+    "revision": null
+  }, {
+    "url": "assets/table-AmtRupuj.js",
+    "revision": null
+  }, {
+    "url": "assets/switch-Dd7P-9B5.js",
+    "revision": null
+  }, {
+    "url": "assets/sun-UIoBGRNZ.js",
+    "revision": null
+  }, {
+    "url": "assets/SubscriptionExpiredPage-Dzo2feVg.js",
+    "revision": null
+  }, {
+    "url": "assets/store-XunlpFLY.js",
+    "revision": null
+  }, {
+    "url": "assets/StaffSubscriptionExpiredPage-C_qHtA2a.js",
+    "revision": null
+  }, {
+    "url": "assets/StaffManagementPage-CCwhKly8.js",
+    "revision": null
+  }, {
+    "url": "assets/sparkles-CK2gPSw3.js",
+    "revision": null
+  }, {
+    "url": "assets/skeleton-C4zP0Ttb.js",
+    "revision": null
+  }, {
+    "url": "assets/shopping-cart-DpCdbQlA.js",
+    "revision": null
+  }, {
+    "url": "assets/shield-check-BgA8TGTO.js",
+    "revision": null
+  }, {
+    "url": "assets/SettingsPage-Q4EPg9_2.js",
+    "revision": null
+  }, {
+    "url": "assets/separator-e8anC7Ms.js",
+    "revision": null
+  }, {
+    "url": "assets/send-DAFFCTFW.js",
+    "revision": null
+  }, {
+    "url": "assets/select-DSKse9Lp.js",
+    "revision": null
+  }, {
+    "url": "assets/search-Dezv0Glh.js",
+    "revision": null
+  }, {
+    "url": "assets/scroll-area-D7f3x41M.js",
+    "revision": null
+  }, {
+    "url": "assets/refresh-cw-Bzz2VoFd.js",
+    "revision": null
+  }, {
+    "url": "assets/receipt-W6n37VBG.js",
+    "revision": null
+  }, {
+    "url": "assets/radio-group-CrTA-EQZ.js",
+    "revision": null
+  }, {
+    "url": "assets/QueueRegistrationPage-BzG4eLDU.js",
+    "revision": null
+  }, {
+    "url": "assets/QueuePage-BEMGUxWV.js",
+    "revision": null
+  }, {
+    "url": "assets/QRCodesPage-7yi8FN2V.js",
+    "revision": null
+  }, {
+    "url": "assets/qr-code-Ddj5cwBp.js",
+    "revision": null
+  }, {
+    "url": "assets/purify.es-C_uT9hQ1.js",
+    "revision": null
+  }, {
+    "url": "assets/PublicMenuPage-BrPBN90D.js",
+    "revision": null
+  }, {
+    "url": "assets/proxy-opKp3I7f.js",
+    "revision": null
+  }, {
+    "url": "assets/PrivacyPolicyPage-rKLwgRfO.js",
+    "revision": null
+  }, {
+    "url": "assets/plus-iF0E9Wez.js",
+    "revision": null
+  }, {
+    "url": "assets/phone-DUmFf1VH.js",
+    "revision": null
+  }, {
+    "url": "assets/OnboardingPage-Cnx0uzsQ.js",
+    "revision": null
+  }, {
+    "url": "assets/MenuPage-DZop-rVk.js",
+    "revision": null
+  }, {
+    "url": "assets/map-pin-CUkoRqvv.js",
+    "revision": null
+  }, {
+    "url": "assets/mail-BOLhHCUV.js",
+    "revision": null
+  }, {
+    "url": "assets/LoginPage-LSOwtMMr.js",
+    "revision": null
+  }, {
+    "url": "assets/log-out-CdIr7XIA.js",
+    "revision": null
+  }, {
+    "url": "assets/LiveOrdersPage-DTzCqcrT.js",
+    "revision": null
+  }, {
+    "url": "assets/LanguageSelector-DYuC5HdK.js",
+    "revision": null
+  }, {
+    "url": "assets/LandingPage-BiiI_AFd.js",
+    "revision": null
+  }, {
+    "url": "assets/label-BAEj2giP.js",
+    "revision": null
+  }, {
+    "url": "assets/kot-data-BOfpsrFX.js",
+    "revision": null
+  }, {
+    "url": "assets/KitchenKDSPage-DlZwy5Cz.js",
+    "revision": null
+  }, {
+    "url": "assets/key-round-Ck-ZXaPm.js",
+    "revision": null
+  }, {
+    "url": "assets/InventoryPage-BnBcLibX.js",
+    "revision": null
+  }, {
+    "url": "assets/input-DP_TaHZO.js",
+    "revision": null
+  }, {
+    "url": "assets/index.es-YBpmo8Lv.js",
+    "revision": null
+  }, {
+    "url": "assets/index-DgVVZul9.js",
+    "revision": null
+  }, {
+    "url": "assets/index-Db1QWdJg.js",
+    "revision": null
+  }, {
+    "url": "assets/index-CzfwYVMo.js",
+    "revision": null
+  }, {
+    "url": "assets/index-CneTjIMo.js",
+    "revision": null
+  }, {
+    "url": "assets/index-Bqxq7DP3.css",
+    "revision": null
+  }, {
+    "url": "assets/index-BdQq_4o_.js",
+    "revision": null
+  }, {
+    "url": "assets/html2canvas.esm-CBrSDip1.js",
+    "revision": null
+  }, {
+    "url": "assets/globe-C-uKXd7i.js",
+    "revision": null
+  }, {
+    "url": "assets/formatDistanceToNow-Crqrgwto.js",
+    "revision": null
+  }, {
+    "url": "assets/format-K_dhCO_h.js",
+    "revision": null
+  }, {
+    "url": "assets/FoodShowcaseSection-Dn9Q0NrO.js",
+    "revision": null
+  }, {
+    "url": "assets/FloorMapPage-ClCwc5pk.js",
+    "revision": null
+  }, {
+    "url": "assets/FeaturesSection--gOaJXsB.js",
+    "revision": null
+  }, {
+    "url": "assets/eye-C7-gJggF.js",
+    "revision": null
+  }, {
+    "url": "assets/external-link-C341JdX4.js",
+    "revision": null
+  }, {
+    "url": "assets/en-US-DsS4pHqz.js",
+    "revision": null
+  }, {
+    "url": "assets/download-0U4R3muI.js",
+    "revision": null
+  }, {
+    "url": "assets/dollar-sign-iYK7N4Az.js",
+    "revision": null
+  }, {
+    "url": "assets/differenceInMilliseconds-Q6T7lIof.js",
+    "revision": null
+  }, {
+    "url": "assets/dialog-CGFsDx0z.js",
+    "revision": null
+  }, {
+    "url": "assets/desktoppos-5BtyJeF8.js",
+    "revision": null
+  }, {
+    "url": "assets/DashboardPage-CmVId6FX.js",
+    "revision": null
+  }, {
+    "url": "assets/DashboardLayout-B_B1zxLE.js",
+    "revision": null
+  }, {
+    "url": "assets/crown-ByAClZSE.js",
+    "revision": null
+  }, {
+    "url": "assets/credit-card-BTEcA7A0.js",
+    "revision": null
+  }, {
+    "url": "assets/copy-BkW8VSEi.js",
+    "revision": null
+  }, {
+    "url": "assets/ContactSection-DPmEBbZo.js",
+    "revision": null
+  }, {
+    "url": "assets/constants-CzULGhDK.js",
+    "revision": null
+  }, {
+    "url": "assets/command-V_PEGnJq.js",
+    "revision": null
+  }, {
+    "url": "assets/clock-wpFFnybd.js",
+    "revision": null
+  }, {
+    "url": "assets/circle-x-CfqhDt_p.js",
+    "revision": null
+  }, {
+    "url": "assets/circle-minus-oYBdJY4D.js",
+    "revision": null
+  }, {
+    "url": "assets/circle-check-BZGviot6.js",
+    "revision": null
+  }, {
+    "url": "assets/chevron-right-DUNqYOJg.js",
+    "revision": null
+  }, {
+    "url": "assets/chevron-left-Dqb0Ce0J.js",
+    "revision": null
+  }, {
+    "url": "assets/chevron-down-BWI2qHC1.js",
+    "revision": null
+  }, {
+    "url": "assets/chef-hat-OxhUmnh7.js",
+    "revision": null
+  }, {
+    "url": "assets/checkbox-dlzda8Zl.js",
+    "revision": null
+  }, {
+    "url": "assets/check-DV7n5ZJv.js",
+    "revision": null
+  }, {
+    "url": "assets/chart-column-BeH4YrC0.js",
+    "revision": null
+  }, {
+    "url": "assets/CancelledOrdersPage-JItmawvU.js",
+    "revision": null
+  }, {
+    "url": "assets/calendar-BScQ0vxE.js",
+    "revision": null
+  }, {
+    "url": "assets/bell-DwJwEuAA.js",
+    "revision": null
+  }, {
+    "url": "assets/BarChart-D4waIff6.js",
+    "revision": null
+  }, {
+    "url": "assets/badge-B3aqRgTm.js",
+    "revision": null
+  }, {
+    "url": "assets/arrow-left-DenN4ahU.js",
+    "revision": null
+  }, {
+    "url": "assets/api-eCOkCBz3.js",
+    "revision": null
+  }, {
+    "url": "assets/AnalyticsPage-vaB0Ld8U.js",
+    "revision": null
+  }, {
+    "url": "assets/alert-dialog-DXdZfIGp.js",
+    "revision": null
+  }, {
+    "url": "favicon.png",
+    "revision": "6c6d75635e62ca8b93f4ef252e5b5647"
+  }, {
+    "url": "pwa-192x192.png",
+    "revision": "6c6d75635e62ca8b93f4ef252e5b5647"
+  }, {
+    "url": "pwa-512x512.png",
+    "revision": "6c6d75635e62ca8b93f4ef252e5b5647"
+  }, {
+    "url": "manifest.webmanifest",
+    "revision": "3afd52c29c53fff3691594654031ff42"
+  }], {});
+  workbox.cleanupOutdatedCaches();
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
+
+}));

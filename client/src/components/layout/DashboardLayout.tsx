@@ -34,7 +34,7 @@ const NAV_LINKS = [
   { icon: FileText, label: "Transactions", href: "/dashboard/transactions" },
   { icon: Users, label: "Staff", href: "/dashboard/staff" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
-  // { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
+  { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },

@@ -69,7 +69,11 @@ function useDeleteStaff(restaurantId: string | null) {
     mutationFn: async (staffId: string) => {
       await api.delete<{ deleted: boolean }>(`/api/restaurants/${restaurantId}/staff/${staffId}`);
     },
-    onSuccess: () => {
+    onSuccess: (_, staffId) => {
+      qc.setQueryData(["staff", restaurantId], (old: StaffRow[] | undefined) => {
+        if (!old) return old;
+        return old.filter((s) => s.id !== staffId);
+      });
       qc.invalidateQueries({ queryKey: ["staff", restaurantId] });
       toast.success("Staff member removed");
     },

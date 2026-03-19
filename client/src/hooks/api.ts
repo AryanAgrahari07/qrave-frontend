@@ -19,6 +19,7 @@ import type {
   DashboardStats,
   Staff,
   InventoryItem,
+  InventoryRecipe,
   LocationOption,
   CurrencyOption,
   AnalyticsData,
@@ -1332,16 +1333,250 @@ export function useStaff(restaurantId: string | null) {
 }
 
 // === Inventory ===
-export function useInventory(restaurantId: string | null) {
+
+export interface InventoryFilters {
+  search?: string;
+  status?: "all" | "in_stock" | "low_stock" | "out_of_stock";
+  unit?: string;
+  sortBy?: "material_name" | "current_stock" | "reorder_level" | "unit" | "updated_at" | "created_at";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+
+export interface InventoryAlerts {
+  outOfStock: number;
+  lowStock: number;
+  totalItems: number;
+}
+
+export function useInventory(restaurantId: string | null, filters?: InventoryFilters) {
+  const params = new URLSearchParams();
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.status && filters.status !== "all") params.set("status", filters.status);
+  if (filters?.unit) params.set("unit", filters.unit);
+  if (filters?.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters?.sortOrder) params.set("sortOrder", filters.sortOrder);
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.offset) params.set("offset", String(filters.offset));
+  const q = params.toString();
+
   return useQuery({
-    queryKey: queryKeys.inventory(restaurantId),
+    queryKey: [...queryKeys.inventory(restaurantId), filters],
     queryFn: () =>
-      api
-        .get<{ items: InventoryItem[] }>(`/api/restaurants/${restaurantId}/inventory`)
-        .then((r) => r.items ?? []),
+      api.get<{
+        items: InventoryItem[];
+        pagination: {
+          total: number;
+          limit: number;
+          offset: number;
+          hasMore: boolean;
+          totalPages: number;
+          currentPage: number;
+        };
+      }>(`/api/restaurants/${restaurantId}/inventory${q ? `?${q}` : ""}`),
+    enabled: !!restaurantId,
+    staleTime: 10000,
+  });
+}
+
+export function useInfiniteInventory(restaurantId: string | null, filters?: InventoryFilters) {
+  return useInfiniteQuery({
+    queryKey: ["infinite-inventory", restaurantId, filters],
+    queryFn: async ({ pageParam = 0 }) => {
+      const params = new URLSearchParams();
+      if (filters?.search) params.set("search", filters.search);
+      if (filters?.status && filters.status !== "all") params.set("status", filters.status);
+      if (filters?.unit) params.set("unit", filters.unit);
+      if (filters?.sortBy) params.set("sortBy", filters.sortBy);
+      if (filters?.sortOrder) params.set("sortOrder", filters.sortOrder);
+      
+      const limit = filters?.limit || 20;
+      params.set("limit", String(limit));
+      params.set("offset", String(pageParam));
+      
+      const q = params.toString();
+      const res = await api.get<{
+        items: InventoryItem[];
+        pagination: {
+          total: number;
+          limit: number;
+          offset: number;
+          hasMore: boolean;
+          totalPages: number;
+          currentPage: number;
+        };
+      }>(`/api/restaurants/${restaurantId}/inventory${q ? `?${q}` : ""}`);
+      return res;
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.pagination.hasMore) {
+        return lastPage.pagination.offset + lastPage.pagination.limit;
+      }
+      return undefined;
+    },
+    enabled: !!restaurantId,
+    staleTime: 30000,
+  });
+}
+
+export function useInventoryAlerts(restaurantId: string | null) {
+  return useQuery({
+    queryKey: ["inventory-alerts", restaurantId],
+    queryFn: () =>
+      api.get<{ alerts: InventoryAlerts }>(`/api/restaurants/${restaurantId}/inventory/alerts`).then((r) => r.alerts),
+    enabled: !!restaurantId,
+    staleTime: 30000,
+  });
+}
+
+export function useCreateInventoryItem(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { materialName: string; unit: string; currentStock?: number; reorderLevel?: number }) =>
+      api.post<{ item: InventoryItem }>(`/api/restaurants/${restaurantId}/inventory`, data).then((r) => r.item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Item added to inventory");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to add item"),
+  });
+}
+
+export function useUpdateInventoryItem(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data: Partial<InventoryItem> }) =>
+      api.put<{ item: InventoryItem }>(`/api/restaurants/${restaurantId}/inventory/${itemId}`, data).then((r) => r.item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Item updated");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update item"),
+  });
+}
+
+export function useRestockInventoryItem(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
+      api.patch<{ item: InventoryItem }>(`/api/restaurants/${restaurantId}/inventory/${itemId}/restock`, { quantity }).then((r) => r.item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Stock restocked successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to restock"),
+  });
+}
+
+export function useAdjustInventoryStock(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, newStock }: { itemId: string; newStock: number }) =>
+      api.patch<{ item: InventoryItem }>(`/api/restaurants/${restaurantId}/inventory/${itemId}/adjust`, { newStock }).then((r) => r.item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Stock adjusted");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to adjust stock"),
+  });
+}
+
+export function useDeleteInventoryItem(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      api.delete<{ item: InventoryItem; deleted: boolean }>(`/api/restaurants/${restaurantId}/inventory/${itemId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Item removed from inventory");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to delete item"),
+  });
+}
+
+// === Inventory: Expanded Phase 2 ===
+
+export function useDecreaseInventoryStock(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, quantity, reason }: { itemId: string; quantity: number; reason?: string }) =>
+      api.patch<{ item: InventoryItem }>(`/api/restaurants/${restaurantId}/inventory/${itemId}/decrease`, { quantity, reason }).then((r) => r.item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventory-alerts"] });
+      toast.success("Stock decreased successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to decrease stock"),
+  });
+}
+
+export function useInventoryToggle(restaurantId: string | null) {
+  return useQuery({
+    queryKey: ["inventory-toggle", restaurantId],
+    queryFn: () =>
+      api.get<{ enabled: boolean }>(`/api/restaurants/${restaurantId}/inventory/toggle`).then((r) => r.enabled),
+    enabled: !!restaurantId,
+    staleTime: 60000,
+  });
+}
+
+export function useSetInventoryToggle(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      api.put<{ enabled: boolean; message: string }>(`/api/restaurants/${restaurantId}/inventory/toggle`, { enabled }).then((r) => r),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["inventory-toggle", restaurantId] });
+      toast.success(data.message);
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to toggle inventory tracking"),
+  });
+}
+
+export function useInventoryRecipes(restaurantId: string | null, menuItemId?: string) {
+  return useQuery({
+    queryKey: ["inventory-recipes", restaurantId, menuItemId],
+    queryFn: () => {
+      const qs = menuItemId ? `?menuItemId=${menuItemId}` : '';
+      return api.get<{ recipes: InventoryRecipe[] }>(`/api/restaurants/${restaurantId}/inventory/recipes${qs}`).then((r) => r.recipes);
+    },
     enabled: !!restaurantId,
   });
 }
+
+export function useUpsertRecipe(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { menuItemId: string; inventoryItemId: string; quantityPerUnit: number }) =>
+      api.put<{ recipe: InventoryRecipe }>(`/api/restaurants/${restaurantId}/inventory/recipes`, data).then((r) => r.recipe),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-recipes"] });
+      toast.success("Recipe mapped successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to map recipe"),
+  });
+}
+
+export function useDeleteRecipe(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (recipeId: string) =>
+      api.delete<{ deleted: boolean }>(`/api/restaurants/${restaurantId}/inventory/recipes/${recipeId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-recipes"] });
+      toast.success("Recipe unmapped");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to unmap recipe"),
+  });
+}
+
 
 // === Meta: Locations & Currencies ===
 export function useCountries(search: string) {

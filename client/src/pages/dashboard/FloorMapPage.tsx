@@ -1142,7 +1142,7 @@ export default function FloorMapPage() {
                           </span>
 
                           {/* Waiter */}
-                          {effectiveWaiterName && (
+                          {/* {effectiveWaiterName && (
                             <span
                               className={cn(
                                 "max-w-[90%] text-[10px] sm:text-xs font-semibold truncate",
@@ -1152,7 +1152,7 @@ export default function FloorMapPage() {
                             >
                               {effectiveWaiterName}
                             </span>
-                          )}
+                          )} */}
 
                           {/* Bill Info */}
                           {hasBill && (
