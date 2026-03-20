@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList
 } from "@/components/ui/command";
@@ -17,19 +16,22 @@ import { cn } from "@/lib/utils";
 import { ChefHat, Loader2, Plus, Trash2, Search, Check, ChevronsUpDown } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
-  useRestaurant, useMenuCategories, useInfiniteInventory,
-  useInventoryRecipes, useUpsertRecipe, useDeleteRecipe
+  useInfiniteInventory,
+  useInventoryRecipes, useUpsertRecipe, useDeleteRecipe,
+  useRestaurant, useMenuCategories,
 } from "@/hooks/api";
-import type { MenuItem, InventoryItem } from "@/types";
+import type { InventoryItem } from "@/types";
 
-function RecipeEditor({ 
+/* ─────────── RecipeEditor (expanded per menu item) ─────────── */
+
+function RecipeEditor({
   menuItem,
   inventoryItems,
   fetchNextPage,
   hasNextPage,
-  isFetchingNextPage
-}: { 
-  menuItem: MenuItem;
+  isFetchingNextPage,
+}: {
+  menuItem: any;
   inventoryItems: InventoryItem[];
   fetchNextPage: () => void;
   hasNextPage: boolean;
@@ -44,9 +46,10 @@ function RecipeEditor({
   const [qty, setQty] = useState("");
   const [openCombobox, setOpenCombobox] = useState(false);
 
-  const selectedInvItem = useMemo(() => 
-    inventoryItems.find((i) => i.id === selectedInvId),
-  [inventoryItems, selectedInvId]);
+  const selectedInvItem = useMemo(
+    () => inventoryItems.find((i) => i.id === selectedInvId),
+    [inventoryItems, selectedInvId],
+  );
 
   const handleAdd = async () => {
     if (!selectedInvId || !Number(qty)) return;
@@ -59,64 +62,80 @@ function RecipeEditor({
     setQty("");
   };
 
-  const handleRemove = async (recipeId: string) => {
-    await deleteRecipe.mutateAsync(recipeId);
-  };
-
-  if (isLoading) return <div className="py-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
+  if (isLoading)
+    return (
+      <div className="py-4 text-center">
+        <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
+      </div>
+    );
 
   return (
-    <div className="bg-muted/30 rounded-md p-3 space-y-4">
-      <div className="space-y-2">
-        {recipes?.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No ingredients mapped yet.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {recipes?.map(r => (
-              <div key={r.id} className="flex items-center justify-between gap-2 bg-background border px-3 py-2 rounded-md text-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center min-w-0">
-                  <span className="font-medium truncate">{r.materialName}</span>
-                  <span className="text-muted-foreground sm:ml-2 text-xs sm:text-sm">{r.quantityPerUnit} {r.unit}</span>
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={() => handleRemove(r.id)}>
-                  <Trash2 className="w-3 h-3" />
-                </Button>
+    <div className="bg-muted/30 rounded-md p-2.5 sm:p-3 space-y-3">
+      {/* Existing ingredients */}
+      {recipes?.length === 0 ? (
+        <p className="text-[11px] sm:text-xs text-muted-foreground italic">
+          No ingredients mapped yet.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {recipes?.map((r: any) => (
+            <div
+              key={r.id}
+              className="flex items-center justify-between gap-1.5 bg-background border px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center min-w-0 gap-0.5 sm:gap-0">
+                <span className="font-medium text-[11px] sm:text-sm truncate">{r.materialName}</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs sm:ml-2">
+                  {r.quantityPerUnit} {r.unit}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 sm:h-7 sm:w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                onClick={() => deleteRecipe.mutateAsync(r.id)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3 pt-2 border-t border-border">
-        <div className="flex-1 space-y-1">
-          <Label className="text-xs">Raw Material</Label>
+      {/* Add ingredient row */}
+      <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border sm:grid-cols-[1fr_80px_auto] sm:items-end">
+        {/* Material picker */}
+        <div className="space-y-1">
+          <Label className="text-[10px] sm:text-xs">Raw Material</Label>
           <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 role="combobox"
                 aria-expanded={openCombobox}
-                className="w-full justify-between h-9 text-xs"
+                className="w-full justify-between h-8 sm:h-9 text-[11px] sm:text-xs"
               >
-                {selectedInvItem 
-                  ? <span className="truncate">{selectedInvItem.materialName} ({selectedInvItem.currentStock} {selectedInvItem.unit} left)</span> 
-                  : "Select material..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                {selectedInvItem ? (
+                  <span className="truncate">
+                    {selectedInvItem.materialName} ({selectedInvItem.currentStock} {selectedInvItem.unit})
+                  </span>
+                ) : (
+                  "Select material..."
+                )}
+                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Search materials..." className="h-9 text-xs" />
-                <CommandList 
+                <CommandInput placeholder="Search materials..." className="h-8 sm:h-9 text-xs" />
+                <CommandList
                   onScroll={(e) => {
-                    const target = e.currentTarget;
-                    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 50) {
-                      if (hasNextPage && !isFetchingNextPage) {
-                        fetchNextPage();
-                      }
+                    const t = e.currentTarget;
+                    if (t.scrollHeight - t.scrollTop <= t.clientHeight + 50 && hasNextPage && !isFetchingNextPage) {
+                      fetchNextPage();
                     }
                   }}
-                  className="max-h-[200px]"
+                  className="max-h-[180px]"
                 >
                   <CommandEmpty>No material found.</CommandEmpty>
                   <CommandGroup>
@@ -129,17 +148,14 @@ function RecipeEditor({
                           setOpenCombobox(false);
                         }}
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedInvId === i.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <span className="truncate">{i.materialName} ({i.unit}) - {i.currentStock} left</span>
+                        <Check className={cn("mr-2 h-3.5 w-3.5", selectedInvId === i.id ? "opacity-100" : "opacity-0")} />
+                        <span className="truncate text-xs">
+                          {i.materialName} ({i.unit}) – {i.currentStock} left
+                        </span>
                       </CommandItem>
                     ))}
                     {isFetchingNextPage && (
-                      <div className="py-2 flex justify-center items-center">
+                      <div className="py-2 flex justify-center">
                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                       </div>
                     )}
@@ -149,141 +165,207 @@ function RecipeEditor({
             </PopoverContent>
           </Popover>
         </div>
-        <div className="w-full sm:w-24 space-y-1">
-          <Label className="text-xs">Qty {selectedInvItem ? `(${selectedInvItem.unit})` : ""}</Label>
-          <Input 
-            type="number" min="0.001" step="any" 
-            className="h-9 text-xs" 
-            value={qty} onChange={(e) => setQty(e.target.value)}
-            placeholder="0.00"
-          />
+
+        {/* Quantity + Add button on same row for mobile */}
+        <div className="flex gap-2 sm:contents">
+          <div className="flex-1 sm:flex-none space-y-1">
+            <Label className="text-[10px] sm:text-xs">
+              Qty{selectedInvItem ? ` (${selectedInvItem.unit})` : ""}
+            </Label>
+            <Input
+              type="number"
+              min="0.001"
+              step="any"
+              className="h-8 sm:h-9 text-[11px] sm:text-xs"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              size="sm"
+              className="h-8 sm:h-9 px-3 sm:px-4"
+              onClick={handleAdd}
+              disabled={!selectedInvId || !Number(qty) || upsertRecipe.isPending}
+            >
+              {upsertRecipe.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span className="ml-1 text-xs">Add</span>
+            </Button>
+          </div>
         </div>
-        <Button size="sm" className="h-9 px-4 w-full sm:w-auto" onClick={handleAdd} disabled={!selectedInvId || !Number(qty) || upsertRecipe.isPending}>
-          {upsertRecipe.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 sm:mr-1" />}
-          <span className="sm:hidden ml-1">Add</span>
-          <span className="hidden sm:inline">Add</span>
-        </Button>
       </div>
     </div>
   );
 }
 
-export function RecipeMappingDialog({
-  isOpen, onClose
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
+/* ─────────── Inner dialog content (only mounts when open) ─────────── */
+
+function RecipeMappingDialogInner() {
   const { restaurantId } = useAuth();
-  const { data: restaurant } = useRestaurant(restaurantId);
-  
-  // Fetch menu (all categories/items)
-  const { data: menuData, isLoading: loadingMenu } = useMenuCategories(restaurantId, restaurant?.slug ?? null);
-  
-  // Use infinite scrolling inventory query
-  const filterParams = useMemo(() => ({ limit: 20 }), []);
-  const { 
-    data: invData, 
-    isLoading: loadingInv,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage
-  } = useInfiniteInventory(restaurantId, filterParams);
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
+  // Fetch restaurant → slug → actual menu items
+  const { data: restaurant } = useRestaurant(restaurantId);
+  const slug = restaurant?.slug ?? null;
+  const { data: menuData, isLoading: loadingMenu } = useMenuCategories(restaurantId, slug);
+
+  const filterParams = useMemo(() => ({ limit: 20 }), []);
+  const {
+    data: invData,
+    isLoading: loadingInv,
+    fetchNextPage: fetchNextInvPage,
+    hasNextPage: hasNextInvPage,
+    isFetchingNextPage: isFetchingNextInvPage,
+  } = useInfiniteInventory(restaurantId, filterParams);
+
+  // Client-side search filter over real menu items
   const menuItems = useMemo(() => {
-    if (!menuData) return [];
-    return menuData.items.filter((item: MenuItem) => 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const all = menuData?.items ?? [];
+    if (!searchTerm.trim()) return all;
+    const q = searchTerm.toLowerCase();
+    return all.filter(
+      (item: any) =>
+        item.name?.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q),
     );
   }, [menuData, searchTerm]);
 
-  const inventoryItems = useMemo(() => {
-    return invData?.pages.flatMap((page) => page.items) ?? [];
-  }, [invData]);
+  const inventoryItems = useMemo(
+    () => invData?.pages.flatMap((p) => p.items) ?? [],
+    [invData],
+  );
 
   const isLoading = loadingMenu || loadingInv;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] w-[95vw] sm:w-full flex flex-col p-0">
-        <div className="p-3 sm:p-4 border-b">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <ChefHat className="w-5 h-5 text-primary" /> Recipe Mapping
-            </DialogTitle>
-            <DialogDescription>
-              Link raw materials to menu items for automatic stock deduction.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-        
-        <div className="p-3 sm:p-4 border-b bg-muted/10">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search menu items to map..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9"
-            />
-          </div>
-        </div>
+    <>
+      {/* ── Header ── */}
+      <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5 sm:pb-4 border-b shrink-0">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-xl">
+            <ChefHat className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            Recipe Mapping
+          </DialogTitle>
+          <DialogDescription className="text-[11px] sm:text-sm">
+            Link raw materials to menu items for automatic stock deduction.
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-        <ScrollArea className="flex-1 p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : menuItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No menu items found.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {menuItems.map((item: MenuItem) => (
-                <div key={item.id} className="border rounded-lg overflow-hidden transition-all">
-                  <div 
-                    className="flex justify-between items-center gap-2 p-3 sm:p-4 bg-background hover:bg-muted/30 cursor-pointer"
-                    onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
-                  >
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      {item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-8 h-8 sm:w-10 sm:h-10 rounded object-cover border shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-muted flex items-center justify-center shrink-0">
-                          <ChefHat className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground/50" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <h4 className="font-semibold text-xs sm:text-sm truncate">{item.name}</h4>
-                        {item.description && <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.description}</p>}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className={cn("shrink-0 text-[10px] sm:text-xs", expandedItemId === item.id ? "bg-primary/10 text-primary border-primary/20" : "")}>
-                      <span className="hidden sm:inline">{expandedItemId === item.id ? "Close" : "Map Recipe"}</span>
-                      <span className="sm:hidden">{expandedItemId === item.id ? "Close" : "Map"}</span>
-                    </Badge>
-                  </div>
-                  
-                  {expandedItemId === item.id && (
-                    <div className="p-3 border-t bg-muted/10">
-                      <RecipeEditor 
-                        menuItem={item} 
-                        inventoryItems={inventoryItems} 
-                        fetchNextPage={fetchNextPage}
-                        hasNextPage={Boolean(hasNextPage)}
-                        isFetchingNextPage={isFetchingNextPage}
+      {/* ── Search ── */}
+      <div className="px-3 py-2.5 sm:px-5 sm:py-3 border-b bg-muted/10 shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search menu items..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 sm:pl-9 h-8 sm:h-9 text-xs sm:text-sm"
+          />
+        </div>
+      </div>
+
+      {/* ── Scrollable menu item list ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
+        {isLoading && menuItems.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-7 h-7 animate-spin text-muted-foreground" />
+          </div>
+        ) : menuItems.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            {searchTerm ? "No matching menu items." : "No menu items found."}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {menuItems.map((item: any) => (
+              <div
+                key={item.id}
+                className="border rounded-lg overflow-hidden transition-colors"
+              >
+                {/* Row */}
+                <button
+                  type="button"
+                  className="w-full flex justify-between items-center gap-2 p-2.5 sm:p-3.5 bg-background hover:bg-muted/40 transition-colors text-left"
+                  onClick={() =>
+                    setExpandedItemId(expandedItemId === item.id ? null : item.id)
+                  }
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-7 h-7 sm:w-9 sm:h-9 rounded object-cover border shrink-0"
                       />
+                    ) : (
+                      <div className="w-7 h-7 sm:w-9 sm:h-9 rounded bg-muted flex items-center justify-center shrink-0">
+                        <ChefHat className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-[11px] sm:text-sm truncate leading-tight">
+                        {item.name}
+                      </h4>
+                      {item.description && (
+                        <p className="text-[10px] sm:text-xs text-muted-foreground truncate leading-tight mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "shrink-0 text-[9px] sm:text-xs py-0.5 px-1.5 sm:px-2",
+                      expandedItemId === item.id
+                        ? "bg-primary/10 text-primary border-primary/20"
+                        : "",
+                    )}
+                  >
+                    {expandedItemId === item.id ? "Close" : "Map"}
+                  </Badge>
+                </button>
+
+                {/* Expanded recipe editor */}
+                {expandedItemId === item.id && (
+                  <div className="p-2.5 sm:p-3 border-t bg-muted/10">
+                    <RecipeEditor
+                      menuItem={item}
+                      inventoryItems={inventoryItems}
+                      fetchNextPage={fetchNextInvPage}
+                      hasNextPage={Boolean(hasNextInvPage)}
+                      isFetchingNextPage={isFetchingNextInvPage}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ─────────── Exported wrapper ─────────── */
+
+export function RecipeMappingDialog({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl w-[95vw] sm:w-full h-[85vh] sm:h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {isOpen && <RecipeMappingDialogInner />}
       </DialogContent>
     </Dialog>
   );

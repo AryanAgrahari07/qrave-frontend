@@ -212,6 +212,7 @@ export interface Order {
   notes?: string;
   isClosed?: boolean;
   orderNumber?: number;
+  transactionBillNumber?: string | null;
   items?: OrderItem[];
   table?: {
     id: string;

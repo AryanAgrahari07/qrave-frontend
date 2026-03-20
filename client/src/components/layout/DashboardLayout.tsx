@@ -24,6 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRestaurant } from "@/hooks/api";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { useTheme } from "@/context/ThemeContext";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import { useState } from "react";
 
 const NAV_LINKS = [
@@ -305,6 +306,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Button>
               </Link>
             )}
+            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./api";
+import { useSoundSettings } from "./useSoundSettings";
 
 interface WebSocketEvent {
     type: "event";
@@ -22,6 +23,9 @@ export function useRestaurantWebSocket(
     const pingIntervalRef = useRef<number | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const enabled = options.enabled !== false && !!restaurantId;
+    
+    // Notification sound for incoming events
+    const { playNotificationSound } = useSoundSettings();
 
     useEffect(() => {
         if (!enabled) return;
@@ -120,12 +124,24 @@ export function useRestaurantWebSocket(
                                 queryClient.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
                                 // PERF-2: Stats no longer polled — invalidate on WS event
                                 queryClient.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+                                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+                                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
+                                
+                                if (ev.event === "order.created") {
+                                    playNotificationSound();
+                                }
                             }
                             else if (ev.event.startsWith("table.")) {
                                 queryClient.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
                             }
                             else if (ev.event.startsWith("queue.")) {
                                 queryClient.invalidateQueries({ queryKey: queryKeys.queue(restaurantId) });
+                                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+                                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
+                                
+                                if (ev.event === "queue.registered") {
+                                    playNotificationSound();
+                                }
                             }
                             else if (ev.event.startsWith("menu.")) {
                                 // Menu invalidation

@@ -40,7 +40,7 @@ export function buildBillDataFromOrder(opts: {
       logo: restaurantLogo ? { url: restaurantLogo.url, type: restaurantLogo.type } : undefined,
     },
     bill: {
-      billNumber: order.id.slice(-6),
+      billNumber: order.transactionBillNumber || (order.orderNumber ? `INV-${String(order.orderNumber).padStart(6, "0")}` : order.id.slice(-6).toUpperCase()),
       date: dt.toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "2-digit",

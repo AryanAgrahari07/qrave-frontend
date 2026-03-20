@@ -20,7 +20,7 @@ import {
   Search, Package, AlertTriangle, Plus, Loader2, RefreshCw, ArrowUpDown,
   ArrowUp, ArrowDown, Pencil, PackagePlus, SlidersHorizontal, Trash2,
   ChevronLeft, ChevronRight, PackageX, PackageCheck, TrendingDown, Bell,
-  MinusCircle, Settings2, ChefHat,
+  MinusCircle, Settings2, ChefHat, X,
 } from "lucide-react";
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -75,32 +75,29 @@ export default function InventoryPage() {
 
   // Filters and pagination state
   const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all");
   const [sortBy, setSortBy] = useState<SortField>("material_name");
   const [sortOrder, setSortOrder] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
 
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [searchTerm]);
+  // Trigger search on button click or Enter key
+  const handleSearch = () => {
+    setAppliedSearch(searchTerm);
+    setPage(1);
+  };
 
   // Reset page on filter change
   useEffect(() => { setPage(1); }, [statusFilter, sortBy, sortOrder]);
 
   const filters: InventoryFilters = useMemo(() => ({
-    search: debouncedSearch || undefined,
+    search: appliedSearch || undefined,
     status: statusFilter,
     sortBy,
     sortOrder,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
-  }), [debouncedSearch, statusFilter, sortBy, sortOrder, page]);
+  }), [appliedSearch, statusFilter, sortBy, sortOrder, page]);
 
   const { data, isLoading, refetch, isRefetching } = useInventory(restaurantId, filters);
   const { data: alerts } = useInventoryAlerts(restaurantId);
@@ -248,7 +245,7 @@ export default function InventoryPage() {
   };
 
   const totalAlerts = (alerts?.lowStock ?? 0) + (alerts?.outOfStock ?? 0);
-  const showAlertBanner = totalAlerts > 0 && !alertsDismissed;
+  const showAlertBanner = totalAlerts > 0 && !alertsDismissed && isEnabled === true;
 
   if (isLoading) {
     return (
@@ -271,7 +268,7 @@ export default function InventoryPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                Stock Alert — {totalAlerts} item{totalAlerts !== 1 ? "s" : ""} need attention
+                Stock Alert
               </p>
               <p className="text-xs text-amber-700/80 dark:text-amber-400/70 mt-0.5">
                 {alerts?.outOfStock ? `${alerts.outOfStock} out of stock` : ""}
@@ -422,14 +419,37 @@ export default function InventoryPage() {
                 )}
               </CardTitle>
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative flex-1 sm:flex-initial sm:w-56">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                <div className="flex items-center flex-1 sm:flex-initial sm:w-64 h-9 rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background">
+                  <Search className="w-4 h-4 text-muted-foreground ml-2.5 shrink-0" />
+                  <input
                     placeholder="Search items..."
-                    className="pl-9 h-9 text-sm"
+                    className="flex-1 h-full px-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground min-w-0"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
                   />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      className="h-full px-2 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setAppliedSearch("");
+                        setPage(1);
+                      }}
+                      title="Clear search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="h-full px-3 border-l border-input bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+                    onClick={handleSearch}
+                    title="Search"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
                 </div>
                 <select
                   className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -452,14 +472,14 @@ export default function InventoryPage() {
                   <Package className="w-8 h-8 text-muted-foreground/50" />
                 </div>
                 <p className="text-base font-medium text-muted-foreground">
-                  {debouncedSearch || statusFilter !== "all" ? "No items match your filters" : "No inventory items yet"}
+                  {appliedSearch || statusFilter !== "all" ? "No items match your filters" : "No inventory items yet"}
                 </p>
                 <p className="text-sm text-muted-foreground/70 mt-1 mb-5">
-                  {debouncedSearch || statusFilter !== "all"
+                  {appliedSearch || statusFilter !== "all"
                     ? "Try adjusting your search or filter criteria."
                     : "Add your first raw material to start tracking stock."}
                 </p>
-                {!debouncedSearch && statusFilter === "all" && (
+                {!appliedSearch && statusFilter === "all" && (
                   <Button onClick={() => { resetForm(); setIsAddOpen(true); }} variant="outline" className="gap-2">
                     <Plus className="w-4 h-4" /> Add First Item
                   </Button>

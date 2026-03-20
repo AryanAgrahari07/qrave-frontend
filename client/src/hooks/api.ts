@@ -109,6 +109,8 @@ export const queryKeys = {
     jobs: (restaurantId: string | null) =>
       ["extraction-jobs", restaurantId] as const,
   },
+  notifications: (restaurantId: string | null) => ["notifications", restaurantId] as const,
+  notificationsUnreadCount: (restaurantId: string | null) => ["notifications", restaurantId, "unread-count"] as const,
 };
 
 // === Restaurants ===
@@ -2130,5 +2132,91 @@ export function useDeleteRestaurantLogo(restaurantId: string | null) {
       qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) });
     },
     onError: (e: Error) => toast.error(e.message || "Failed to remove logo"),
+  });
+}
+
+// === Notifications ===
+
+export type Notification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
+};
+
+type NotificationsPage = {
+  notifications: Notification[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export function useNotifications(restaurantId: string | null) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.notifications(restaurantId),
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
+      const params = new URLSearchParams();
+      params.set("limit", "20");
+      if (pageParam) params.set("cursor", pageParam);
+      return api.get<NotificationsPage>(
+        `/api/restaurants/${restaurantId}/notifications?${params.toString()}`
+      );
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage: NotificationsPage) =>
+      lastPage.hasMore ? (lastPage.nextCursor ?? undefined) : undefined,
+    enabled: !!restaurantId,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useUnreadNotificationCount(restaurantId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.notificationsUnreadCount(restaurantId),
+    queryFn: () =>
+      api
+        .get<{ count: number }>(
+          `/api/restaurants/${restaurantId}/notifications/unread-count`
+        )
+        .then((r) => r.count),
+    enabled: !!restaurantId,
+    refetchInterval: 30000,
+    staleTime: 10000,
+  });
+}
+
+export function useMarkAllNotificationsRead(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ updated: number }>(
+        `/api/restaurants/${restaurantId}/notifications/mark-all-read`
+      ),
+    onSuccess: () => {
+      qc.setQueryData(
+        queryKeys.notificationsUnreadCount(restaurantId),
+        0
+      );
+      qc.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+    },
+  });
+}
+
+export function useMarkNotificationRead(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: string) =>
+      api.patch<{ notification: Notification }>(
+        `/api/restaurants/${restaurantId}/notifications/${notificationId}/read`
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: queryKeys.notificationsUnreadCount(restaurantId),
+      });
+      qc.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+    },
   });
 }

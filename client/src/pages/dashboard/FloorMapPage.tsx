@@ -37,6 +37,8 @@ import {
   useUpdateOrder,
   useRemoveOrderServiceCharge,
   useRestaurantLogo,
+  useAddOrderItems,
+  useMarkOrderItemsServed,
 } from "@/hooks/api";
 import type { Table, TableStatus, MenuItem, Order, PaymentMethod } from "@/types";
 import type { POSCartLineItem, POSCustomizationSelection } from "@/types/pos";
@@ -83,6 +85,8 @@ export default function FloorMapPage() {
   const closeOrder = useCloseOrder(restaurantId);
   const updateOrder = useUpdateOrder(restaurantId);
   const removeServiceCharge = useRemoveOrderServiceCharge(restaurantId);
+  const addOrderItems = useAddOrderItems(restaurantId);
+  const markOrderItemsServed = useMarkOrderItemsServed(restaurantId);
 
   // Filter waiters only and check if user is admin/owner
   const waiters = staff?.filter((s) => s.role === "WAITER" && s.isActive) || [];
@@ -357,10 +361,119 @@ export default function FloorMapPage() {
     setCustomizingItem(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (manualCart.length === 0) {
       toast.error("Please add items to the order");
       return;
+    }
+
+    if (!selectedTableForOrder) {
+      toast.error("No table selected");
+      return;
+    }
+
+    try {
+      const existingOrder = getTableOrder(selectedTableForOrder.id);
+      let orderResult: any;
+
+      if (existingOrder) {
+        const response = await addOrderItems.mutateAsync({
+          orderId: existingOrder.id,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+        });
+        
+        orderResult = response.order;
+
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: existingOrder.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
+
+        if (isAdmin && response.newItems?.length) {
+          const newItemIds = response.newItems.map((i: any) => i.id);
+          await markOrderItemsServed.mutateAsync({ orderId: existingOrder.id, itemIds: newItemIds });
+        }
+        
+        toast.success(`Items saved to Order #${existingOrder.orderNumber || existingOrder.id.slice(-4)}`);
+      } else {
+        const paymentStatusMap = {
+          "cash": "PAID",
+          "card": "PAID",
+          "upi": "PAID",
+          "due": "DUE",
+        };
+
+        const result = await createOrder.mutateAsync({
+          tableId: selectedTableForOrder.id,
+          orderType: "DINE_IN",
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+          assignedWaiterId: selectedWaiterIdForOrder || undefined,
+          waiveServiceCharge,
+          paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+          paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+        });
+
+        orderResult = result.order || result;
+
+        const discountNum = parseFloat(discountAmount || "0");
+        if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+          try {
+            await (updateOrder.mutateAsync as any)({
+              orderId: orderResult.id,
+              data: { discountAmount: discountNum },
+            });
+          } catch {
+            toast.error("Order created, but failed to apply discount");
+          }
+        }
+
+        const itemsToMark = result.newItems || orderResult.items;
+        if (isAdmin && itemsToMark?.length) {
+          const newItemIds = itemsToMark
+            .filter((i: any) => i.status !== "SERVED")
+            .map((i: any) => i.id);
+          if (newItemIds.length > 0) {
+            await markOrderItemsServed.mutateAsync({ orderId: orderResult.id, itemIds: newItemIds });
+          }
+        }
+
+        toast.success(
+          `Order saved! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
+        );
+      }
+
+      setManualCart([]);
+      setPaymentMethod("due");
+      setDiscountAmount("");
+      setIsPOSOpen(false);
+      setShowMobilePOS(false);
+      setSelectedTableForOrder(null);
+      refetch();
+    } catch (error) {
+      // Error handled by mutation
     }
   };
 
@@ -375,66 +488,109 @@ export default function FloorMapPage() {
       return;
     }
 
-    // Printer must be connected — KOT print is the purpose of this button.
+    // Printer must be connected — Bill print is the purpose of this button.
     if (!isPrinterConnected) {
-      toast.error("Printer not connected, Connect to print KOT");
+      toast.error("Printer not connected, Connect to print Bill");
       return;
     }
 
     try {
-      const paymentStatusMap = {
-        "cash": "PAID",
-        "card": "PAID",
-        "upi": "PAID",
-        "due": "DUE",
-      };
+      const existingOrder = getTableOrder(selectedTableForOrder.id);
+      let orderResult: any;
 
-      const result = await createOrder.mutateAsync({
-        tableId: selectedTableForOrder.id,
-        orderType: "DINE_IN",
-        items: manualCart.map((item) => ({
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          variantId: item.variantId,
-          modifierIds: item.modifierIds,
-        })),
-        assignedWaiterId: selectedWaiterIdForOrder || undefined,
-        waiveServiceCharge,
-        paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
-        paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
-      });
+      if (existingOrder) {
+        const response = await addOrderItems.mutateAsync({
+          orderId: existingOrder.id,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+        });
+        
+        orderResult = response.order;
 
-      const orderResult = result.order || result;
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: existingOrder.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
 
-      // Apply discount if set
-      const discountNum = parseFloat(discountAmount || "0");
-      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+        toast.success(`Items added & Bill printed for Order #${existingOrder.orderNumber || existingOrder.id.slice(-4)}`);
+      } else {
+        const paymentStatusMap = {
+          "cash": "PAID",
+          "card": "PAID",
+          "upi": "PAID",
+          "due": "DUE",
+        };
+
+        const result = await createOrder.mutateAsync({
+          tableId: selectedTableForOrder.id,
+          orderType: "DINE_IN",
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+          assignedWaiterId: selectedWaiterIdForOrder || undefined,
+          waiveServiceCharge,
+          paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+          paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+        });
+
+        orderResult = result.order || result;
+
+        const discountNum = parseFloat(discountAmount || "0");
+        if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+          try {
+            await (updateOrder.mutateAsync as any)({
+              orderId: orderResult.id,
+              data: { discountAmount: discountNum },
+            });
+          } catch {
+            toast.error("Order created, but failed to apply discount");
+          }
+        }
+
+        toast.success(
+          `Bill printed! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
+        );
+      }
+
+      // Print Bill to thermal printer
+      if (restaurant) {
         try {
-          await (updateOrder.mutateAsync as any)({
-            orderId: orderResult.id,
-            data: { discountAmount: discountNum },
+          // Fetch the full order for bill data (with discounts applied and all items merged)
+          const refreshed = await refetch();
+          const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === orderResult.id);
+          const finalOrderResult = updatedOrder || orderResult;
+          
+          const billData = buildBillDataFromOrder({
+            order: finalOrderResult,
+            restaurant,
+            currency,
+            restaurantLogo,
           });
-        } catch {
-          toast.error("Order created, but failed to apply discount");
+          await printThermalBill(billData);
+        } catch (printErr) {
+          console.error("Bill print error:", printErr);
         }
       }
-
-      const waiterDisplay = staff?.find((s) => s.id === selectedWaiterIdForOrder)?.fullName;
-
-      // Print KOT to thermal printer
-      if (restaurant) {
-        const kotData = buildKOTDataFromOrder({
-          order: orderResult,
-          restaurant,
-          tableNumber: selectedTableForOrder.tableNumber,
-          waiterName: waiterDisplay
-        });
-        await printKOT(kotData);
-      }
-
-      toast.success(
-        `KOT printed! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
-      );
 
       setManualCart([]);
       setPaymentMethod("due");
@@ -443,7 +599,7 @@ export default function FloorMapPage() {
       setSelectedTableForOrder(null);
       refetch();
     } catch (error) {
-      // Error handled by mutation / printKOT toast
+      // Error handled by mutation
     }
   };
 
@@ -464,51 +620,103 @@ export default function FloorMapPage() {
     }
 
     try {
-      const paymentStatusMap = {
-        "cash": "PAID",
-        "card": "PAID",
-        "upi": "PAID",
-        "due": "DUE",
-      };
+      const existingOrder = getTableOrder(selectedTableForOrder.id);
+      let orderResult: any;
 
-      const result = await createOrder.mutateAsync({
-        tableId: selectedTableForOrder.id,
-        orderType: "DINE_IN",
-        items: manualCart.map((item) => ({
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          variantId: item.variantId,
-          modifierIds: item.modifierIds,
-        })),
-        assignedWaiterId: selectedWaiterIdForOrder || undefined,
-        waiveServiceCharge,
-        paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
-        paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
-      });
+      if (existingOrder) {
+        const response = await addOrderItems.mutateAsync({
+          orderId: existingOrder.id,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+        });
+        orderResult = response.order;
 
-      const orderResult = result.order || result;
-
-      const discountNum = parseFloat(discountAmount || "0");
-      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
-        try {
-          await (updateOrder.mutateAsync as any)({
-            orderId: orderResult.id,
-            data: { discountAmount: discountNum },
-          });
-        } catch {
-          toast.error("Order created, but failed to apply discount");
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: existingOrder.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
         }
-      }
 
-      toast.success(`Order saved! Table ${selectedTableForOrder.tableNumber}`);
+        if (isAdmin && response.newItems?.length) {
+          const newItemIds = response.newItems.map((i: any) => i.id);
+          await markOrderItemsServed.mutateAsync({ orderId: existingOrder.id, itemIds: newItemIds });
+        }
+
+        toast.success(`Items saved to Order #${existingOrder.orderNumber || existingOrder.id.slice(-4)}`);
+      } else {
+        const paymentStatusMap = {
+          "cash": "PAID",
+          "card": "PAID",
+          "upi": "PAID",
+          "due": "DUE",
+        };
+
+        const result = await createOrder.mutateAsync({
+          tableId: selectedTableForOrder.id,
+          orderType: "DINE_IN",
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+          assignedWaiterId: selectedWaiterIdForOrder || undefined,
+          waiveServiceCharge,
+          paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+          paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+        });
+
+        orderResult = result.order || result;
+
+        const discountNum = parseFloat(discountAmount || "0");
+        if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+          try {
+            await (updateOrder.mutateAsync as any)({
+              orderId: orderResult.id,
+              data: { discountAmount: discountNum },
+            });
+          } catch {
+            toast.error("Order created, but failed to apply discount");
+          }
+        }
+
+        const itemsToMark = result.newItems || orderResult.items;
+        if (isAdmin && itemsToMark?.length) {
+          const newItemIds = itemsToMark.filter((i: any) => i.status !== "SERVED").map((i: any) => i.id);
+          if (newItemIds.length > 0) {
+            await markOrderItemsServed.mutateAsync({ orderId: orderResult.id, itemIds: newItemIds });
+          }
+        }
+
+        toast.success(`Order saved! Table ${selectedTableForOrder.tableNumber}`);
+      }
 
       // Print bill to thermal printer (if connected)
       if (isPrinterConnected && restaurant) {
         try {
           // Fetch the full order for bill data (with discounts applied)
-          await refetch();
+          const refreshed = await refetch();
+          const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === orderResult.id);
+          const finalOrderResult = updatedOrder || orderResult;
+          
           const billData = buildBillDataFromOrder({
-            order: orderResult,
+            order: finalOrderResult,
             restaurant,
             currency,
             restaurantLogo,
@@ -543,48 +751,83 @@ export default function FloorMapPage() {
     }
 
     try {
-      const paymentStatusMap = {
-        "cash": "PAID",
-        "card": "PAID",
-        "upi": "PAID",
-        "due": "DUE",
-      };
+      const existingOrder = getTableOrder(selectedTableForOrder.id);
 
-      const created = await createOrder.mutateAsync({
-        tableId: selectedTableForOrder.id,
-        orderType: "DINE_IN",
-        items: manualCart.map((item) => ({
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          variantId: item.variantId,
-          modifierIds: item.modifierIds,
-        })),
-        assignedWaiterId: selectedWaiterIdForOrder || undefined,
-        waiveServiceCharge,
-        paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
-        paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
-      });
+      if (existingOrder) {
+        await addOrderItems.mutateAsync({
+          orderId: existingOrder.id,
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+        });
 
-      // Apply discount (admin only) after order creation (backend create schema doesn't accept discountAmount)
-      const discountNum = parseFloat(discountAmount || "0");
-      if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
-        try {
-          await (updateOrder.mutateAsync as any)({
-            orderId: created.id,
-            data: { discountAmount: discountNum },
-          });
-          await refetch();
-        } catch {
-          toast.error("Order created, but failed to apply discount");
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: existingOrder.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
         }
-      }
 
-      toast.success(
-        `Order ${paymentMethod !== 'due' ? 'placed and paid' : 'sent to kitchen'}! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
-      );
+        toast.success(`Items sent to kitchen for Order #${existingOrder.orderNumber || existingOrder.id.slice(-4)}`);
+      } else {
+        const paymentStatusMap = {
+          "cash": "PAID",
+          "card": "PAID",
+          "upi": "PAID",
+          "due": "DUE",
+        };
+
+        const result = await createOrder.mutateAsync({
+          tableId: selectedTableForOrder.id,
+          orderType: "DINE_IN",
+          items: manualCart.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            variantId: item.variantId,
+            modifierIds: item.modifierIds,
+          })),
+          assignedWaiterId: selectedWaiterIdForOrder || undefined,
+          waiveServiceCharge,
+          paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+          paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+        });
+
+        const created = result.order || result;
+
+        const discountNum = parseFloat(discountAmount || "0");
+        if (isAdmin && discountAmount.trim() && !Number.isNaN(discountNum) && discountNum > 0) {
+          try {
+            await (updateOrder.mutateAsync as any)({
+              orderId: created.id,
+              data: { discountAmount: discountNum },
+            });
+          } catch {
+            toast.error("Order created, but failed to apply discount");
+          }
+        }
+
+        toast.success(
+          `Order ${paymentMethod !== 'due' ? 'placed and paid' : 'sent to kitchen'}! Table ${selectedTableForOrder.tableNumber} - ${manualCart.length} items`,
+        );
+      }
 
       setManualCart([]);
       setPaymentMethod("due");
+      setDiscountAmount("");
       setIsPOSOpen(false);
       setShowMobilePOS(false);
       setSelectedTableForOrder(null);
@@ -1141,18 +1384,13 @@ export default function FloorMapPage() {
                             {table.capacity} SEATS
                           </span>
 
-                          {/* Waiter */}
-                          {/* {effectiveWaiterName && (
-                            <span
-                              className={cn(
-                                "max-w-[90%] text-[10px] sm:text-xs font-semibold truncate",
-                                effectiveStatus === "AVAILABLE" ? "text-green-600/80" : "text-red-200"
-                              )}
-                              title={effectiveWaiterName}
-                            >
-                              {effectiveWaiterName}
-                            </span>
-                          )} */}
+                            {effectiveWaiterName && (
+                          // <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                             <span className="text-[10px] font-semibold text-primary px-3 py-1 bg-primary/10 rounded-full whitespace-nowrap">
+                                👤 {effectiveWaiterName}
+                              </span>
+                          // </div>
+                          )}
 
                           {/* Bill Info */}
                           {hasBill && (
@@ -1175,13 +1413,14 @@ export default function FloorMapPage() {
                           )}
 
                           {/* Waiter Info - Inside card at bottom */}
-                          {effectiveWaiterName && !hasBill && (
+                          {/* {effectiveWaiterName && !hasBill && (
                             <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
                               <span className="text-[10px] font-semibold text-primary px-3 py-1 bg-primary/10 rounded-full whitespace-nowrap">
                                 👤 {effectiveWaiterName}
                               </span>
                             </div>
-                          )}
+                          )} */}
+                          {/* Waiter */}
                         </button>
 
                         {/* Bottom Icons - Half in, half out */}

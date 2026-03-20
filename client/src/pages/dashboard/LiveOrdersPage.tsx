@@ -448,6 +448,24 @@ export default function LiveOrdersPage() {
             modifierIds: item.modifierIds,
           })),
         });
+
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: selectedOrderForEdit.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
         
         // Admin direct-serve: mark ONLY the newly added items as SERVED (not the whole order)
         if (isAdmin && response.newItems?.length) {
@@ -540,9 +558,9 @@ export default function LiveOrdersPage() {
       return;
     }
 
-    // Printer must be connected — KOT print is the purpose of this button.
+    // Printer must be connected — Bill print is the purpose of this button.
     if (!isPrinterConnected) {
-      toast.error("Printer not connected, Connect to print KOT");
+      toast.error("Printer not connected, Connect to print Bill");
       return;
     }
 
@@ -560,7 +578,26 @@ export default function LiveOrdersPage() {
           })),
         });
         order = response.order;
-        toast.success(`Items added & KOT printed for Order #${order.orderNumber || order.id.slice(-4)}`);
+
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: selectedOrderForEdit.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
+
+        toast.success(`Items added & Bill printed for Order #${order.orderNumber || order.id.slice(-4)}`);
       } else {
         const orderTypeMap = {
           "dine-in": "DINE_IN",
@@ -606,22 +643,28 @@ export default function LiveOrdersPage() {
         }
 
         toast.success(
-          `KOT printed! ${orderMethod === "dine-in" ? `Table ${tables?.find((t) => t.id === selectedTableId)?.tableNumber || selectedTableId}` : ""} - ${manualCart.length} items`,
+          `Bill printed! ${orderMethod === "dine-in" ? `Table ${tables?.find((t) => t.id === selectedTableId)?.tableNumber || selectedTableId}` : ""} - ${manualCart.length} items`,
         );
       }
 
-      const tableDisplayNum = tables?.find((t) => t.id === (selectedOrderForEdit?.tableId || selectedTableId))?.tableNumber || (selectedOrderForEdit?.tableId || selectedTableId);
-      const waiterDisplay = staff?.find((s) => s.id === (selectedOrderForEdit?.placedByStaff?.id || selectedWaiterId))?.fullName;
-
-      // Print KOT to thermal printer
+      // Print Bill to thermal printer
       if (restaurant) {
-        const kotData = buildKOTDataFromOrder({
-          order,
-          restaurant,
-          tableNumber: (selectedOrderForEdit?.orderType || orderMethod) === "dine-in" || (selectedOrderForEdit?.orderType || orderMethod) === "DINE_IN" ? String(tableDisplayNum) : undefined,
-          waiterName: waiterDisplay
-        });
-        await printKOT(kotData);
+        try {
+          // Fetch the full order for bill data (with discounts applied and all items merged)
+          const refreshed = await refetch();
+          const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === order.id);
+          const finalOrderResult = updatedOrder || order;
+          
+          const billData = buildBillDataFromOrder({
+            order: finalOrderResult,
+            restaurant,
+            currency,
+            restaurantLogo,
+          });
+          await printThermalBill(billData);
+        } catch (printErr) {
+          console.error("Bill print error:", printErr);
+        }
       }
 
       await refetch();
@@ -666,6 +709,24 @@ export default function LiveOrdersPage() {
           })),
         });
         order = response.order;
+
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: selectedOrderForEdit.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
 
         if (isAdmin && response.newItems?.length) {
           const newItemIds = response.newItems.map((i: any) => i.id);
@@ -786,6 +847,25 @@ export default function LiveOrdersPage() {
             modifierIds: item.modifierIds,
           })),
         });
+
+        if (paymentMethod !== "due") {
+          const paymentStatusMap = {
+            "cash": "PAID",
+            "card": "PAID",
+            "upi": "PAID",
+            "due": "DUE",
+          };
+          try {
+            await updatePaymentStatus.mutateAsync({
+              orderId: selectedOrderForEdit.id,
+              paymentStatus: paymentStatusMap[paymentMethod] as "PAID" | "DUE",
+              paymentMethod: paymentMethod.toUpperCase() as "CASH" | "CARD" | "UPI" | "DUE",
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        }
+
         toast.success(`Items sent to kitchen for Order #${selectedOrderForEdit.orderNumber || selectedOrderForEdit.id.slice(-4)}`);
       } else {
         const orderTypeMap = {

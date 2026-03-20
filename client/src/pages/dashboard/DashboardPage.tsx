@@ -128,7 +128,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-7">
         <Card className="shadow-sm md:col-span-4">
           <CardHeader>
-            <CardTitle>Weekly Scan Activity</CardTitle>
+            <CardTitle>Weekly Dine-In Orders</CardTitle>
           </CardHeader>
           <CardContent className="px-2 sm:pl-2">
             <ResponsiveContainer width="100%" height={isMobile ? 220 : 300}>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
                   }}
                 />
                 <Bar
-                  dataKey="scans"
+                  dataKey="orders"
                   fill="hsl(var(--primary))"
                   radius={[4, 4, 0, 0]}
                   barSize={isMobile ? 18 : 28}
