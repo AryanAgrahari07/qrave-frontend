@@ -217,7 +217,7 @@ export default function QRCodesPage() {
                           {isLoadingThis ? (
                             <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-primary" />
                           ) : tableQR ? (
-                            <img src={tableQR.qrCodeDataURL} alt={`Table ${table.tableNumber}`} className="w-full h-full" />
+                            <img src={tableQR.qrCodeDataURL} loading="lazy" alt={`Table ${table.tableNumber}`} className="w-full h-full" />
                           ) : (
                             <QrIcon className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground group-hover:text-primary" />
                           )}

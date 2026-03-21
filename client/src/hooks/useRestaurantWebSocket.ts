@@ -24,14 +24,50 @@ export function useRestaurantWebSocket(
     const [isConnected, setIsConnected] = useState(false);
     const enabled = options.enabled !== false && !!restaurantId;
     
-    // Notification sound for incoming events
-    const { playNotificationSound } = useSoundSettings();
+    // Sound settings are handled at the NotificationBell level
 
     useEffect(() => {
         if (!enabled) return;
 
         let isComponentMounted = true;
 
+        // PERF: Debounce timers for batching rapid WS invalidations
+        const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+        function debouncedInvalidate(key: string, fn: () => void, delay = 500) {
+            clearTimeout(debounceTimers[key]);
+            debounceTimers[key] = setTimeout(fn, delay);
+        }
+
+        function debouncedInvalidateOrders() {
+            debouncedInvalidate("orders", () => {
+                queryClient.invalidateQueries({ queryKey: queryKeys.orders(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
+            });
+        }
+
+        function debouncedInvalidateTables() {
+            debouncedInvalidate("tables", () => {
+                queryClient.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+            });
+        }
+
+        function debouncedInvalidateQueue() {
+            debouncedInvalidate("queue", () => {
+                queryClient.invalidateQueries({ queryKey: queryKeys.queue(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
+            });
+        }
+
+        function debouncedInvalidateMenu() {
+            debouncedInvalidate("menu", () => {
+                queryClient.invalidateQueries({ queryKey: ["menu-categories", restaurantId] });
+                queryClient.invalidateQueries({ queryKey: ["menu-public", restaurantId] });
+            });
+        }
         function connect() {
             // Clear any pending reconnects
             if (reconnectTimeoutRef.current) {
@@ -117,36 +153,20 @@ export function useRestaurantWebSocket(
                             const ev = payload as WebSocketEvent;
 
                             // C1: WebSocket-driven Cache Invalidation
-                            // This replaces expensive HTTP polling with targeted cache clears
+                            // PERF: Debounced — rapid events within 500ms batch into one refetch
+                            // instead of firing 5+ API calls per WS event
 
                             if (ev.event.startsWith("order.")) {
-                                queryClient.invalidateQueries({ queryKey: queryKeys.orders(restaurantId) });
-                                queryClient.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
-                                // PERF-2: Stats no longer polled — invalidate on WS event
-                                queryClient.invalidateQueries({ queryKey: queryKeys.ordersStats(restaurantId) });
-                                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
-                                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
-                                
-                                if (ev.event === "order.created") {
-                                    playNotificationSound();
-                                }
+                                debouncedInvalidateOrders();
                             }
                             else if (ev.event.startsWith("table.")) {
-                                queryClient.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
+                                debouncedInvalidateTables();
                             }
                             else if (ev.event.startsWith("queue.")) {
-                                queryClient.invalidateQueries({ queryKey: queryKeys.queue(restaurantId) });
-                                queryClient.invalidateQueries({ queryKey: queryKeys.notifications(restaurantId) });
-                                queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount(restaurantId) });
-                                
-                                if (ev.event === "queue.registered") {
-                                    playNotificationSound();
-                                }
+                                debouncedInvalidateQueue();
                             }
                             else if (ev.event.startsWith("menu.")) {
-                                // Menu invalidation
-                                queryClient.invalidateQueries({ queryKey: ["menu-categories", restaurantId] });
-                                queryClient.invalidateQueries({ queryKey: ["menu-public", restaurantId] });
+                                debouncedInvalidateMenu();
                             }
                         }
                     } catch (err) {
@@ -188,6 +208,8 @@ export function useRestaurantWebSocket(
 
         return () => {
             isComponentMounted = false;
+            // PERF: Clear debounce timers
+            Object.values(debounceTimers).forEach(t => clearTimeout(t));
             if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
             if (pingIntervalRef.current) window.clearInterval(pingIntervalRef.current);
             if (wsRef.current) {

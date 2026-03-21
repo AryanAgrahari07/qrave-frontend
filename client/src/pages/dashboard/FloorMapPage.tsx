@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Utensils, Plus, Loader2, RefreshCw, Edit2, Trash2, User, Receipt, DollarSign, CreditCard, QrCode, MinusCircle, Percent, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import {
   useTables,
   useUpdateTableStatus,
@@ -61,6 +62,7 @@ import { buildBillDataFromOrder } from "@/lib/bill-data";
 import { buildKOTDataFromOrder } from "@/lib/kot-data";
 export default function FloorMapPage() {
   const { restaurantId, user } = useAuth();
+  const { planLimits, currentPlan } = useSubscription();
   const { data: restaurant } = useRestaurant(restaurantId);
   const { data: restaurantLogo } = useRestaurantLogo(restaurantId);
 
@@ -89,7 +91,7 @@ export default function FloorMapPage() {
   const markOrderItemsServed = useMarkOrderItemsServed(restaurantId);
 
   // Filter waiters only and check if user is admin/owner
-  const waiters = staff?.filter((s) => s.role === "WAITER" && s.isActive) || [];
+  const waiters = useMemo(() => staff?.filter((s) => s.role === "WAITER" && s.isActive) || [], [staff]);
   const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "platform_admin";
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -131,37 +133,38 @@ export default function FloorMapPage() {
   const [billDiscountMode, setBillDiscountMode] = useState<"amount" | "percent">("amount");
   const [billDiscountPercent, setBillDiscountPercent] = useState("");
 
-  const currency = restaurant?.currency || "₹";
-  const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
-  const serviceRatePct = parseFloat(restaurant?.taxRateService || "0");
+  const currency = useMemo(() => restaurant?.currency || "₹", [restaurant?.currency]);
+  const gstRate = useMemo(() => parseFloat(restaurant?.taxRateGst || "5") / 100, [restaurant?.taxRateGst]);
+  const serviceRatePct = useMemo(() => parseFloat(restaurant?.taxRateService || "0"), [restaurant?.taxRateService]);
 
-  // Detect mobile screen size
+  // Detect mobile screen size — PERF: debounced
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setIsMobile(window.innerWidth < 1024), 150);
     };
-
-    checkMobile();
+    setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    return () => { window.removeEventListener("resize", checkMobile); clearTimeout(timeout); };
   }, []);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [refetch]);
 
-  // Set initial active category
-  useMemo(() => {
+  // Set initial active category — Fix: useEffect for side effects, not useMemo
+  useEffect(() => {
     if (!activeCategory && menuData?.categories && menuData.categories.length > 0) {
       setActiveCategory(menuData.categories[0].id);
     }
   }, [menuData, activeCategory]);
 
   // Get active order for a table (used to derive OCCUPIED state instantly)
-  const getTableOrder = (tableId: string) => {
+  const getTableOrder = useCallback((tableId: string) => {
     return orders.find(
       (o: Order) =>
         o.tableId === tableId &&
@@ -169,13 +172,13 @@ export default function FloorMapPage() {
         !(o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) &&
         o.status !== "CANCELLED",
     );
-  };
+  }, [orders]);
 
-  const getEffectiveTableStatus = (table: Table): TableStatus => {
+  const getEffectiveTableStatus = useCallback((table: Table): TableStatus => {
     const activeOrder = getTableOrder(table.id);
     if (activeOrder) return "OCCUPIED";
     return table.currentStatus;
-  };
+  }, [getTableOrder]);
 
   const getEffectiveWaiterName = (table: Table): string | null => {
     // Show ONLY explicitly assigned waiter for the table.
@@ -255,11 +258,11 @@ export default function FloorMapPage() {
   const makeLineId = (menuItemId: string) =>
     `${menuItemId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  const isItemCustomizable = (item: MenuItem) =>
+  const isItemCustomizable = useCallback((item: MenuItem) =>
     (item.variants && item.variants.length > 0) ||
-    (item.modifierGroups && item.modifierGroups.length > 0);
+    (item.modifierGroups && item.modifierGroups.length > 0), []);
 
-  const addToManualCart = (item: MenuItem) => {
+  const addToManualCart = useCallback((item: MenuItem) => {
     if (isItemCustomizable(item)) {
       setCustomizingItem(item);
       return;
@@ -286,24 +289,24 @@ export default function FloorMapPage() {
       };
       return [...prev, newLine];
     });
-  };
+  }, [isItemCustomizable]);
 
-  const decrementLineItem = (lineId: string) => {
+  const decrementLineItem = useCallback((lineId: string) => {
     setManualCart((prev) =>
       prev
         .map((li) => (li.lineId === lineId ? { ...li, quantity: li.quantity - 1 } : li))
         .filter((li) => li.quantity > 0),
     );
-  };
+  }, []);
 
-  const incrementLineItem = (lineId: string) => {
+  const incrementLineItem = useCallback((lineId: string) => {
     setManualCart((prev) =>
       prev.map((li) => (li.lineId === lineId ? { ...li, quantity: li.quantity + 1 } : li)),
     );
-  };
+  }, []);
 
-  const getMenuItemQuantity = (menuItemId: string) =>
-    manualCart.reduce((sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum), 0);
+  const getMenuItemQuantity = useCallback((menuItemId: string) =>
+    manualCart.reduce((sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum), 0), [manualCart]);
 
   const handlePlusForCustomizableItem = (item: MenuItem) => {
     // If already exists in cart, ask user repeat vs new
@@ -1186,7 +1189,16 @@ export default function FloorMapPage() {
             <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing} className="shrink-0">
               <RefreshCw className={cn("w-4 h-4", (isRefreshing) && "animate-spin")} />
             </Button>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+              if (open) {
+                const canAddTable = planLimits.maxTables === -1 || (tables?.length || 0) < planLimits.maxTables;
+                if (!canAddTable) {
+                  toast.error(`Table limit reached. The ${currentPlan} plan allows up to ${planLimits.maxTables} tables. Please upgrade to add more.`);
+                  return;
+                }
+              }
+              setIsAddDialogOpen(open);
+            }}>
               <DialogTrigger asChild>
                 <Button className="shadow-lg shadow-primary/20 flex-1 sm:flex-none">
                   <Plus className="w-4 h-4 sm:mr-2" />

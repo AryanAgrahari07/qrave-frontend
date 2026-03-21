@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { UserPlus, Users, UserCircle, ChefHat, Trash2, Loader2, RefreshCw, ShieldCheck, Eye, Mail, Phone, Calendar, Shield, Copy, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -95,16 +96,34 @@ function useResetPasscode(restaurantId: string | null) {
 
 export default function StaffManagementPage() {
   const { restaurantId } = useAuth();
+  const { canAccess, planLimits, currentPlan } = useSubscription();
   const { data: staff, isLoading, refetch, isRefetching } = useStaff(restaurantId);
   const createStaff = useCreateStaff(restaurantId);
   const deleteStaff = useDeleteStaff(restaurantId);
   const resetPasscode = useResetPasscode(restaurantId);
 
+  // Filter available roles based on plan
+  const availableRoles = useMemo(() => {
+    const roles: { value: string; label: string }[] = [];
+    if (canAccess("waiter")) roles.push({ value: "WAITER", label: "Waiter" });
+    if (canAccess("kitchen")) roles.push({ value: "KITCHEN", label: "Kitchen Staff" });
+    roles.push({ value: "admin", label: "Admin" });
+    return roles;
+  }, [canAccess]);
+
+  // Admin count for limit display
+  const adminCount = useMemo(
+    () => (staff || []).filter((s) => s.role === "ADMIN" && s.isActive).length,
+    [staff]
+  );
+  const maxAdmins = planLimits.maxAdmins;
+  const isAdminLimitReached = maxAdmins !== -1 && adminCount >= maxAdmins;
+
   const [formData, setFormData] = useState({
     displayName: "",
     email: "",
     phoneNumber: "",
-    role: "WAITER" as "admin" | "WAITER" | "KITCHEN",
+    role: (availableRoles[0]?.value || "admin") as "admin" | "WAITER" | "KITCHEN",
     passcode: "",
   });
 
@@ -380,10 +399,15 @@ export default function StaffManagementPage() {
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as "admin" | "WAITER" | "KITCHEN" })}
                 >
-                  <option value="WAITER">Waiter</option>
-                  <option value="KITCHEN">Kitchen Staff</option>
-                  <option value="admin">Admin</option>
+                  {availableRoles.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
                 </select>
+                {maxAdmins !== -1 && (
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">
+                    Admins: {adminCount}/{maxAdmins} used ({currentPlan} plan)
+                  </p>
+                )}
               </div>
               
               <div className="space-y-2">

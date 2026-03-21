@@ -34,7 +34,7 @@ import {
   MinusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useDeferredValue, useMemo } from "react";
 import type { MenuItem, Table } from "@/types";
 import type { POSCartLineItem } from "@/types/pos";
 import {
@@ -50,6 +50,7 @@ import {
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 import { useLanguage } from "@/context/LanguageContext";
 import { getTranslatedName } from "@/context/LanguageContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { toast } from "sonner";
 
 type POSMode = "full" | "waiter";
@@ -169,8 +170,30 @@ export function DesktopPOS({
   onToggleWaiveServiceCharge,
 }: DesktopPOSProps) {
   const { language } = useLanguage();
+  const { canAccess } = useSubscription();
   const isWaiterMode = mode === "waiter";
   const [vegFilter, setVegFilter] = useState<"all" | "veg" | "non-veg">("all");
+
+  // Plan-based feature access  
+  const showWaiterDropdown = !isWaiterMode && canAccess("waiter");
+  const showCookingNotes = canAccess("cookingNotes");
+  const showKOT = canAccess("kot");
+
+  const visibleSelectsCount = [
+    !hideTableSelect,
+    showWaiterDropdown,
+    !hideOrderTypeSelect && !isWaiterMode
+  ].filter(Boolean).length;
+
+  const topGridColsClass = isWaiterMode
+    ? "grid-cols-[1fr_auto]"
+    : visibleSelectsCount === 3
+      ? "grid-cols-[1fr_1fr_1fr_auto]"
+      : visibleSelectsCount === 2
+        ? "grid-cols-[1fr_1fr_auto]"
+        : visibleSelectsCount === 1
+          ? "grid-cols-[1fr_auto]"
+          : "flex justify-end";
 
   const handleActionClick = (callback?: () => void) => {
     if (orderMethod === "dine-in" && (!selectedTableId || selectedTableId === "none")) {
@@ -182,20 +205,24 @@ export function DesktopPOS({
 
   const discountNum = Math.max(0, parseFloat(discountAmount || "0") || 0);
 
-  const filteredItems = menuItems.filter((item: MenuItem) => {
-    const isVeg = item.dietaryTags?.some(t => t.toLowerCase() === "veg");
-    const isVegMatch = vegFilter === "all" ? true : vegFilter === "veg" ? isVeg : !isVeg;
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
-    if (!isVegMatch) return false;
+  const filteredItems = useMemo(() => {
+    return menuItems.filter((item: MenuItem) => {
+      const isVeg = item.dietaryTags?.some(t => t.toLowerCase() === "veg");
+      const isVegMatch = vegFilter === "all" ? true : vegFilter === "veg" ? isVeg : !isVeg;
 
-    if (!searchQuery && activeCategory) {
-      return item.categoryId === activeCategory && item.isAvailable;
-    } else if (searchQuery) {
-      const translatedName = getTranslatedName(item as any, language);
-      return item.isAvailable && translatedName.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return false;
-  });
+      if (!isVegMatch) return false;
+
+      if (!deferredSearchQuery && activeCategory) {
+        return item.categoryId === activeCategory && item.isAvailable;
+      } else if (deferredSearchQuery) {
+        const translatedName = getTranslatedName(item as any, language);
+        return item.isAvailable && translatedName.toLowerCase().includes(deferredSearchQuery.toLowerCase());
+      }
+      return false;
+    });
+  }, [menuItems, vegFilter, deferredSearchQuery, activeCategory, language]);
 
   const manualCartTotal = manualCart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
   const subtotal = manualCartTotal;
@@ -490,15 +517,37 @@ export function DesktopPOS({
               {/* Right Side - Order Summary */}
               <div className="flex-[1_1_40%] min-w-[280px] max-w-[40%] bg-gray-50 dark:bg-muted/10 border-l border-gray-200 dark:border-border flex flex-col h-full overflow-hidden">
                 {/* Header */}
-                <div className="bg-white dark:bg-card border-b border-gray-200 dark:border-border p-3 sm:p-4 flex-shrink-0">
-                  <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-foreground mb-3">
-                    Order Summary
-                  </h2>
+                <div className="bg-white dark:bg-card border-b border-gray-200 dark:border-border p-2 sm:p-3 flex-shrink-0">
+                  <div className="flex items-center justify-start gap-4 mb-2">
+                    <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-foreground">
+                      Order Summary
+                    </h2>
+                    {visibleSelectsCount === 0 && (
+                      <div className="flex items-center gap-2">
+                        {showCookingNotes && (
+                        <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-muted/30 px-1.5 py-1 rounded-sm border border-gray-100 dark:border-border/50">
+                          <span className="text-[10px] text-gray-500 font-medium tracking-wide">Note</span>
+                          <Button
+                            type="button"
+                            variant={cookingNote.trim() ? "default" : "ghost"}
+                            size="icon"
+                            className="h-6 w-6 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
+                            onClick={(e) => { e.stopPropagation(); setNoteDialogOpen(true); }}
+                            title="Cooking note"
+                          >
+                            <StickyNote className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
+                  {visibleSelectsCount > 0 && (
                   <div
                     className={cn(
                       "grid gap-2 items-end",
-                      isWaiterMode ? "grid-cols-[1fr_auto]" : "grid-cols-[1fr_1fr_1fr_auto]",
+                      topGridColsClass,
                     )}
                   >
                     {/* Table */}
@@ -526,7 +575,7 @@ export function DesktopPOS({
                     )}
 
                     {/* Waiter */}
-                    {!isWaiterMode && (
+                    {showWaiterDropdown && (
                       <div className="space-y-1 min-w-0">
                         <Label className="text-[10px] text-gray-600 dark:text-muted-foreground font-medium flex items-center gap-1">
                           <Users className="size-3" />
@@ -573,6 +622,7 @@ export function DesktopPOS({
                     {/* Options */}
                     <div className="flex flex-col items-end justify-end gap-1 pb-[4px]">
                       <div className="flex items-end justify-end gap-2">
+                        {showCookingNotes && (
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="text-[9px] text-gray-600 dark:text-muted-foreground font-medium">Note</span>
                           <Button
@@ -586,26 +636,13 @@ export function DesktopPOS({
                             <StickyNote className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-
-                        {!isWaiterMode && showDiscount && (
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[9px] text-gray-600 dark:text-muted-foreground font-medium">Disc</span>
-                            <Button
-                              type="button"
-                              variant={discountAmount.trim() ? "default" : "outline"}
-                              size="icon"
-                              className="h-7 w-7 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
-                              onClick={() => setDiscountDialogOpen(true)}
-                              title="Discount"
-                            >
-                              <Percent className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
                         )}
                       </div>
                     </div>
+                  </div>
+                  )}
 
-                    {/* Dialogs */}
+                  {/* Dialogs */}
                     <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
                       <DialogContent className="max-w-md">
                         <DialogHeader>
@@ -702,8 +739,6 @@ export function DesktopPOS({
                         </div>
                       </DialogContent>
                     </Dialog>
-
-                  </div>
                 </div>
 
                 {/* Order Items */}
@@ -844,12 +879,30 @@ export function DesktopPOS({
                       </div>
                     )}
 
-                    {!isWaiterMode && showDiscount && discountNum > 0 && (
-                      <div className="flex justify-between text-[9px] md:text-[10px]">
-                        <span className="text-gray-600 dark:text-muted-foreground">Discount</span>
-                        <span className="text-gray-900 dark:text-foreground font-semibold">
-                          - {currency}{discountNum.toFixed(2)}
-                        </span>
+                    {!isWaiterMode && showDiscount && (
+                      <div className="flex justify-between items-center text-[9px] md:text-[10px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-600 dark:text-muted-foreground">Discount</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-gray-400 hover:text-gray-900 dark:hover:text-foreground dark:text-muted-foreground"
+                            title="Add discount"
+                            onClick={() => setDiscountDialogOpen(true)}
+                          >
+                            <Percent className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        {discountNum > 0 ? (
+                          <span className="text-gray-900 dark:text-foreground font-semibold">
+                            - {currency}{discountNum.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 dark:text-muted-foreground font-medium">
+                            {currency}0.00
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -925,7 +978,7 @@ export function DesktopPOS({
                   {/* Action Buttons */}
                   <div className="p-1.5 md:p-2 flex-shrink-0">
                     {!isWaiterMode ? (
-                      <div className="grid grid-cols-4 gap-1">
+                      <div className={cn("grid gap-1", showKOT ? "grid-cols-4" : "grid-cols-2")}>
                         <Button
                           onClick={() => handleActionClick(onSave)}
                           variant="outline"
@@ -935,6 +988,7 @@ export function DesktopPOS({
                           <Save className="size-3 xl:size-3.5" />
                           <span className="font-semibold leading-none">Save</span>
                         </Button>
+                        {showKOT && (
                         <Button
                           onClick={() => handleActionClick(onSaveAndPrint)}
                           variant="outline"
@@ -944,6 +998,7 @@ export function DesktopPOS({
                           <Printer className="size-3 xl:size-3.5" />
                           <span className="font-semibold leading-none">KOT</span>
                         </Button>
+                        )}
                         {onSaveAndPrintBill ? (
                           <Button
                             onClick={() => handleActionClick(onSaveAndPrintBill)}
@@ -954,9 +1009,11 @@ export function DesktopPOS({
                             <Printer className="size-3 xl:size-3.5" />
                             <span className="font-semibold leading-none">Save & print</span>
                           </Button>
-                        ) : (
+                        ) : showKOT ? (
                           <div /> // placeholder
-                        )}
+                        ) : null}
+
+                        {showKOT && (
                         <Button
                           onClick={() => handleActionClick(onSendToKitchen)}
                           disabled={manualCart.length === 0 || isLoading}
@@ -969,6 +1026,7 @@ export function DesktopPOS({
                           )}
                           <span className="font-semibold leading-none">Kitchen</span>
                         </Button>
+                        )}
                       </div>
                     ) : (
                       <Button

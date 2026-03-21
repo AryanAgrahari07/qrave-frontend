@@ -37,25 +37,52 @@ export default function SubscriptionExpiredPage() {
 
     const plans = [
         {
-            id: "PRO",
-            name: "Professional",
-            price: serverPlans?.PRO?.amount || 700,
-            isPopular: true,
-            features: ["Unlimited Tables", "Advanced Analytics", "Priority Support", "Digital Menu & KDS", "Staff Management"],
-            icon: <Zap className="h-5 w-5 text-blue-500" />,
-        }
-    ];
-
-    if (subscription?.isEligibleForTrial) {
-        plans.unshift({
             id: "STARTER",
             name: "Starter Trial (7 Days)",
             price: serverPlans?.STARTER?.amount || 0,
-            features: ["Full System Access", "Explore All Features", "1-Time Usage Per Restaurant"],
+            features: [
+                "Full System Access & Explore All Features",
+                "Up to 5 Tables & 20 Menu Items",
+                "Max 50 Transactions & 10 Active Queue Entries",
+                "Kitchen & Waiter Access Included",
+                "1-Time Usage Per Restaurant"
+            ],
             icon: <CheckCircle2 className="h-5 w-5 text-green-500" />,
             isPopular: false,
-        });
-    }
+            // Only show trial if eligible
+            isHidden: !subscription?.isEligibleForTrial
+        },
+        {
+            id: "PRO",
+            name: "Professional",
+            price: serverPlans?.PRO?.amount || 399,
+            isPopular: false,
+            features: [
+                "Unlimited Tables, Menu Items & Transactions",
+                "Basic Billing & Live Orders Dashboard",
+                "Floor Map, Guest Queue & Analytics",
+                "Menu Builder & QR Code Management",
+                "Max 4 Admins Allowed"
+            ],
+            icon: <Zap className="h-5 w-5 text-blue-500" />,
+            isHidden: false
+        },
+        {
+            id: "MAX",
+            name: "Maximum",
+            price: serverPlans?.MAX?.amount || 799,
+            isPopular: true,
+            features: [
+                "Everything in Professional Plan",
+                "Waiter App & Terminal Access",
+                "Kitchen Display System (KDS)",
+                "Full Inventory Management",
+                "Unlimited Admins"
+            ],
+            icon: <Crown className="h-5 w-5 text-amber-500" />,
+            isHidden: false
+        }
+    ].filter(p => !p.isHidden);
 
     const handleSubscribe = async (planId: string) => {
         try {
@@ -181,7 +208,7 @@ export default function SubscriptionExpiredPage() {
 
                 <div className={cn(
                     "grid grid-cols-1 gap-6 mx-auto pt-8",
-                    plans.length === 1 ? "max-w-sm" : "md:grid-cols-2 max-w-3xl"
+                    plans.length === 1 ? "max-w-sm" : plans.length === 2 ? "md:grid-cols-2 max-w-3xl" : "lg:grid-cols-3 max-w-6xl"
                 )}>
                     {plans.map((plan) => (
                         <div

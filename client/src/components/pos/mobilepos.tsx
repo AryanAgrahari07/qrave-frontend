@@ -40,6 +40,7 @@ import type { MenuItem, Table } from "@/types";
 import type { POSCartLineItem } from "@/types/pos";
 import { getCustomizationSummary } from "@/components/menu/Customizedorderitemdisplay";
 import { useLanguage, getTranslatedName } from "@/context/LanguageContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { toast } from "sonner";
 
 type POSMode = "full" | "waiter";
@@ -145,7 +146,29 @@ export function MobilePOS({
   onToggleWaiveServiceCharge,
 }: MobilePOSProps) {
   const { language } = useLanguage();
+  const { canAccess } = useSubscription();
   const isWaiterMode = mode === "waiter";
+
+  // Plan-based feature access
+  const showWaiterDropdown = !isWaiterMode && canAccess("waiter");
+  const showCookingNotes = canAccess("cookingNotes");
+  const showKOT = canAccess("kot");
+
+  const visibleSelectsCount = [
+    !hideTableSelect,
+    showWaiterDropdown,
+    !hideOrderTypeSelect && !isWaiterMode
+  ].filter(Boolean).length;
+
+  const topGridColsClass = isWaiterMode
+    ? "grid-cols-[1fr_auto]"
+    : visibleSelectsCount === 3
+      ? "grid-cols-[1fr_1fr_1fr_auto]"
+      : visibleSelectsCount === 2
+        ? "grid-cols-[1fr_1fr_auto]"
+        : visibleSelectsCount === 1
+          ? "grid-cols-[1fr_auto]"
+          : "flex justify-end";
 
   const handleActionClick = (callback?: () => void) => {
     if (diningType === "dine-in" && (!tableNumber || tableNumber === "none")) {
@@ -438,8 +461,8 @@ export function MobilePOS({
           </div>
         ) : (
           <div className="h-full flex flex-col bg-gray-50 dark:bg-muted/10">
-            {/* Order Items List - Fixed 50% height with scroll */}
-            <div className="h-[50%] flex-shrink-0">
+            {/* Order Items List - Flexible height */}
+            <div className="flex-1 min-h-0">
               <ScrollArea className="h-full">
                 <div className="p-3">
                   <h3 className="font-semibold text-gray-900 dark:text-foreground mb-2 text-sm">
@@ -531,8 +554,8 @@ export function MobilePOS({
               </ScrollArea>
             </div>
 
-            {/* Bottom Section - Settings & Actions - 50% */}
-            <div className="flex-1 flex flex-col bg-white dark:bg-card border-t border-gray-200 dark:border-border">
+            {/* Bottom Section - Settings & Actions - Auto height */}
+            <div className="flex-none flex flex-col bg-white dark:bg-card border-t border-gray-200 dark:border-border">
               {/* Tax Breakdown */}
               <div className="px-2 py-1.5 border-b border-gray-200 dark:border-border">
                 <div className="space-y-0.5">
@@ -570,16 +593,55 @@ export function MobilePOS({
                     </div>
                   )}
 
-                  {!isWaiterMode && showDiscount && discountNum > 0 && (
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-gray-600 dark:text-muted-foreground">Discount</span>
-                      <span className="text-gray-900 dark:text-foreground font-medium">-{currency}{discountNum.toFixed(2)}</span>
+                  {!isWaiterMode && showDiscount && (
+                    <div className="flex justify-between items-center text-[10px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-600 dark:text-muted-foreground">Discount</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-gray-400 hover:text-gray-900 dark:hover:text-foreground dark:text-muted-foreground"
+                          title="Add discount"
+                          onClick={() => setDiscountDialogOpen(true)}
+                        >
+                          <Percent className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      {discountNum > 0 ? (
+                        <span className="text-gray-900 dark:text-foreground font-medium">-{currency}{discountNum.toFixed(2)}</span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-muted-foreground font-medium">{currency}0.00</span>
+                      )}
                     </div>
                   )}
 
                   <Separator className="my-0.5" />
                   <div className="flex justify-between items-center pt-0.5">
-                    <span className="font-semibold text-gray-900 dark:text-foreground text-[11px]">Total</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900 dark:text-foreground text-[11px]">Total</span>
+                      {visibleSelectsCount === 0 && (
+                        <div className="flex items-center gap-1">
+                          {showCookingNotes && (
+                          <div className="flex items-center gap-1 bg-gray-50 dark:bg-muted/30 px-1 py-0.5 rounded-sm border border-gray-100 dark:border-border/50">
+                            <span className="text-[9px] text-gray-500 font-medium">Note</span>
+                            <Button
+                              type="button"
+                              variant={cookingNote.trim() ? "default" : "ghost"}
+                              size="icon"
+                              className="h-5 w-5 dark:text-card-foreground dark:hover:bg-accent focus:bg-transparent"
+                              onClick={(e) => { e.stopPropagation(); setNoteDialogOpen(true); }}
+                              title="Cooking note"
+                            >
+                              <StickyNote className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          )}
+
+
+                        </div>
+                      )}
+                    </div>
                     <span className="font-bold text-sm text-primary">
                       {currency}{total.toFixed(2)}
                     </span>
@@ -588,14 +650,11 @@ export function MobilePOS({
               </div>
 
               {/* Controls */}
+              {visibleSelectsCount > 0 && (
               <div className="px-2 py-1.5 border-b border-gray-200 dark:border-border">
                 <div className={cn(
                   "grid gap-1 items-end",
-                  isWaiterMode
-                    ? "grid-cols-[1fr_auto]"
-                    : hideTableSelect || hideOrderTypeSelect
-                      ? "grid-cols-[1fr_1fr_auto]"
-                      : "grid-cols-[1fr_1fr_1fr_auto]"
+                  topGridColsClass
                 )}>
                   {!hideTableSelect && (
                     <div className="min-w-0">
@@ -617,7 +676,7 @@ export function MobilePOS({
                     </div>
                   )}
 
-                  {!isWaiterMode && (
+                  {showWaiterDropdown && (
                     <div className="min-w-0">
                       <Label className="text-[8px] text-gray-600 dark:text-muted-foreground mb-0.5 block">Waiter</Label>
                       <Select value={waiterName || "none"} onValueChange={onWaiterChange}>
@@ -657,6 +716,7 @@ export function MobilePOS({
                   {/* Options */}
                   <div className="flex flex-col items-end justify-end gap-0.5 pb-[2px]">
                     <div className="flex items-end justify-end gap-1">
+                      {showCookingNotes && (
                       <div className="space-y-1 flex flex-col items-center">
                         <span className="text-[7px] text-gray-600 dark:text-muted-foreground font-medium leading-none">Note</span>
                         <Button
@@ -670,27 +730,16 @@ export function MobilePOS({
                           <StickyNote className="h-3 w-3" />
                         </Button>
                       </div>
-
-                      {!isWaiterMode && showDiscount && (
-                        <div className="space-y-1 flex flex-col items-center">
-                          <span className="text-[7px] text-gray-600 dark:text-muted-foreground font-medium leading-none">Disc</span>
-                          <Button
-                            type="button"
-                            variant={discountAmount.trim() ? "default" : "outline"}
-                            size="icon"
-                            className="h-6 w-6 dark:bg-card dark:text-card-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
-                            onClick={() => setDiscountDialogOpen(true)}
-                            title="Discount"
-                          >
-                            <Percent className="h-3 w-3" />
-                          </Button>
-                        </div>
                       )}
+
+
                     </div>
                   </div>
                 </div>
+              </div>
+              )}
 
-                {/* Dialogs */}
+              {/* Dialogs */}
                 <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
@@ -788,8 +837,6 @@ export function MobilePOS({
                   </DialogContent>
                 </Dialog>
 
-              </div>
-
               {/* Payment Method */}
               {!isWaiterMode && (
                 <div className="px-2 py-1.5 border-b border-gray-200 dark:border-border">
@@ -867,7 +914,7 @@ export function MobilePOS({
                     <span className="text-sm font-semibold">Send to Kitchen</span>
                   </Button>
                 ) : (
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className={cn("grid gap-1", showKOT ? "grid-cols-4" : "grid-cols-2")}>
                     <Button
                       onClick={() => handleActionClick(onSave)}
                       variant="outline"
@@ -877,6 +924,7 @@ export function MobilePOS({
                       <Save className="size-3" />
                       <span className="text-[8px] font-semibold mt-0.5">Save</span>
                     </Button>
+                    {showKOT && (
                     <Button
                       onClick={() => handleActionClick(onSaveAndPrint)}
                       variant="outline"
@@ -886,6 +934,7 @@ export function MobilePOS({
                       <Printer className="size-3" />
                       <span className="text-[8px] font-semibold mt-0.5">KOT</span>
                     </Button>
+                    )}
                     {onSaveAndPrintBill ? (
                       <Button
                         onClick={() => handleActionClick(onSaveAndPrintBill)}
@@ -896,9 +945,11 @@ export function MobilePOS({
                         <Printer className="size-3" />
                         <span className="text-[8px] font-semibold mt-0.5">Save & print</span>
                       </Button>
-                    ) : (
+                    ) : showKOT ? (
                       <div /> // placeholder to keep Kitchen in position 4
-                    )}
+                    ) : null}
+
+                    {showKOT && (
                     <Button
                       onClick={() => handleActionClick(onSendToKitchen)}
                       disabled={!hasItems || isLoading}
@@ -911,6 +962,7 @@ export function MobilePOS({
                       )}
                       <span className="text-[8px] font-semibold mt-0.5">Kitchen</span>
                     </Button>
+                    )}
                   </div>
                 )}
               </div>

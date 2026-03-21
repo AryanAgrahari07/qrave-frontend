@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users as UsersIcon, Clock, UserPlus, Phone, Loader2, RefreshCw, Bell, X, ChevronRight, QrCode, ExternalLink, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
   DialogFooter,
   DialogDescription
@@ -23,23 +23,25 @@ import { useQueueActive, useTables, useRegisterInQueue, useCallNextGuest, useSea
 import type { QueueEntry, Table } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import QRCode from "qrcode";
+import { useSubscription } from "@/context/SubscriptionContext";
 
 export default function QueuePage() {
   const { restaurantId } = useAuth();
+  const { planLimits, currentPlan } = useSubscription();
   const { data: restaurant } = useRestaurant(restaurantId);
   const { data: queueEntries, isLoading, refetch, isRefetching } = useQueueActive(restaurantId);
   const { data: tables } = useTables(restaurantId);
   const { data: queueStats } = useQueueStats(restaurantId);
-  
+
   const registerInQueue = useRegisterInQueue(restaurantId);
   const callNext = useCallNextGuest(restaurantId);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [refetch]);
   const seatGuest = useSeatGuest(restaurantId);
   const cancelEntry = useCancelQueueEntry(restaurantId);
 
@@ -80,7 +82,7 @@ export default function QueuePage() {
       cancelled = true;
     };
   }, [queueJoinUrl]);
-  
+
   // New guest form
   const [newGuest, setNewGuest] = useState({
     guestName: "",
@@ -89,58 +91,58 @@ export default function QueuePage() {
     notes: "",
   });
 
-  const availableTables = tables?.filter((t: Table) => t.currentStatus === "AVAILABLE") || [];
+  const availableTables = useMemo(() => tables?.filter((t: Table) => t.currentStatus === "AVAILABLE") || [], [tables]);
 
-  const handleAddToQueue = async (e: React.FormEvent) => {
+  const handleAddToQueue = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGuest.guestName.trim()) return;
-    
+
     await registerInQueue.mutateAsync({
       guestName: newGuest.guestName.trim(),
       partySize: newGuest.partySize,
       phoneNumber: newGuest.phoneNumber.trim() || undefined,
       notes: newGuest.notes.trim() || undefined,
     });
-    
+
     setNewGuest({ guestName: "", partySize: 2, phoneNumber: "", notes: "" });
     setIsAddDialogOpen(false);
-  };
+  }, [newGuest, registerInQueue]);
 
-  const handleCallNext = async () => {
+  const handleCallNext = useCallback(async () => {
     try {
       await callNext.mutateAsync();
     } catch {
       // Error handled by mutation
     }
-  };
+  }, [callNext]);
 
-  const handleSeatGuest = async () => {
+  const handleSeatGuest = useCallback(async () => {
     if (!selectedGuest) return;
-    
+
     await seatGuest.mutateAsync({
       queueId: selectedGuest.id,
       tableId: selectedTableId || undefined,
     });
-    
+
     setSelectedGuest(null);
     setSelectedTableId(null);
     setIsSeatDialogOpen(false);
-  };
+  }, [selectedGuest, selectedTableId, seatGuest]);
 
-  const handleCancelEntry = async (queueId: string) => {
+  const handleCancelEntry = useCallback(async (queueId: string) => {
     if (!confirm("Are you sure you want to remove this guest from the queue?")) return;
     cancelEntry.mutate(queueId);
-  };
+  }, [cancelEntry]);
 
-  const getWaitTime = (entryTime: string) => {
+  const getWaitTime = useCallback((entryTime: string) => {
     try {
       return formatDistanceToNow(new Date(entryTime), { addSuffix: false });
     } catch {
       return "just now";
     }
-  };
+  }, []);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case "CALLED":
         return <Badge className="bg-primary animate-pulse text-xs">CALLED</Badge>;
@@ -149,9 +151,9 @@ export default function QueuePage() {
       default:
         return <Badge variant="outline" className="text-xs">{status}</Badge>;
     }
-  };
+  }, []);
 
-  const downloadQR = (dataUrl: string, filename: string) => {
+  const downloadQR = useCallback((dataUrl: string, filename: string) => {
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = filename;
@@ -159,9 +161,9 @@ export default function QueuePage() {
     link.click();
     document.body.removeChild(link);
     toast.success(`Downloaded ${filename}`);
-  };
+  }, []);
 
-  const copyQueueLink = async () => {
+  const copyQueueLink = useCallback(async () => {
     if (!queueJoinUrl) return;
     try {
       await navigator.clipboard.writeText(queueJoinUrl);
@@ -169,7 +171,11 @@ export default function QueuePage() {
     } catch {
       toast.error("Failed to copy");
     }
-  };
+  }, [queueJoinUrl]);
+
+  // Separate called guests from waiting
+  const calledGuests = useMemo(() => queueEntries?.filter((e: QueueEntry) => e.status === "CALLED") || [], [queueEntries]);
+  const waitingGuests = useMemo(() => queueEntries?.filter((e: QueueEntry) => e.status === "WAITING") || [], [queueEntries]);
 
   if (isLoading) {
     return (
@@ -180,10 +186,6 @@ export default function QueuePage() {
       </DashboardLayout>
     );
   }
-
-  // Separate called guests from waiting
-  const calledGuests = queueEntries?.filter((e: QueueEntry) => e.status === "CALLED") || [];
-  const waitingGuests = queueEntries?.filter((e: QueueEntry) => e.status === "WAITING") || [];
 
   return (
     <DashboardLayout>
@@ -196,8 +198,8 @@ export default function QueuePage() {
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isRefreshing} className="shrink-0">
             <RefreshCw className={cn("w-4 h-4", (isRefetching || isRefreshing) && "animate-spin")} />
           </Button>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             onClick={handleCallNext}
             disabled={callNext.isPending || waitingGuests.length === 0}
             className="flex-1 sm:flex-none"
@@ -285,7 +287,17 @@ export default function QueuePage() {
               )}
             </DialogContent>
           </Dialog>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            if (open) {
+              const activeQueueCount = (queueEntries?.filter((e: QueueEntry) => e.status === "WAITING" || e.status === "CALLED") || []).length;
+              const canAddQueue = planLimits.maxQueueActive === -1 || activeQueueCount < planLimits.maxQueueActive;
+              if (!canAddQueue) {
+                toast.error(`Queue limit reached. The ${currentPlan} plan allows up to ${planLimits.maxQueueActive} active entries. Please wait or upgrade to increase limit.`);
+                return;
+              }
+            }
+            setIsAddDialogOpen(open);
+          }}>
             <DialogTrigger asChild>
               <Button className="shadow-lg shadow-primary/20 flex-1 sm:flex-none">
                 <UserPlus className="w-4 h-4 sm:mr-2" />
@@ -300,9 +312,9 @@ export default function QueuePage() {
               <form onSubmit={handleAddToQueue} className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="guest-name" className="text-xs sm:text-sm">Guest Name *</Label>
-                  <Input 
-                    id="guest-name" 
-                    placeholder="Enter name..." 
+                  <Input
+                    id="guest-name"
+                    placeholder="Enter name..."
                     value={newGuest.guestName}
                     onChange={(e) => setNewGuest({ ...newGuest, guestName: e.target.value })}
                     required
@@ -312,10 +324,10 @@ export default function QueuePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="party-size" className="text-xs sm:text-sm">Party Size *</Label>
-                    <Input 
-                      id="party-size" 
-                      type="number" 
-                      min="1" 
+                    <Input
+                      id="party-size"
+                      type="number"
+                      min="1"
                       max="20"
                       value={newGuest.partySize}
                       onChange={(e) => setNewGuest({ ...newGuest, partySize: parseInt(e.target.value) || 1 })}
@@ -325,8 +337,8 @@ export default function QueuePage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-xs sm:text-sm">Phone Number</Label>
-                    <Input 
-                      id="phone" 
+                    <Input
+                      id="phone"
                       type="tel"
                       placeholder="+91 98765..."
                       value={newGuest.phoneNumber}
@@ -337,8 +349,8 @@ export default function QueuePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes" className="text-xs sm:text-sm">Notes</Label>
-                  <Textarea 
-                    id="notes" 
+                  <Textarea
+                    id="notes"
                     placeholder="Special requests, occasion, etc..."
                     value={newGuest.notes}
                     onChange={(e) => setNewGuest({ ...newGuest, notes: e.target.value })}
@@ -383,7 +395,7 @@ export default function QueuePage() {
       {calledGuests.length > 0 && (
         <div className="mb-6 sm:mb-8">
           <h3 className="font-heading font-bold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-primary animate-pulse" /> 
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-primary animate-pulse" />
             <span className="hidden sm:inline">Called - Ready to Seat</span>
             <span className="sm:hidden">Called</span>
           </h3>
@@ -395,7 +407,7 @@ export default function QueuePage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-base sm:text-lg truncate">{guest.guestName}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3 shrink-0" /> 
+                        <Clock className="w-3 h-3 shrink-0" />
                         <span className="hidden sm:inline">Waiting for {getWaitTime(guest.entryTime)}</span>
                         <span className="sm:hidden">{getWaitTime(guest.entryTime)}</span>
                       </p>
@@ -407,7 +419,7 @@ export default function QueuePage() {
                     </div>
                     {getStatusBadge(guest.status)}
                   </div>
-                  
+
                   <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4 text-xs sm:text-sm">
                     <div className="flex items-center gap-1.5">
                       <UsersIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
@@ -424,7 +436,7 @@ export default function QueuePage() {
                   {guest.notes && (
                     <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 italic line-clamp-2">"{guest.notes}"</p>
                   )}
-                  
+
                   <div className="flex gap-2">
                     <Dialog open={isSeatDialogOpen && selectedGuest?.id === guest.id} onOpenChange={(open) => {
                       setIsSeatDialogOpen(open);
@@ -462,13 +474,13 @@ export default function QueuePage() {
                                     onClick={() => setSelectedTableId(selectedTableId === table.id ? null : table.id)}
                                     className={cn(
                                       "p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 text-left transition-all",
-                                      selectedTableId === table.id 
-                                        ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                                      selectedTableId === table.id
+                                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                                         : "border-border hover:border-primary/50"
                                     )}
                                   >
                                     <div className="flex justify-between items-start mb-1">
-                                      <span className="font-bold text-base sm:text-lg">{table.tableNumber.replace(/^T/i, '')}</span>
+                                      <span className="font-bold text-base sm:text-lg">{table.tableNumber}</span>
                                       {isOptimal && (
                                         <Badge variant="outline" className="text-[9px] sm:text-[10px] bg-green-50 text-green-700 border-green-200">
                                           Fits
@@ -491,8 +503,8 @@ export default function QueuePage() {
                           )}
                         </div>
                         <DialogFooter className="flex flex-col sm:flex-row gap-2">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => {
                               setSelectedTableId(null);
                               handleSeatGuest();
@@ -503,7 +515,7 @@ export default function QueuePage() {
                             <span className="hidden sm:inline">Seat Without Table</span>
                             <span className="sm:hidden">Without Table</span>
                           </Button>
-                          <Button 
+                          <Button
                             onClick={handleSeatGuest}
                             disabled={seatGuest.isPending || !selectedTableId}
                             className="w-full h-9 sm:h-10 text-sm"
@@ -514,8 +526,8 @@ export default function QueuePage() {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="icon"
                       className="text-destructive hover:bg-destructive/10 h-9 w-9 sm:h-10 sm:w-10 shrink-0"
                       onClick={() => handleCancelEntry(guest.id)}
@@ -532,12 +544,12 @@ export default function QueuePage() {
 
       {/* Waiting Queue */}
       <h3 className="font-heading font-bold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
-        <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" /> 
+        <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
         <span className="hidden sm:inline">Waiting Queue</span>
         <span className="sm:hidden">Queue</span>
         <Badge variant="outline" className="text-xs">{waitingGuests.length}</Badge>
       </h3>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {waitingGuests.map((guest: QueueEntry) => (
           <Card key={guest.id} className={cn("shadow-sm border-l-4 border-l-muted")}>
@@ -551,7 +563,7 @@ export default function QueuePage() {
                     )}
                   </div>
                   <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-3 h-3 shrink-0" /> 
+                    <Clock className="w-3 h-3 shrink-0" />
                     <span className="hidden sm:inline">Waiting for {getWaitTime(guest.entryTime)}</span>
                     <span className="sm:hidden">{getWaitTime(guest.entryTime)}</span>
                   </p>
@@ -563,7 +575,7 @@ export default function QueuePage() {
                 </div>
                 {getStatusBadge(guest.status)}
               </div>
-              
+
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4 text-xs sm:text-sm">
                 <div className="flex items-center gap-1.5">
                   <UsersIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
@@ -580,7 +592,7 @@ export default function QueuePage() {
               {guest.notes && (
                 <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 italic line-clamp-2">"{guest.notes}"</p>
               )}
-              
+
               <div className="flex gap-2">
                 <Dialog open={isSeatDialogOpen && selectedGuest?.id === guest.id} onOpenChange={(open) => {
                   setIsSeatDialogOpen(open);
@@ -615,13 +627,13 @@ export default function QueuePage() {
                                 onClick={() => setSelectedTableId(selectedTableId === table.id ? null : table.id)}
                                 className={cn(
                                   "p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 text-left transition-all",
-                                  selectedTableId === table.id 
-                                    ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                                  selectedTableId === table.id
+                                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                                     : "border-border hover:border-primary/50"
                                 )}
                               >
                                 <div className="flex justify-between items-start mb-1">
-                                  <span className="font-bold text-base sm:text-lg">{table.tableNumber.replace(/^T/i, '')}</span>
+                                  <span className="font-bold text-base sm:text-lg">{table.tableNumber}</span>
                                   {isOptimal && (
                                     <Badge variant="outline" className="text-[9px] sm:text-[10px] bg-green-50 text-green-700 border-green-200">
                                       Optimal
@@ -640,9 +652,9 @@ export default function QueuePage() {
                       )}
                     </div>
                     <DialogFooter>
-                      <Button 
-                        className="w-full h-9 sm:h-10 text-sm" 
-                        disabled={!selectedTableId || seatGuest.isPending} 
+                      <Button
+                        className="w-full h-9 sm:h-10 text-sm"
+                        disabled={!selectedTableId || seatGuest.isPending}
                         onClick={handleSeatGuest}
                       >
                         {seatGuest.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -651,8 +663,8 @@ export default function QueuePage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
                   className="text-destructive hover:bg-destructive/10 h-9 w-9 sm:h-10 sm:w-10 shrink-0"
                   onClick={() => handleCancelEntry(guest.id)}
@@ -663,7 +675,7 @@ export default function QueuePage() {
             </CardContent>
           </Card>
         ))}
-        
+
         {waitingGuests.length === 0 && calledGuests.length === 0 && (
           <div className="col-span-full text-center py-12 sm:py-20 text-muted-foreground border-2 border-dashed rounded-2xl sm:rounded-3xl">
             <UsersIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 opacity-20" />

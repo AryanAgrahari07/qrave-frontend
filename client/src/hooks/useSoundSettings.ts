@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const SOUND_PREFERENCE_KEY = "qrave_notification_sound_enabled";
+
+let sharedAudioContext: any = null;
 
 export function useSoundSettings() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -13,42 +15,62 @@ export function useSoundSettings() {
     }
   }, []);
 
-  const toggleSound = () => {
+  const toggleSound = useCallback(() => {
     setSoundEnabled((prev) => {
       const next = !prev;
       localStorage.setItem(SOUND_PREFERENCE_KEY, String(next));
       return next;
     });
-  };
+  }, []);
 
-  const playNotificationSound = () => {
+  const playNotificationSound = useCallback(() => {
     if (!soundEnabled) return;
     
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
       
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+      if (!sharedAudioContext) {
+        sharedAudioContext = new AudioContextClass();
+      }
       
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      const ctx = sharedAudioContext;
+      
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
 
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.3);
+      const t = ctx.currentTime;
+
+      // --- Fundamental bell tone (830 Hz) ---
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.value = 830;
+      gain1.gain.setValueAtTime(0, t);
+      gain1.gain.linearRampToValueAtTime(0.4, t + 0.005);   // sharp attack
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.6); // smooth decay
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(t);
+      osc1.stop(t + 0.6);
+
+      // --- Harmonic overtone (1660 Hz, softer) ---
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.value = 1660;
+      gain2.gain.setValueAtTime(0, t);
+      gain2.gain.linearRampToValueAtTime(0.15, t + 0.003);  // very short attack
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.35); // faster decay
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(t);
+      osc2.stop(t + 0.35);
     } catch (e) {
       console.error("Failed to play sound snippet:", e);
     }
-  };
+  }, [soundEnabled]);
 
   return {
     soundEnabled,

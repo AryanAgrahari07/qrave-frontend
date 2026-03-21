@@ -172,7 +172,7 @@ export function useMenuSuggestions(query: string = "") {
       if (query) q.set('q', query);
       q.set('page', String(pageParam));
       q.set('limit', '20');
-      
+
       return api.get<{
         items: MenuSuggestion[];
         pagination: {
@@ -453,7 +453,7 @@ export function useCreateOrder(restaurantId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateOrderInput) =>
-      api.post<{ order: Order; newItems?: Array<{ id: string; [key: string]: unknown }> }>(`/api/restaurants/${restaurantId}/orders`, data).then((r) => r),
+      api.post<{ order: Order; newItems?: Array<{ id: string;[key: string]: unknown }> }>(`/api/restaurants/${restaurantId}/orders`, data).then((r) => r),
     onSuccess: () => {
       if (restaurantId) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
@@ -522,7 +522,28 @@ export function useUpdateOrderStatus(restaurantId: string | null) {
   return useMutation({
     mutationFn: ({ orderId, status }: { orderId: string; status: OrderStatus }) =>
       api.patch<{ order: Order }>(`/api/restaurants/${restaurantId}/orders/${orderId}/status`, { status }).then((r) => r.order),
-    onSuccess: () => {
+    // PERF: Optimistic update — UI reflects change instantly, rolls back on error
+    onMutate: async ({ orderId, status }) => {
+      if (!restaurantId) return;
+      await qc.cancelQueries({ queryKey: ["orders", restaurantId] });
+      const prevOrders = qc.getQueryData<{ orders: Order[]; pagination?: any }>(["orders", restaurantId]);
+      if (prevOrders?.orders) {
+        qc.setQueryData(["orders", restaurantId], {
+          ...prevOrders,
+          orders: prevOrders.orders.map((o: Order) =>
+            o.id === orderId ? { ...o, status } : o
+          ),
+        });
+      }
+      return { prevOrders };
+    },
+    onError: (e: Error, _vars, ctx) => {
+      if (restaurantId && ctx?.prevOrders) {
+        qc.setQueryData(["orders", restaurantId], ctx.prevOrders);
+      }
+      toast.error(e.message || "Failed to update status");
+    },
+    onSettled: () => {
       if (restaurantId) {
         qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         qc.invalidateQueries({ queryKey: queryKeys.ordersKitchen(restaurantId) });
@@ -530,7 +551,6 @@ export function useUpdateOrderStatus(restaurantId: string | null) {
         qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
       }
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to update status"),
   });
 }
 
@@ -588,7 +608,7 @@ export function useAddOrderItems(restaurantId: string | null) {
       paymentMethod?: "CASH" | "CARD" | "UPI" | "DUE";
       paymentStatus?: "PAID" | "DUE";
     }) =>
-      api.post<{ order: Order; newItems: Array<{ id: string; [key: string]: unknown }> }>(
+      api.post<{ order: Order; newItems: Array<{ id: string;[key: string]: unknown }> }>(
         `/api/restaurants/${restaurantId}/orders/${orderId}/items`,
         {
           items,
@@ -706,7 +726,7 @@ export function useTables(restaurantId: string | null) {
     enabled: !!restaurantId,
     // C1: WebSocket driven
     refetchInterval: false,
-    staleTime: 0,
+    staleTime: 5000, // PERF: WS handles invalidation, prevent refetch storms on tab switch
   });
 }
 
@@ -816,10 +836,27 @@ export function useUpdateTableStatus(restaurantId: string | null) {
   return useMutation({
     mutationFn: ({ tableId, status }: { tableId: string; status: TableStatus }) =>
       api.patch<{ table: Table }>(`/api/restaurants/${restaurantId}/tables/${tableId}/status`, { status }).then((r) => r.table),
-    onSuccess: (table) => {
+    // PERF: Optimistic update — table grid reflects change instantly
+    onMutate: async ({ tableId, status }) => {
+      if (!restaurantId) return;
+      await qc.cancelQueries({ queryKey: queryKeys.tables(restaurantId) });
+      const prevTables = qc.getQueryData<Table[]>(queryKeys.tables(restaurantId));
+      if (prevTables) {
+        qc.setQueryData<Table[]>(queryKeys.tables(restaurantId),
+          prevTables.map((t) => t.id === tableId ? { ...t, currentStatus: status } : t)
+        );
+      }
+      return { prevTables };
+    },
+    onError: (e: Error, _vars, ctx) => {
+      if (restaurantId && ctx?.prevTables) {
+        qc.setQueryData(queryKeys.tables(restaurantId), ctx.prevTables);
+      }
+      toast.error(e.message || "Failed to update table");
+    },
+    onSettled: () => {
       if (restaurantId) qc.invalidateQueries({ queryKey: queryKeys.tables(restaurantId) });
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to update table"),
   });
 }
 
@@ -838,7 +875,7 @@ export function useQueue(restaurantId: string | null, opts?: { status?: string; 
     enabled: !!restaurantId,
     // C1: WebSocket driven
     refetchInterval: false,
-    staleTime: 0,
+    staleTime: 5000, // PERF: WS handles invalidation
     // FE-2 FIX: Refetch on window focus ensures data is fresh if WS dies
     refetchOnWindowFocus: true,
   });
@@ -852,7 +889,7 @@ export function useQueueActive(restaurantId: string | null) {
     enabled: !!restaurantId,
     // C1: WebSocket driven
     refetchInterval: false,
-    staleTime: 0,
+    staleTime: 5000, // PERF: WS handles invalidation
   });
 }
 
@@ -862,7 +899,9 @@ export function useQueueStats(restaurantId: string | null) {
     queryFn: () =>
       api.get<{ stats: QueueStats }>(`/api/restaurants/${restaurantId}/queue/stats/summary`).then((r) => r.stats),
     enabled: !!restaurantId,
-    refetchInterval: 30000,
+    // PERF: WS invalidates queue queries via useRestaurantWebSocket. No need to poll.
+    refetchInterval: false,
+    staleTime: 30000,
   });
 }
 
@@ -888,14 +927,31 @@ export function useUpdateQueueStatus(restaurantId: string | null) {
   return useMutation({
     mutationFn: ({ queueId, status }: { queueId: string; status: "WAITING" | "CALLED" | "SEATED" | "CANCELLED" }) =>
       api.patch<{ entry: QueueEntry }>(`/api/restaurants/${restaurantId}/queue/${queueId}/status`, { status }).then((r) => r.entry),
-    onSuccess: () => {
+    // PERF: Optimistic update — queue list reflects change instantly
+    onMutate: async ({ queueId, status }) => {
+      if (!restaurantId) return;
+      await qc.cancelQueries({ queryKey: queryKeys.queue(restaurantId) });
+      const prevQueue = qc.getQueryData<QueueEntry[]>(queryKeys.queue(restaurantId));
+      if (prevQueue) {
+        qc.setQueryData<QueueEntry[]>(queryKeys.queue(restaurantId),
+          prevQueue.map((e) => e.id === queueId ? { ...e, status } : e)
+        );
+      }
+      return { prevQueue };
+    },
+    onError: (e: Error, _vars, ctx) => {
+      if (restaurantId && ctx?.prevQueue) {
+        qc.setQueryData(queryKeys.queue(restaurantId), ctx.prevQueue);
+      }
+      toast.error(e.message || "Failed to update status");
+    },
+    onSettled: () => {
       if (restaurantId) {
         qc.invalidateQueries({ queryKey: queryKeys.queue(restaurantId) });
         qc.invalidateQueries({ queryKey: queryKeys.queueActive(restaurantId) });
         qc.invalidateQueries({ queryKey: queryKeys.queueStats(restaurantId) });
       }
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to update status"),
   });
 }
 
@@ -1392,11 +1448,11 @@ export function useInfiniteInventory(restaurantId: string | null, filters?: Inve
       if (filters?.unit) params.set("unit", filters.unit);
       if (filters?.sortBy) params.set("sortBy", filters.sortBy);
       if (filters?.sortOrder) params.set("sortOrder", filters.sortOrder);
-      
+
       const limit = filters?.limit || 20;
       params.set("limit", String(limit));
       params.set("offset", String(pageParam));
-      
+
       const q = params.toString();
       const res = await api.get<{
         items: InventoryItem[];

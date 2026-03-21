@@ -24,10 +24,19 @@ import { useAuth } from "@/context/AuthContext";
 import { useRestaurant } from "@/hooks/api";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { useTheme } from "@/context/ThemeContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
+import type { PlanFeatures } from "@/lib/plan-config";
 
-const NAV_LINKS = [
+type NavLink = {
+  icon: React.ElementType;
+  label: string;
+  href: string;
+  requiredFeature?: keyof PlanFeatures;
+};
+
+const NAV_LINKS: NavLink[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: UtensilsCrossed, label: "Live Orders", href: "/dashboard/orders" },
   { icon: UtensilsCrossed, label: "Floor Map", href: "/dashboard/floor-map" },
@@ -35,7 +44,7 @@ const NAV_LINKS = [
   { icon: FileText, label: "Transactions", href: "/dashboard/transactions" },
   { icon: Users, label: "Staff", href: "/dashboard/staff" },
   { icon: UtensilsCrossed, label: "Menu Builder", href: "/dashboard/menu" },
-  { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
+  { icon: Package, label: "Inventory", href: "/dashboard/inventory", requiredFeature: "inventory" },
   { icon: QrCode, label: "QR Codes", href: "/dashboard/qr" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
@@ -47,6 +56,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: restaurant } = useRestaurant(restaurantId);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { canAccess } = useSubscription();
+
+  // Filter nav links based on the current plan's features
+  const filteredNavLinks = useMemo(
+    () => NAV_LINKS.filter((link) => !link.requiredFeature || canAccess(link.requiredFeature)),
+    [canAccess]
+  );
 
   const {
     isConnected: isPrinterConnected,
@@ -55,14 +71,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     disconnect: disconnectPrinter,
   } = useThermalPrinter(32);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     setLocation("/auth");
-  };
+  }, [logout, setLocation]);
 
-  const handleNavClick = () => {
+  const handleNavClick = useCallback(() => {
     setIsMobileMenuOpen(false);
-  };
+  }, []);
 
   const rest = restaurant as { name?: string; plan?: string; slug?: string } | undefined;
   const restName = rest?.name ?? "My Restaurant";
@@ -98,7 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <nav className="space-y-1">
-            {NAV_LINKS.map((link) => {
+            {filteredNavLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location === link.href;
               return (
@@ -210,7 +226,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <nav className="space-y-1">
-            {NAV_LINKS.map((link) => {
+            {filteredNavLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location === link.href;
               return (

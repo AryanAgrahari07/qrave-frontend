@@ -38,6 +38,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { useRestaurant, useMenuCategories, useCreateCategory, useUpdateCategory, useCreateMenuItem, useUpdateMenuItem, useUpdateMenuItemAvailability, useDeleteMenuItem, useDeleteCategory, useVariantsForMenuItem, useModifierGroupsForMenuItem, useMenuSuggestions } from "@/hooks/api";
 import { api } from "@/lib/api";
 import type { MenuCategory, MenuItem, MenuSuggestion } from "@/types";
@@ -240,7 +241,7 @@ function MenuItemRow({
       {/* Item Image */}
       <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-md sm:rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
         {item.imageUrl ? (
-          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+          <img src={item.imageUrl} alt={item.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
             <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
@@ -525,7 +526,10 @@ function SortableCategory({
                 variant="outline"
                 size="sm"
                 className="text-xs"
-                onClick={onAddItem}
+                onClick={() => {
+                  const totalItems = category.items.length; // Actually we want total items across all, but we will check it at the parent level before calling onAddItem
+                  onAddItem();
+                }}
               >
                 <Plus className="w-3 h-3 mr-1.5" /> Add Item
               </Button>
@@ -573,6 +577,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function MenuPage() {
   const { restaurantId } = useAuth();
+  const { planLimits, currentPlan } = useSubscription();
   const { data: restaurant } = useRestaurant(restaurantId);
   const { data: menuData, isLoading } = useMenuCategories(restaurantId, restaurant?.slug ?? null);
 
@@ -807,6 +812,17 @@ export default function MenuPage() {
       dietaryType: dietaryType as "" | "Veg" | "Non-Veg"
     });
     setIsEditItemDialogOpen(true);
+  };
+
+  const checkAddItemLimit = (categoryId: string) => {
+    const totalItems = menuData?.items?.length || 0;
+    const canAddItem = planLimits.maxMenuItems === -1 || totalItems < planLimits.maxMenuItems;
+    if (!canAddItem) {
+      toast.error(`Menu item limit reached. The ${currentPlan} plan allows up to ${planLimits.maxMenuItems} items. Please upgrade to add more.`);
+      return;
+    }
+    setSelectedCategoryId(categoryId);
+    setIsItemDialogOpen(true);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -1064,10 +1080,7 @@ export default function MenuPage() {
                   onToggleExpand={() => toggleCategoryExpand(category.id)}
                   onEdit={() => handleOpenEditCategory(category)}
                   onDelete={() => handleDeleteCategory(category.id)}
-                  onAddItem={() => {
-                    setSelectedCategoryId(category.id);
-                    setIsItemDialogOpen(true);
-                  }}
+                  onAddItem={() => checkAddItemLimit(category.id)}
                   onToggleAvailability={handleToggleAvailability}
                   onEditItem={handleOpenEditItem}
                   onDeleteItem={handleDeleteItem}
@@ -1128,7 +1141,7 @@ export default function MenuPage() {
                           className="w-full flex items-center gap-1.5 sm:gap-2 md:gap-3 p-1.5 sm:p-2 rounded-md sm:rounded-lg border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all text-left"
                         >
                           {item.imageUrl ? (
-                            <img src={item.imageUrl} className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md object-cover flex-shrink-0" alt="" />
+                            <img src={item.imageUrl} loading="lazy" className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md object-cover flex-shrink-0" alt="" />
                           ) : (
                             <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0 text-muted-foreground"><ImageIcon className="w-4 h-4" /></div>
                           )}

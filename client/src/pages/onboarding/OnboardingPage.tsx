@@ -70,8 +70,45 @@ export default function OnboardingPage() {
   });
 
   const PLANS = [
-    { name: "STARTER", displayName: "Starter Trial (7 Days)", price: serverPlans?.STARTER?.amount ? `₹${serverPlans.STARTER.amount}/mo` : "Free", features: ["Full System Access", "Explore All Features", "1-Time Usage Per Restaurant"] },
-    { name: "PRO", displayName: "Pro", price: serverPlans?.PRO?.amount ? `₹${serverPlans.PRO.amount}/mo` : "₹700/mo", features: ["Unlimited Items", "Custom Branding", "Analytics Dashboard", "Priority Support"], popular: true },
+    {
+      name: "STARTER",
+      displayName: "Starter Trial (7 Days)",
+      price: serverPlans?.STARTER?.amount ? `₹${serverPlans.STARTER.amount}/mo` : "Free",
+      features: [
+        "Full System Access & Explore All Features",
+        "Up to 5 Tables & 20 Menu Items",
+        "Max 50 Transactions & 10 Active Queue Entries",
+        "Kitchen & Waiter Access Included",
+        "1-Time Usage Per Restaurant"
+      ],
+      popular: false
+    },
+    {
+      name: "PRO",
+      displayName: "Professional",
+      price: serverPlans?.PRO?.amount ? `₹${serverPlans.PRO.amount}/mo` : "₹399/mo",
+      features: [
+        "Unlimited Tables, Menu Items & Transactions",
+        "Basic Billing & Live Orders Dashboard",
+        "Floor Map, Guest Queue & Analytics",
+        "Menu Builder & QR Code Management",
+        "Max 4 Admins Allowed"
+      ],
+      popular: false
+    },
+    {
+      name: "MAX",
+      displayName: "Maximum",
+      price: serverPlans?.MAX?.amount ? `₹${serverPlans.MAX.amount}/mo` : "₹799/mo",
+      features: [
+        "Everything in Professional Plan",
+        "Waiter App & Terminal Access",
+        "Kitchen Display System (KDS)",
+        "Full Inventory Management",
+        "Unlimited Admins"
+      ],
+      popular: true
+    }
   ];
 
   const [formData, setFormData] = useState<OnboardingData>({
@@ -329,6 +366,9 @@ export default function OnboardingPage() {
     if (!canProceed()) return;
 
     if (step < 3) {
+      if (step === 2 && formData.plan === 'STARTER') {
+        setFormData(prev => ({ ...prev, tableCount: 5 }));
+      }
       setStep(step + 1);
     } else {
       handleSubmit();
@@ -540,7 +580,7 @@ export default function OnboardingPage() {
                   <h2 className="text-2xl sm:text-3xl font-heading font-bold tracking-tight">Select a plan</h2>
                   <p className="text-muted-foreground">Scale as you grow. Start for free and upgrade anytime.</p>
                 </div>
-                <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto w-full">
+                <div className="grid md:grid-cols-3 gap-4 md:gap-6 max-w-6xl mx-auto w-full">
                   {PLANS.map((plan) => (
                     <div
                       key={plan.name}
@@ -566,12 +606,12 @@ export default function OnboardingPage() {
                         </div>
                       )}
 
-                      <h3 className="font-bold text-xl mb-2 text-foreground">{plan.displayName}</h3>
-                      <div className="text-3xl sm:text-4xl font-heading font-bold mb-6 text-foreground">{plan.price}</div>
+                      <h3 className="font-bold text-lg mb-1 text-foreground">{plan.displayName}</h3>
+                      <div className="text-2xl sm:text-3xl font-heading font-bold mb-4 text-foreground">{plan.price}</div>
 
-                      <div className="h-px w-full bg-border mb-6" />
+                      <div className="h-px w-full bg-border mb-4" />
 
-                      <ul className="space-y-4 text-sm text-muted-foreground">
+                      <ul className="space-y-3 text-xs sm:text-sm text-muted-foreground">
                         {plan.features.map((f, i) => (
                           <li key={i} className="flex items-start gap-3">
                             <Check className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -595,8 +635,21 @@ export default function OnboardingPage() {
                   <div className="space-y-8">
                     <div className="space-y-4">
                       <Label className="text-sm font-medium text-foreground">How many tables do you have?</Label>
+                      {formData.plan === 'STARTER' && (
+                         <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                           The Starter Trial plan includes a maximum of 5 tables. You can upgrade your plan later to add more.
+                         </p>
+                      )}
                       <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 sm:gap-3">
-                        {[4, 6, 8, 10, 12, 16, 20, 24].map((count) => (
+                        {formData.plan === 'STARTER' ? (
+                            <button
+                                type="button"
+                                disabled
+                                className="p-3 sm:p-4 rounded-xl border-2 font-bold text-base sm:text-lg bg-primary text-primary-foreground border-primary shadow-md opacity-100"
+                            >
+                              5
+                            </button>
+                        ) : [4, 6, 8, 10, 12, 16, 20, 24].map((count) => (
                           <button
                             key={count}
                             type="button"

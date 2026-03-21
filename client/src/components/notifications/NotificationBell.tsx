@@ -51,9 +51,18 @@ export default function NotificationBell() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   
-  const { soundEnabled, toggleSound } = useSoundSettings();
+  const { soundEnabled, toggleSound, playNotificationSound } = useSoundSettings();
 
   const { data: unreadCount = 0 } = useUnreadNotificationCount(restaurantId);
+  const prevUnreadCount = useRef(unreadCount);
+
+  useEffect(() => {
+    if (unreadCount > prevUnreadCount.current) {
+      playNotificationSound();
+    }
+    prevUnreadCount.current = unreadCount;
+  }, [unreadCount, playNotificationSound]);
+  
   const {
     data,
     fetchNextPage,

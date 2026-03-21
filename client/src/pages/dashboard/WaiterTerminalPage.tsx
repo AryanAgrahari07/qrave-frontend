@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +59,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// PERF: Pre-load notification audio once at module level instead of creating new Audio() per event
+const notificationAudio = typeof window !== 'undefined' ? new Audio("/notification.mp3") : null;
+if (notificationAudio) notificationAudio.preload = "auto";
+
+function playNotificationSound() {
+  if (!notificationAudio) return;
+  notificationAudio.currentTime = 0;
+  notificationAudio.play().catch(() => {});
+}
 
 export default function WaiterTerminalPage() {
   const [_, setLocation] = useLocation();
@@ -136,15 +146,16 @@ export default function WaiterTerminalPage() {
   const [editCookingNote, setEditCookingNote] = useState("");
 
 
-  // Mobile detection
+  // Mobile detection — PERF: debounced to avoid 60+ setState/sec during resize
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setIsMobile(window.innerWidth < 768), 150);
     };
-
-    checkMobile();
+    setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    return () => { window.removeEventListener("resize", checkMobile); clearTimeout(timeout); };
   }, []);
 
   // Set initial active category
@@ -169,11 +180,7 @@ export default function WaiterTerminalPage() {
         };
         setNotifications((prev) => [notification, ...prev].slice(0, 10));
 
-        // Play notification sound if available
-        try {
-          const audio = new Audio("/notification.mp3");
-          audio.play().catch(() => { });
-        } catch { }
+        playNotificationSound();
       }
     });
   }, [orders]);
@@ -200,10 +207,7 @@ export default function WaiterTerminalPage() {
         const msg = `🪑 New table assigned: Table ${table.tableNumber}`;
         const notification = { id: `table-${table.id}`, message: msg, time: new Date() };
         setNotifications((p) => [notification, ...p].slice(0, 10));
-        try {
-          const audio = new Audio("/notification.mp3");
-          audio.play().catch(() => { });
-        } catch { }
+        playNotificationSound();
       }
     }
   }, [tables, user?.id]);
@@ -233,28 +237,25 @@ export default function WaiterTerminalPage() {
       const msg = `🧾 New order assigned: ${guestOrTableStr}`;
       const notification = { id: `order-${order.id}`, message: msg, time: new Date() };
       setNotifications((p) => [notification, ...p].slice(0, 10));
-      try {
-        const audio = new Audio("/notification.mp3");
-        audio.play().catch(() => { });
-      } catch { }
+      playNotificationSound();
     }
   }, [orders, user?.id]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     setLocation("/auth");
-  };
+  }, [logout, setLocation]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRefreshAll = async () => {
+  const handleRefreshAll = useCallback(async () => {
     setIsRefreshing(true);
     refetchTables();
     refetchQueue();
     refetchOrders();
     refetchMenu();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [refetchTables, refetchQueue, refetchOrders, refetchMenu]);
 
   const toggleTableStatus = async (table: Table) => {
     const newStatus = table.currentStatus === "AVAILABLE" ? "OCCUPIED" : "AVAILABLE";
@@ -277,17 +278,17 @@ export default function WaiterTerminalPage() {
   const makeLineId = (menuItemId: string) =>
     `${menuItemId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  const isItemCustomizable = (item: MenuItem) =>
+  const isItemCustomizable = useCallback((item: MenuItem) =>
     (item.variants && item.variants.length > 0) ||
-    (item.modifierGroups && item.modifierGroups.length > 0);
+    (item.modifierGroups && item.modifierGroups.length > 0), []);
 
-  const getMenuItemQuantity = (menuItemId: string) =>
+  const getMenuItemQuantity = useCallback((menuItemId: string) =>
     cart.reduce(
       (sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum),
       0,
-    );
+    ), [cart]);
 
-  const addToCart = (item: MenuItem) => {
+  const addToCart = useCallback((item: MenuItem) => {
     if (isItemCustomizable(item)) {
       setCustomizingItem(item);
       setIsCustomizing(true);
@@ -323,9 +324,9 @@ export default function WaiterTerminalPage() {
       };
       return [...prev, newLine];
     });
-  };
+  }, [isItemCustomizable, language]);
 
-  const decrementLineItem = (lineId: string) => {
+  const decrementLineItem = useCallback((lineId: string) => {
     setCart((prev) =>
       prev
         .map((li) =>
@@ -333,15 +334,15 @@ export default function WaiterTerminalPage() {
         )
         .filter((li) => li.quantity > 0),
     );
-  };
+  }, []);
 
-  const incrementLineItem = (lineId: string) => {
+  const incrementLineItem = useCallback((lineId: string) => {
     setCart((prev) =>
       prev.map((li) =>
         li.lineId === lineId ? { ...li, quantity: li.quantity + 1 } : li,
       ),
     );
-  };
+  }, []);
 
   const handlePlusForCustomizableItem = (item: MenuItem) => {
     // For waiter flow we always open customization for customizable items.

@@ -15,6 +15,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthGate } from "@/components/AuthGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PlanGate } from "@/components/PlanGate";
 
 // A wrapper around `lazy` that auto-refreshes if a chunk fails to load due to deployment updates.
 const lazyImport = (importFunc: () => Promise<{ default: React.ComponentType<any> }>) => {
@@ -89,14 +90,18 @@ function Router() {
         <Route path="/kitchen">
           {() => (
             <ProtectedRoute requiredRole={["KITCHEN", "owner", "admin"]}>
-              <KitchenKDSPage />
+              <PlanGate feature="kitchen">
+                <KitchenKDSPage />
+              </PlanGate>
             </ProtectedRoute>
           )}
         </Route>
         <Route path="/waiter">
           {() => (
             <ProtectedRoute requiredRole={["WAITER", "owner", "admin"]}>
-              <WaiterTerminalPage />
+              <PlanGate feature="waiter">
+                <WaiterTerminalPage />
+              </PlanGate>
             </ProtectedRoute>
           )}
         </Route>
@@ -161,7 +166,9 @@ function Router() {
         <Route path="/dashboard/inventory">
           {() => (
             <ProtectedRoute requiredRole={["owner", "admin", "ADMIN"]}>
-              <InventoryPage />
+              <PlanGate feature="inventory">
+                <InventoryPage />
+              </PlanGate>
             </ProtectedRoute>
           )}
         </Route>

@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Search, Calendar, FileText, Download, Eye, Receipt, CreditCard, Utensils, Clock, Printer, Share2, Loader2, ChevronLeft, ChevronRight, Filter, ChevronsLeft, ChevronsRight, MessageCircle, Send, MinusCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -122,16 +122,16 @@ export default function TransactionsPage() {
   const offset = (page - 1) * limit;
 
   // Debounce search removed: user wants explicit search trigger
-  const handleSearchSubmit = () => {
+  const handleSearchSubmit = useCallback(() => {
     setDebouncedSearch(searchTerm);
     setPage(1);
-  };
+  }, [searchTerm]);
 
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearchTerm("");
     setDebouncedSearch("");
     setPage(1);
-  };
+  }, []);
 
   // Reset WhatsApp phone when dialog closes
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function TransactionsPage() {
 
   const exportCSV = useExportTransactionsCSV(restaurantId);
 
-  const currency = restaurant?.currency || "₹";
+  const currency = useMemo(() => restaurant?.currency || "₹", [restaurant?.currency]);
   const transactions = data?.transactions || [];
   const pagination = data?.pagination;
 
@@ -569,14 +569,14 @@ Total: ${currency}${parseFloat(transactionDetail.grandTotal).toFixed(2)}
     }
   };
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchTerm("");
     setDebouncedSearch("");
     setPaymentFilter("");
     setFromDate("");
     setToDate("");
     setPage(1);
-  };
+  }, []);
 
   const hasActiveFilters = searchTerm || paymentFilter || fromDate || toDate;
 

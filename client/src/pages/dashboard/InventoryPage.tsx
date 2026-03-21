@@ -25,6 +25,7 @@ import {
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { PlanGate } from "@/components/PlanGate";
 import {
   useInventory, useInventoryAlerts, useCreateInventoryItem, useUpdateInventoryItem,
   useRestockInventoryItem, useAdjustInventoryStock, useDeleteInventoryItem,
@@ -259,7 +260,8 @@ export default function InventoryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-5 sm:space-y-6">
+      <PlanGate feature="inventory" requiredPlan="MAX">
+        <div className="space-y-5 sm:space-y-6">
         {/* Alert Banner */}
         {showAlertBanner && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-3 sm:p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1005,6 +1007,7 @@ export default function InventoryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </PlanGate>
     </DashboardLayout>
   );
 }

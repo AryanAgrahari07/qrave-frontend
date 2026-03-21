@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { preferences } from "@/lib/preferences";
 import { api, migrateLegacyTokenIfNeeded, setStoredToken } from "@/lib/api";
@@ -271,14 +271,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [state.isReady, setRestaurantId]);
 
-  const value: AuthContextValue = {
+  const value: AuthContextValue = useMemo(() => ({
     ...state,
     login,
     staffLogin,
     logout,
     setRestaurantId,
     onboardingComplete,
-  };
+  }), [state, login, staffLogin, logout, setRestaurantId, onboardingComplete]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, memo, useDeferredValue } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -209,7 +209,7 @@ function ItemCustomizationDialog({
 }
 
 // Item Card Component
-function MenuItemCard({
+const MenuItemCard = memo(function MenuItemCard({
   item,
   currency,
   lang,
@@ -300,6 +300,7 @@ function MenuItemCard({
             <img
               src={item.imageUrl}
               alt={item.name}
+              loading="lazy"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             />
           </div>
@@ -307,7 +308,7 @@ function MenuItemCard({
       </div>
     </div>
   );
-}
+});
 
 export default function PublicMenuPage() {
   const params = useParams<{ slug: string }>();
@@ -347,11 +348,13 @@ export default function PublicMenuPage() {
     }
   }, [categoriesWithItems]);
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   // Filter by search
   const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) return categoriesWithItems;
+    if (!deferredSearchQuery.trim()) return categoriesWithItems;
 
-    const query = searchQuery.toLowerCase();
+    const query = deferredSearchQuery.toLowerCase();
     return categoriesWithItems
       .map(cat => ({
         ...cat,
@@ -361,20 +364,29 @@ export default function PublicMenuPage() {
         ),
       }))
       .filter(cat => cat.items.length > 0);
-  }, [categoriesWithItems, searchQuery]);
+  }, [categoriesWithItems, deferredSearchQuery]);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 20);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleOpenCustomization = (item: MenuItem) => {
+  const handleOpenCustomization = useCallback((item: MenuItem) => {
     setSelectedItem(item);
     setCustomizationDialogOpen(true);
-  };
+  }, []);
 
-  const toggleCategoryExpand = (categoryId: string) => {
+  const toggleCategoryExpand = useCallback((categoryId: string) => {
     setExpandedCategories((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(categoryId)) {
@@ -384,7 +396,7 @@ export default function PublicMenuPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   const restaurant = menuData?.restaurant;
   const currency = restaurant?.currency || "₹";
@@ -511,7 +523,7 @@ export default function PublicMenuPage() {
     <div className="min-h-screen bg-background pb-16 font-sans">
       {/* Hero Header */}
       <div className="h-48 sm:h-56 relative overflow-hidden bg-primary">
-        <img src={foodImg} alt="Hero" className="w-full h-full object-cover opacity-50 scale-110" />
+        <img src={foodImg} alt="Hero" loading="eager" className="w-full h-full object-cover opacity-50 scale-110" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/10" />
         <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 right-4 sm:right-6">
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-white drop-shadow-lg">

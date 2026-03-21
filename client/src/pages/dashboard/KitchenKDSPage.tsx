@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,67 +56,66 @@ export default function KitchenKDSPage() {
     });
   }, [allVisibleItemIds]);
 
-  const toggleItemChecked = (itemId: string) => {
+  const toggleItemChecked = useCallback((itemId: string) => {
     setCheckedItemIds((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
       return next;
     });
-  };
+  }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     setLocation("/auth");
-  };
+  }, [logout, setLocation]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [refetch]);
 
   const [section, setSection] = useState<"active" | "ready">("active");
 
-  const handleStartOrder = async (orderId: string) => {
+  const handleStartOrder = useCallback(async (orderId: string) => {
     try {
       await startOrder.mutateAsync(orderId);
     } catch {
       // Error handled by mutation
     }
-  };
+  }, [startOrder]);
 
-  const handleCompleteOrder = async (orderId: string) => {
+  const handleCompleteOrder = useCallback(async (orderId: string) => {
     try {
       await completeOrder.mutateAsync(orderId);
     } catch {
       // Error handled by mutation
     }
-  };
+  }, [completeOrder]);
 
-  const getMinutesSince = (dateString: string) => {
+  const getMinutesSince = useCallback((dateString: string) => {
     try {
       return differenceInMinutes(new Date(), new Date(dateString));
     } catch {
       return 0;
     }
-  };
+  }, []);
 
-  const isUrgent = (order: Order) => {
+  const isUrgent = useCallback((order: Order) => {
     const mins = getMinutesSince(order.createdAt);
     return order.status === "PENDING" && mins > 10;
-  };
+  }, [getMinutesSince]);
 
-  // Sort orders only by time (oldest first).
-  // This prevents cards from re-ordering when status changes (e.g. clicking "Start Preparing").
-  const sortedOrders = [...(orders || [])].sort((a: Order, b: Order) => {
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
+  // PERF: Memoize sorted/filtered order lists
+  const sortedOrders = useMemo(() =>
+    [...(orders || [])].sort((a: Order, b: Order) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    ), [orders]);
 
-  // Keep READY orders "aside" so they don't mix with the cooking workflow.
-  const readyOrders = sortedOrders.filter((o) => o.status === "READY");
-  const activeOrders = sortedOrders.filter((o) => o.status !== "READY");
+  const readyOrders = useMemo(() => sortedOrders.filter((o) => o.status === "READY"), [sortedOrders]);
+  const activeOrders = useMemo(() => sortedOrders.filter((o) => o.status !== "READY"), [sortedOrders]);
 
   // If there are no READY orders anymore, force the view back to Active.
   useEffect(() => {

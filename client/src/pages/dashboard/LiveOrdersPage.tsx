@@ -35,7 +35,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
@@ -83,6 +83,16 @@ import { DesktopPOS } from "@/components/pos/desktoppos";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { buildBillDataFromOrder } from "@/lib/bill-data";
 import { buildKOTDataFromOrder } from "@/lib/kot-data";
+
+// PERF: Pre-load notification audio once at module level
+const notificationAudio = typeof window !== 'undefined' ? new Audio("/notification.mp3") : null;
+if (notificationAudio) notificationAudio.preload = "auto";
+
+function playNotificationSound() {
+  if (!notificationAudio) return;
+  notificationAudio.currentTime = 0;
+  notificationAudio.play().catch(() => {});
+}
 
 export default function LiveOrdersPage() {
   const { restaurantId, user } = useAuth();
@@ -154,19 +164,19 @@ export default function LiveOrdersPage() {
   const closeOrder = useCloseOrder(restaurantId);
 
   // Manual wrapper for updateOrderStatus to track local READY updates
-  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+  const handleUpdateStatus = useCallback(async (orderId: string, status: OrderStatus) => {
     if (status === "READY") {
       localReadyOrdersRef.current.add(orderId);
     }
     await updateStatus.mutateAsync({ orderId, status });
-  };
+  }, [updateStatus]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [refetch]);
 
   const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "platform_admin";
 
@@ -181,15 +191,16 @@ export default function LiveOrdersPage() {
   const [billDiscountMode, setBillDiscountMode] = useState<"amount" | "percent">("amount");
   const [billDiscountPercent, setBillDiscountPercent] = useState("");
 
-  // Detect mobile screen size
+  // Detect mobile screen size — PERF: debounced
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setIsMobile(window.innerWidth < 1024), 150);
     };
-
-    checkMobile();
+    setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    return () => { window.removeEventListener("resize", checkMobile); clearTimeout(timeout); };
   }, []);
 
   // Sync bill preview discount editor with selected order
@@ -279,8 +290,7 @@ export default function LiveOrdersPage() {
         );
 
         try {
-          const audio = new Audio("/notification.mp3");
-          audio.play().catch(() => { });
+          playNotificationSound();
         } catch { }
       } else {
         // Automatically mark assigned ones so we only track newly ready ones
@@ -298,12 +308,12 @@ export default function LiveOrdersPage() {
     );
   }, [orders]);
 
-  const currency = restaurant?.currency || "₹";
-  const gstRate = parseFloat(restaurant?.taxRateGst || "5") / 100;
-  const serviceRatePct = parseFloat(restaurant?.taxRateService || "0");
+  const currency = useMemo(() => restaurant?.currency || "₹", [restaurant?.currency]);
+  const gstRate = useMemo(() => parseFloat(restaurant?.taxRateGst || "5") / 100, [restaurant?.taxRateGst]);
+  const serviceRatePct = useMemo(() => parseFloat(restaurant?.taxRateService || "0"), [restaurant?.taxRateService]);
 
-  // Set initial active category
-  useMemo(() => {
+  // Set initial active category — Fix: useEffect for side effects, not useMemo
+  useEffect(() => {
     if (!activeCategory && menuData?.categories && menuData.categories.length > 0) {
       setActiveCategory(menuData.categories[0].id);
     }
@@ -312,11 +322,11 @@ export default function LiveOrdersPage() {
   const makeLineId = (menuItemId: string) =>
     `${menuItemId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  const isItemCustomizable = (item: MenuItem) =>
+  const isItemCustomizable = useCallback((item: MenuItem) =>
     (item.variants && item.variants.length > 0) ||
-    (item.modifierGroups && item.modifierGroups.length > 0);
+    (item.modifierGroups && item.modifierGroups.length > 0), []);
 
-  const addToManualCart = (item: MenuItem) => {
+  const addToManualCart = useCallback((item: MenuItem) => {
     if (isItemCustomizable(item)) {
       setCustomizingItem(item);
       setCustomizationTarget("manual");
@@ -350,9 +360,9 @@ export default function LiveOrdersPage() {
       };
       return [...prev, newLine];
     });
-  };
+  }, [isItemCustomizable]);
 
-  const decrementLineItem = (lineId: string) => {
+  const decrementLineItem = useCallback((lineId: string) => {
     setManualCart((prev) =>
       prev
         .map((li) =>
@@ -360,21 +370,21 @@ export default function LiveOrdersPage() {
         )
         .filter((li) => li.quantity > 0),
     );
-  };
+  }, []);
 
-  const incrementLineItem = (lineId: string) => {
+  const incrementLineItem = useCallback((lineId: string) => {
     setManualCart((prev) =>
       prev.map((li) =>
         li.lineId === lineId ? { ...li, quantity: li.quantity + 1 } : li,
       ),
     );
-  };
+  }, []);
 
-  const getMenuItemQuantity = (menuItemId: string) =>
+  const getMenuItemQuantity = useCallback((menuItemId: string) =>
     manualCart.reduce(
       (sum, li) => (li.menuItemId === menuItemId ? sum + li.quantity : sum),
       0,
-    );
+    ), [manualCart]);
 
   const handlePlusForCustomizableItem = (item: MenuItem) => {
     const existingLines = manualCart.filter((li) => li.menuItemId === item.id);
