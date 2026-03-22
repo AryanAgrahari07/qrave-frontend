@@ -20,6 +20,8 @@ import {
   Check,
   ChevronsUpDown,
   Crown,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -48,7 +50,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-// import { LogoSelector } from "@/components/logo/logo-selector";
+import { MenuBackgroundSelector } from "@/components/menu-background/MenuBackgroundSelector";
 
 const SHOP_TYPES = [
   { id: "fine-dine", label: "Fine Dine", icon: Utensils, desc: "Premium dining experience with table service." },
@@ -89,6 +91,7 @@ export default function SettingsPage() {
   const [addressLine1, setAddressLine1] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [showMenuBg, setShowMenuBg] = useState(false);
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("");
   const [currency, setCurrency] = useState("₹");
@@ -704,11 +707,55 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* {restaurantId && (
-            <LogoSelector
-              restaurantId={restaurantId}
-            />
-          )} */}
+          {restaurantId && (
+            <div className="space-y-4">
+              {!showMenuBg ? (
+                <Card 
+                  className="cursor-pointer hover:border-primary/50 transition-colors" 
+                  onClick={() => setShowMenuBg(true)}
+                >
+                  <CardHeader className="px-4 sm:px-6 py-4 sm:py-5 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-image w-4 h-4 sm:w-5 sm:h-5 text-primary"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg sm:text-xl">Menu Background</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm mt-1">
+                          Customize your public menu's hero background and overlay filter.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="shrink-0 pointer-events-none">
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    </Button>
+                  </CardHeader>
+                </Card>
+              ) : (
+                <div className="relative animate-in fade-in slide-in-from-top-2 duration-300">
+                  <MenuBackgroundSelector restaurantId={restaurantId} />
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="absolute top-4 right-4 sm:top-6 sm:right-6 hidden sm:flex gap-1"
+                    onClick={() => setShowMenuBg(false)}
+                  >
+                    Close
+                    <ChevronUp className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full sm:hidden mt-2"
+                    onClick={() => setShowMenuBg(false)}
+                  >
+                    Close Background Settings
+                    <ChevronUp className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* <Card>
             <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-4">

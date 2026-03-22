@@ -193,6 +193,12 @@ export class BluetoothPrinter {
   private config: PrinterConfig;
   private onDisconnected?: () => void;
 
+  /** 
+   * Optional override for sending raw bytes. 
+   * If provided, connect/disconnect/send will bypass Web Bluetooth and use this instead (e.g. for native plugins).
+   */
+  public customSendFn?: (data: Uint8Array) => Promise<void>;
+
   constructor(config: PrinterConfig = { width: 32 }, opts?: { onDisconnected?: () => void }) {
     this.config = config;
     this.onDisconnected = opts?.onDisconnected;
@@ -308,6 +314,8 @@ export class BluetoothPrinter {
    * Check if printer is connected
    */
   isConnected(): boolean {
+    // If using a custom native sender, the connection state is managed externally.
+    if (this.customSendFn) return true;
     return !!this.device?.gatt?.connected;
   }
 
@@ -319,6 +327,11 @@ export class BluetoothPrinter {
    * Larger chunks = fewer round-trips = much faster logo/bill printing.
    */
   private async sendData(data: Uint8Array): Promise<void> {
+    if (this.customSendFn) {
+      await this.customSendFn(data);
+      return;
+    }
+
     if (!this.characteristic) {
       throw new Error('Printer not connected');
     }

@@ -21,6 +21,7 @@ import { useParams } from "wouter";
 import { usePublicMenu } from "@/hooks/api";
 import type { MenuCategory, MenuItem, RestaurantSettings } from "@/types";
 import foodImg from "@assets/generated_images/exquisite_red_gourmet_dish.png";
+import { getOverlayPreset } from "@/components/menu-background/MenuBackgroundSelector";
 import {
   Dialog,
   DialogContent,
@@ -523,8 +524,17 @@ export default function PublicMenuPage() {
     <div className="min-h-screen bg-background pb-16 font-sans">
       {/* Hero Header */}
       <div className="h-48 sm:h-56 relative overflow-hidden bg-primary">
-        <img src={foodImg} alt="Hero" loading="eager" className="w-full h-full object-cover opacity-50 scale-110" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/10" />
+        {(() => {
+          const bgSettings = (restaurant?.settings as RestaurantSettings)?.menuBackground;
+          const heroUrl = bgSettings?.url || foodImg;
+          const overlay = getOverlayPreset(bgSettings?.overlay);
+          return (
+            <>
+              <img src={heroUrl} alt="Hero" loading="eager" className={cn("w-full h-full object-cover scale-110", overlay.imgClass)} />
+              {overlay.overlayClass && <div className={cn("absolute inset-0", overlay.overlayClass)} />}
+            </>
+          );
+        })()}
         <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 right-4 sm:right-6">
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-white drop-shadow-lg">
             {restaurant?.name || "Restaurant"}

@@ -157,9 +157,8 @@ export function usePublicMenu(slug: string | null, dietaryFilter?: 'veg' | 'non-
       return api.get<MenuData>(url);
     },
     enabled: !!slug,
-    staleTime: 10000,
-    // PERF-5: Reduced from 30s → 120s. 1M viewers × every 30s = 33K req/sec. Rely on backend Redis TTL.
-    refetchInterval: 120000,
+    staleTime: 3000,
+    refetchInterval: 5000,
   });
 }
 
@@ -2276,3 +2275,68 @@ export function useMarkNotificationRead(restaurantId: string | null) {
     },
   });
 }
+
+// === Menu Background ===
+interface MenuBackgroundTemplate {
+  id: string;
+  name: string;
+  thumbnail: string;
+  url: string;
+  description: string;
+}
+
+export function useMenuBackgroundTemplates() {
+  return useQuery({
+    queryKey: ["menu-background-templates"],
+    queryFn: () =>
+      api
+        .get<{ backgrounds: MenuBackgroundTemplate[] }>("/api/menu-backgrounds/templates")
+        .then((r) => r.backgrounds),
+    staleTime: 600000, // 10 minutes — templates rarely change
+  });
+}
+
+export function useMenuBackground(restaurantId: string | null) {
+  return useQuery({
+    queryKey: ["menu-background", restaurantId],
+    queryFn: () =>
+      api
+        .get<{ background: { type: string; url: string; key?: string; updatedAt?: string } | null }>(
+          `/api/menu-backgrounds/${restaurantId}`
+        )
+        .then((r) => r.background),
+    enabled: !!restaurantId,
+    staleTime: 30000,
+  });
+}
+
+export function useUpdateMenuBackground(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { type: "predefined" | "custom"; url: string; key?: string | null; overlay?: string }) =>
+      api.put<{ success: boolean; restaurant: any; message: string }>(
+        `/api/menu-backgrounds/${restaurantId}`,
+        data
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["menu-background", restaurantId] });
+      qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) });
+      toast.success("Menu background updated!");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to update background"),
+  });
+}
+
+export function useDeleteMenuBackground(restaurantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.delete<{ success: boolean }>(`/api/menu-backgrounds/${restaurantId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["menu-background", restaurantId] });
+      qc.invalidateQueries({ queryKey: queryKeys.restaurant(restaurantId) });
+      toast.success("Menu background removed");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to remove background"),
+  });
+}

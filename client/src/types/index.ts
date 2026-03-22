@@ -34,10 +34,19 @@ export interface RestaurantSettingsTimings {
   closeTime?: string;
 }
 
+export interface MenuBackgroundSettings {
+  type: "predefined" | "custom";
+  url: string;
+  key?: string | null;
+  overlay?: string; // e.g. 'dark-fade', 'subtle', 'vivid', 'none', 'warm-fade', 'cool-fade'
+  updatedAt?: string;
+}
+
 export interface RestaurantSettings {
   languages?: RestaurantSettingsLanguages;
   notifications?: RestaurantSettingsNotifications;
   timings?: RestaurantSettingsTimings;
+  menuBackground?: MenuBackgroundSettings;
   // Allow future settings keys without breaking the type
   [key: string]: unknown;
 }

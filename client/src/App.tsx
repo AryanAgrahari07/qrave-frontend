@@ -16,6 +16,9 @@ import { AuthGate } from "@/components/AuthGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { PlanGate } from "@/components/PlanGate";
+import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
+import { Capacitor } from "@capacitor/core";
+import { NativeSplashScreen } from "@/components/NativeSplashScreen";
 
 // A wrapper around `lazy` that auto-refreshes if a chunk fails to load due to deployment updates.
 const lazyImport = (importFunc: () => Promise<{ default: React.ComponentType<any> }>) => {
@@ -76,7 +79,9 @@ function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
-        <Route path="/" component={LandingPage} />
+        <Route path="/">
+          {() => Capacitor.isNativePlatform() ? <LoginPage /> : <LandingPage />}
+        </Route>
         <Route path="/auth" component={LoginPage} />
         <Route path="/signup" component={OnboardingPage} />
         <Route path="/onboarding" component={OnboardingPage} />
@@ -223,6 +228,9 @@ function Router() {
 }
 
 function App() {
+  useAndroidBackButton();
+  const [showSplash, setShowSplash] = React.useState(Capacitor.isNativePlatform());
+
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -235,7 +243,10 @@ function App() {
                     <OfflineBanner />
                     <Toaster />
                     <SonnerToaster position="top-center" richColors />
-                    <Router />
+                    {showSplash && <NativeSplashScreen onComplete={() => setShowSplash(false)} />}
+                    <div style={{ display: showSplash ? "none" : "block", height: "100%" }}>
+                      <Router />
+                    </div>
                   </TooltipProvider>
                 </PrinterProvider>
               </SubscriptionProvider>

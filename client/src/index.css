@@ -398,3 +398,43 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Capacitor Android Native Feel ─────────────────────────────────────────── */
+
+/* Safe area insets for notched / punch-hole devices */
+html {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Applied by Capacitor automatically on Android */
+.capacitor-android {
+  /* Disable pull-to-refresh / overscroll glow */
+  overscroll-behavior: none !important;
+
+  /* Disable long-press context menu */
+  -webkit-touch-callout: none !important;
+
+  /* Disable tap highlight */
+  -webkit-tap-highlight-color: transparent !important;
+
+  /* Smoother touch scrolling */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbars on mobile for cleaner native feel */
+.capacitor-android ::-webkit-scrollbar {
+  display: none;
+}
+
+.capacitor-android * {
+  scrollbar-width: none;
+}
+
+/* Disable text selection on non-input elements for native feel */
+.capacitor-android *:not(input):not(textarea):not([contenteditable="true"]) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
