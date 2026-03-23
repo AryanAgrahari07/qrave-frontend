@@ -18,10 +18,12 @@ import {
 import { useTheme } from "@/context/ThemeContext";
 import { Input } from "@/components/ui/input";
 import { useParams } from "wouter";
+import { SEO } from "@/components/SEO";
 import { usePublicMenu } from "@/hooks/api";
 import type { MenuCategory, MenuItem, RestaurantSettings } from "@/types";
 import foodImg from "@assets/generated_images/exquisite_red_gourmet_dish.png";
 import { getOverlayPreset } from "@/components/menu-background/MenuBackgroundSelector";
+import { Helmet } from 'react-helmet-async';
 import {
   Dialog,
   DialogContent,
@@ -520,17 +522,58 @@ export default function PublicMenuPage() {
     );
   }
 
+  const schemaMarkup = useMemo(() => {
+    if (!restaurant) return null;
+    return {
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": restaurant.name,
+      "image": (restaurant.settings as any)?.menuBackground?.url || foodImg,
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": [restaurant.addressLine1, restaurant.addressLine2].filter(Boolean).join(", "),
+        "addressLocality": restaurant.city,
+        "addressRegion": restaurant.state,
+        "postalCode": restaurant.postalCode,
+        "addressCountry": restaurant.country
+      },
+      "telephone": restaurant.phoneNumber,
+      "url": window.location.href.split('?')[0],
+      "menu": window.location.href.split('?')[0]
+    };
+  }, [restaurant]);
+
   return (
     <div className="min-h-screen bg-background pb-16 font-sans">
+      {schemaMarkup && (
+        <Helmet>
+          <script type="application/ld+json">
+            {JSON.stringify(schemaMarkup)}
+          </script>
+        </Helmet>
+      )}
+      <SEO
+        title={restaurant?.name ? `${restaurant.name} - Menu | Orderzi` : 'Restaurant Menu | Orderzi'}
+        description={`View the digital menu for ${restaurant?.name || 'this restaurant'} on Orderzi.`}
+        image={(restaurant?.settings as any)?.menuBackground?.url || foodImg}
+        canonical={typeof window !== 'undefined' ? window.location.href.split('?')[0] : `https://orderzi.com/r/${slug}`}
+      />
       {/* Hero Header */}
       <div className="h-48 sm:h-56 relative overflow-hidden bg-primary">
         {(() => {
-          const bgSettings = (restaurant?.settings as RestaurantSettings)?.menuBackground;
+          const bgSettings = (restaurant?.settings as any)?.menuBackground;
           const heroUrl = bgSettings?.url || foodImg;
           const overlay = getOverlayPreset(bgSettings?.overlay);
           return (
             <>
-              <img src={heroUrl} alt="Hero" loading="eager" className={cn("w-full h-full object-cover scale-110", overlay.imgClass)} />
+              <img 
+                src={heroUrl} 
+                alt={`${restaurant?.name || 'Restaurant'} Hero`} 
+                loading="eager" 
+                fetchPriority="high"
+                decoding="sync"
+                className={cn("w-full h-full object-cover scale-110", overlay.imgClass)} 
+              />
               {overlay.overlayClass && <div className={cn("absolute inset-0", overlay.overlayClass)} />}
             </>
           );

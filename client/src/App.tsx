@@ -229,7 +229,7 @@ function Router() {
 
 function App() {
   useAndroidBackButton();
-  const [showSplash, setShowSplash] = React.useState(Capacitor.isNativePlatform());
+  const [showSplash, setShowSplash] = React.useState(true);
 
   return (
     <ErrorBoundary>

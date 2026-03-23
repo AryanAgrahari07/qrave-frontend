@@ -7,6 +7,7 @@ import {
   Smartphone, Users, Clock, Shield, Zap, Star
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { SEO } from "@/components/SEO";
 import { useAuth } from "@/context/AuthContext";
 import dashboardImg from "@assets/../orderzi-video/public/screenshots/dashboard.png";
 import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
@@ -41,6 +42,7 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
+      <SEO title="Orderzi - Restaurant QR Platform" description="The modern OS for restaurants. Menus, QR codes, and analytics in one place." />
       {/* ============ HERO SECTION ============ */}
       <section className="relative pt-28 pb-20 sm:pt-32 sm:pb-24 md:pt-36 md:pb-28 lg:pt-44 lg:pb-36 overflow-hidden bg-[#080a10]">
         {/* Animated gradient orbs */}

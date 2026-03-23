@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /r/*
+Allow: /q/*
+Disallow: /dashboard/*
+Disallow: /app/*
+Disallow: /auth/*
+Disallow: /kitchen/*
+Disallow: /waiter/*
+
+Sitemap: https://orderzi.com/sitemap.xml

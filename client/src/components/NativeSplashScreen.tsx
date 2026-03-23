@@ -136,9 +136,10 @@ export function NativeSplashScreen({ onComplete }: { onComplete: () => void }) {
         }}
         style={{ x: "-50%" }}
       >
-        <p className="font-inter text-4xl md:text-5xl font-bold tracking-[0.2em] md:tracking-[0.25em] bg-gradient-to-r from-red-600 to-amber-500 bg-clip-text text-transparent uppercase">
-          Orderzi
-        </p>
+        <div className="font-inter text-4xl md:text-5xl font-bold tracking-tight flex items-center justify-center">
+          <span className="text-white">Order</span>
+          <span className="text-[#DC2626]">zi</span>
+        </div>
       </motion.div>
     </div>
   );
