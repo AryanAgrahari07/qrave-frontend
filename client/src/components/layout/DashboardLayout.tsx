@@ -26,6 +26,7 @@ import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { useTheme } from "@/context/ThemeContext";
 import { useSubscription } from "@/context/SubscriptionContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import { GlobalNewOrderDialog } from "@/components/orders/GlobalNewOrderDialog";
 import { useState, useMemo, useCallback } from "react";
 import type { PlanFeatures } from "@/lib/plan-config";
 
@@ -300,6 +301,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content */}
       <main className="flex-1 lg:ml-64 min-h-screen flex flex-col">
+        <GlobalNewOrderDialog restaurantId={restaurantId} />
         <header className="h-16 bg-background border-b border-border sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button

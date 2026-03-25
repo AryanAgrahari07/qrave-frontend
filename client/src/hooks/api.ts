@@ -163,6 +163,15 @@ export function usePublicMenu(slug: string | null, dietaryFilter?: 'veg' | 'non-
 }
 
 // === Protected Menu ===
+export function usePublicTables(slug: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["public-tables", slug],
+    queryFn: () =>
+      api.get<{ tables: Table[] }>(`/api/public/restaurants/${slug}/tables`).then((r) => r.tables),
+    enabled: !!slug && enabled,
+    staleTime: 10000,
+  });
+}
 export function useMenuSuggestions(query: string = "") {
   return useInfiniteQuery({
     queryKey: queryKeys.menuSuggestions(query),

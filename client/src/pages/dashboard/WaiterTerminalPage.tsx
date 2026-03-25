@@ -45,6 +45,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ItemCustomizationDialog } from "@/components/menu/Itemcustomizationdialog";
 import { CustomizedOrderItemDisplay } from "@/components/menu/Customizedorderitemdisplay";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
+import { OrderVerificationRequests } from "@/components/orders/OrderVerificationRequests";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +68,17 @@ if (notificationAudio) notificationAudio.preload = "auto";
 function playNotificationSound() {
   if (!notificationAudio) return;
   notificationAudio.currentTime = 0;
-  notificationAudio.play().catch(() => {});
+  notificationAudio.play().catch(() => { });
+}
+
+// Distinct loud audio for QR requests/calls
+const alertAudio = typeof window !== 'undefined' ? new Audio("/sounds/order-notification.mp3") : null;
+if (alertAudio) alertAudio.preload = "auto";
+
+function playAlertSound() {
+  if (!alertAudio) return;
+  alertAudio.currentTime = 0;
+  alertAudio.play().catch(() => { });
 }
 
 export default function WaiterTerminalPage() {
@@ -187,6 +198,41 @@ export default function WaiterTerminalPage() {
 
   // Notify waiter when a new table is assigned to them
   useEffect(() => {
+    const handleVerificationRequired = (e: any) => {
+      const order = e.detail.order;
+      const orderNum = order.orderNumber ? String(order.orderNumber).padStart(4, "0") : order.id.slice(-4);
+      const guestOrTableStr = order.table?.tableNumber
+        ? `Table ${order.table.tableNumber}`
+        : order.guestName || `Order #${orderNum}`;
+      toast(`🔔 New Request: ${guestOrTableStr}`, {
+        description: "Customer has sent a new order request.",
+        duration: 15000,
+        position: 'top-center'
+      });
+      playAlertSound();
+    };
+
+    const handleCallWaiter = (e: any) => {
+      const { tableNumber, tableId } = e.detail;
+      const tableStr = tableNumber ? `Table ${tableNumber}` : (tableId ? `Table ID ${tableId.slice(0, 4)}` : "A table");
+      toast.error(`🛎️ Waiter Called!`, {
+        description: `${tableStr} needs assistance.`,
+        duration: 20000,
+        position: 'top-center'
+      });
+      playAlertSound();
+    };
+
+    window.addEventListener("order_verification_required", handleVerificationRequired);
+    window.addEventListener("order_call_waiter", handleCallWaiter);
+
+    return () => {
+      window.removeEventListener("order_verification_required", handleVerificationRequired);
+      window.removeEventListener("order_call_waiter", handleCallWaiter);
+    };
+  }, []);
+
+  useEffect(() => {
     const uid = user?.id;
     if (!uid) return;
     if (!tables) return;
@@ -262,8 +308,8 @@ export default function WaiterTerminalPage() {
 
     if (newStatus === "AVAILABLE") {
       const hasActiveOrders = orders.some(
-        (o) => (o.tableId === table.id || o.table?.id === table.id) && 
-               !["PAID", "CANCELLED"].includes(o.status)
+        (o) => (o.tableId === table.id || o.table?.id === table.id) &&
+          !["PAID", "CANCELLED"].includes(o.status)
       );
 
       if (hasActiveOrders) {
@@ -783,7 +829,7 @@ export default function WaiterTerminalPage() {
               onClick={handleRefreshAll}
               disabled={isRefetching || isRefreshing}
             >
-              <RefreshCw className={cn("w-4 h-4 mr-1", (isRefetching || isRefreshing) && "animate-spin")} /> 
+              <RefreshCw className={cn("w-4 h-4 mr-1", (isRefetching || isRefreshing) && "animate-spin")} />
             </Button>
 
             <Button
@@ -875,24 +921,24 @@ export default function WaiterTerminalPage() {
                             )}
                           >
                             <span className={cn(
-                              "text-2xl font-bold", 
+                              "text-2xl font-bold",
                               !isOccupied || isMyTable ? "dark:text-foreground" : "dark:text-muted-foreground"
                             )}>
                               {table.tableNumber}
                             </span>
                             <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-muted-foreground">Cap: {table.capacity}</span>
-                            
+
                             {table.assignedWaiter && (
                               <span className={cn(
                                 "text-[9px] font-semibold mt-0.5 px-1.5 py-0.5 rounded max-w-[90%] truncate",
-                                isMyTable 
-                                  ? "text-primary bg-primary/10" 
+                                isMyTable
+                                  ? "text-primary bg-primary/10"
                                   : "text-slate-600 dark:text-slate-400 bg-slate-200 dark:bg-slate-800"
                               )}>
                                 👤 {isMyTable ? t("waiter.me") || "Me" : table.assignedWaiter.fullName}
                               </span>
                             )}
-                            
+
                           </button>
 
                           {/* Order Button - Bottom Center Overlay */}
@@ -901,7 +947,22 @@ export default function WaiterTerminalPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleNewOrderClick(table);
+                                  
+                                  // Find the active order for this table
+                                  const existingOrder = activeOrders
+                                    .filter((o) => o.table?.id === table.id)
+                                    // Prefer most recent active order
+                                    .sort((a, b) => {
+                                      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                                      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                                      return tb - ta;
+                                    })[0];
+                                    
+                                  if (existingOrder) {
+                                    handleAddItemsClick(existingOrder);
+                                  } else {
+                                    handleNewOrderClick(table);
+                                  }
                                 }}
                                 className={cn(
                                   "h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white dark:bg-card border-2 flex items-center justify-center shadow-md hover:shadow-lg transition-all",
@@ -993,8 +1054,14 @@ export default function WaiterTerminalPage() {
             </div>
           </TabsContent>
 
-          {/* Orders Tab */}
           <TabsContent value="orders" className="space-y-4">
+            {/* Customer Requests Verification */}
+            <OrderVerificationRequests
+              restaurantId={restaurantId!}
+              orders={activeOrders}
+              currency={currency}
+            />
+
             {activeOrders.length === 0 ? (
               <div className="text-center py-16 border-2 border-dashed rounded-xl">
                 <Utensils className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />

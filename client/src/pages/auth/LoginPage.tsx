@@ -132,7 +132,7 @@ function ForgotPasswordPanel({ onBack }: { onBack: () => void }) {
                 type="email"
                 placeholder="owner@restaurant.com"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                onChange={(e) => { setEmail(e.target.value.trim().toLowerCase()); setError(null); }}
                 required
                 className="h-11 pl-10 bg-muted/30"
                 autoFocus
@@ -247,7 +247,7 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       if (role === "ADMIN") {
-        await login(identifier, password);
+        await login(identifier.trim().toLowerCase(), password);
       } else {
         const prefix = role === "WAITER" ? "W-" : role === "KITCHEN" ? "K-" : "";
         let finalCode = staffCodeDigits;

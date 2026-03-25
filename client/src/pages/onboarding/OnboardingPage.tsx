@@ -158,10 +158,12 @@ export default function OnboardingPage() {
   };
 
   const handleChange = (field: keyof OnboardingData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    validateField(field, value);
+    // Normalize email: always lowercase and trimmed
+    const normalized = field === 'email' ? value.trim().toLowerCase() : value;
+    setFormData(prev => ({ ...prev, [field]: normalized }));
+    validateField(field, normalized);
     // If email changes after verify, reset verified state
-    if (field === 'email' && value !== lastVerifiedEmail.current) {
+    if (field === 'email' && normalized !== lastVerifiedEmail.current) {
       setEmailVerified(false);
       setOtpSent(false);
       setOtpValue("");

@@ -22,6 +22,8 @@ import {
   Crown,
   ChevronDown,
   ChevronUp,
+  Smartphone,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -108,6 +110,8 @@ export default function SettingsPage() {
   const [tableAlerts, setTableAlerts] = useState(false);
   const [openTime, setOpenTime] = useState("");
   const [closeTime, setCloseTime] = useState("");
+  const [qrOrderingEnabled, setQrOrderingEnabled] = useState(false);
+  const [qrOrderingVerification, setQrOrderingVerification] = useState(false);
 
   const [countrySearch, setCountrySearch] = useState("");
   const [stateSearch, setStateSearch] = useState("");
@@ -174,6 +178,8 @@ export default function SettingsPage() {
     const languages = settings?.languages;
     const notifications = settings?.notifications;
     const timings = settings?.timings;
+    const qrOrdering = settings?.qrOrdering;
+    const isMaxPlan = restaurant?.plan === "MAX";
 
     setSpanishEnabled(!!languages?.es);
     setHindiEnabled(!!languages?.hi);
@@ -181,6 +187,9 @@ export default function SettingsPage() {
     setTableAlerts(notifications?.tableAlerts ?? false);
     setOpenTime(timings?.openTime || "");
     setCloseTime(timings?.closeTime || "");
+    // Default QR ordering toggles to ON for MAX plan, but never override explicitly saved values.
+    setQrOrderingEnabled(qrOrdering?.enabled ?? isMaxPlan);
+    setQrOrderingVerification(qrOrdering?.verification ?? isMaxPlan);
   }, [restaurant]);
 
   // Auto-load countries on mount (search with empty string to get all)
@@ -270,6 +279,11 @@ export default function SettingsPage() {
           ...(existingSettings.notifications ?? {}),
           emailReports,
           tableAlerts,
+        },
+        qrOrdering: {
+          ...(existingSettings.qrOrdering ?? {}),
+          enabled: qrOrderingEnabled,
+          verification: qrOrderingVerification,
         },
       };
 
@@ -755,6 +769,61 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {restaurantId && restaurant?.plan === 'MAX' && (
+            <Card className="mt-4">
+              <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-4">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                  <CardTitle className="text-lg sm:text-xl">QR Menu Ordering</CardTitle>
+                </div>
+                <CardDescription className="text-xs sm:text-sm">
+                  Allow customers to place orders directly from their personal devices.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 px-4 sm:px-6 pb-4 sm:pb-6">
+                <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-sm sm:text-base">Accept Customer Orders via QR</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Customers will see an "Add to Cart" button on the digital menu. (MAX Plan Feature)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={qrOrderingEnabled}
+                    onCheckedChange={setQrOrderingEnabled}
+                  />
+                </div>
+
+                {qrOrderingEnabled && (
+                  <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg bg-primary/5">
+                    <div className="space-y-0.5 flex gap-2">
+                      <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-sm sm:text-base">Require Order Verification</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Staff must review and accept customer orders before they are sent to the kitchen.
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={qrOrderingVerification}
+                      onCheckedChange={setQrOrderingVerification}
+                    />
+                  </div>
+                )}
+                
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    onClick={handleSavePreferences} 
+                    disabled={updateRestaurant.isPending}
+                  >
+                    {updateRestaurant.isPending ? "Saving..." : "Save Ordering Settings"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* <Card>

@@ -83,15 +83,36 @@ import { DesktopPOS } from "@/components/pos/desktoppos";
 import { useThermalPrinter } from "@/hooks/useThermalPrinter";
 import { buildBillDataFromOrder } from "@/lib/bill-data";
 import { buildKOTDataFromOrder } from "@/lib/kot-data";
+import { OrderVerificationRequests } from "@/components/orders/OrderVerificationRequests";
 
 // PERF: Pre-load notification audio once at module level
 const notificationAudio = typeof window !== 'undefined' ? new Audio("/notification.mp3") : null;
 if (notificationAudio) notificationAudio.preload = "auto";
 
+// Distinct loud audio for QR requests/calls
+const alertAudio = typeof window !== 'undefined' ? new Audio("/sounds/order-notification.mp3") : null;
+if (alertAudio) alertAudio.preload = "auto";
+let alertStopTimer: ReturnType<typeof setTimeout> | null = null;
+
 function playNotificationSound() {
   if (!notificationAudio) return;
   notificationAudio.currentTime = 0;
-  notificationAudio.play().catch(() => {});
+  notificationAudio.play().catch(() => { });
+}
+
+function playAlertSound() {
+  if (!alertAudio) return;
+  if (alertStopTimer) {
+    clearTimeout(alertStopTimer);
+    alertStopTimer = null;
+  }
+  alertAudio.currentTime = 0;
+  alertAudio.play().catch(() => { });
+  alertStopTimer = setTimeout(() => {
+    if (!alertAudio) return;
+    alertAudio.pause();
+    alertAudio.currentTime = 0;
+  }, 4000);
 }
 
 export default function LiveOrdersPage() {
@@ -199,7 +220,6 @@ export default function LiveOrdersPage() {
       timeout = setTimeout(() => setIsMobile(window.innerWidth < 1024), 150);
     };
     setIsMobile(window.innerWidth < 1024);
-    window.addEventListener("resize", checkMobile);
     return () => { window.removeEventListener("resize", checkMobile); clearTimeout(timeout); };
   }, []);
 
@@ -226,6 +246,22 @@ export default function LiveOrdersPage() {
   const totalPages = pagination?.totalPages ?? 1;
   const hasNextPage = pagination?.hasMore ?? false;
   const hasPrevPage = currentPage > 1;
+
+  // Scroll to hash target on mount / hash change (for global verification "View More")
+  useEffect(() => {
+    const handleHash = () => {
+      if (window.location.hash && window.location.hash.startsWith("#verify-")) {
+        const id = window.location.hash.substring(1);
+        const el = document.getElementById(id);
+        if (el) {
+          setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+        }
+      }
+    };
+    handleHash(); // initial
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, [orders]); // Re-run when orders load so the element exists
 
   // Track notified unassigned ready orders
   const notifiedUnassignedReadyRef = useRef<Set<string>>(new Set());
@@ -299,13 +335,36 @@ export default function LiveOrdersPage() {
     });
   }, [orders, tables, isAdmin]);
 
-  // Filter active orders (not paid/cancelled)
+  // Listen for customer order verification requests and call-waiter events
+  useEffect(() => {
+    const handleCallWaiter = (e: any) => {
+      const detail = e.detail;
+      const tableNum = detail?.tableNumber || "Unknown";
+      toast.warning(`Table ${tableNum} is calling for a waiter!`, {
+        duration: 10000,
+        icon: <Utensils className="w-5 h-5 text-blue-500" />,
+      });
+      playAlertSound();
+    };
+
+    window.addEventListener("order_call_waiter", handleCallWaiter);
+    return () => {
+      window.removeEventListener("order_call_waiter", handleCallWaiter);
+    };
+  }, []);
+
+  // Filter active orders (not paid/cancelled, and not pure-unverified QR requests)
   const activeOrders = useMemo(() => {
-    return orders.filter(
-      (o: Order) =>
-        !(o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) &&
-        o.status !== "CANCELLED"
-    );
+    return orders.filter((o: Order) => {
+      // Exclude fully paid+closed+served orders and cancelled ones
+      if (o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) return false;
+      if (o.status === "CANCELLED") return false;
+      // Exclude orders where every item is unverified — these are pending QR customer
+      // requests that should only appear in the "Customer Request" section until accepted.
+      const items: any[] = (o as any).items ?? [];
+      if (items.length > 0 && items.every((i: any) => i.isVerified === false)) return false;
+      return true;
+    });
   }, [orders]);
 
   const currency = useMemo(() => restaurant?.currency || "₹", [restaurant?.currency]);
@@ -476,13 +535,13 @@ export default function LiveOrdersPage() {
             console.error(err);
           }
         }
-        
+
         // Admin direct-serve: mark ONLY the newly added items as SERVED (not the whole order)
         if (isAdmin && response.newItems?.length) {
           const newItemIds = response.newItems.map((i: any) => i.id);
           await markOrderItemsServed.mutateAsync({ orderId: selectedOrderForEdit.id, itemIds: newItemIds });
         }
-        
+
         toast.success(`Items saved to Order #${selectedOrderForEdit.orderNumber || selectedOrderForEdit.id.slice(-4)}`);
       } else {
         const orderTypeMap = {
@@ -664,7 +723,7 @@ export default function LiveOrdersPage() {
           const refreshed = await refetch();
           const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === order.id);
           const finalOrderResult = updatedOrder || order;
-          
+
           const billData = buildBillDataFromOrder({
             order: finalOrderResult,
             restaurant,
@@ -1468,6 +1527,14 @@ export default function LiveOrdersPage() {
 
       <div className="grid lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 space-y-6">
+          <OrderVerificationRequests
+            restaurantId={restaurantId!}
+            orders={orders}
+            currency={currency}
+            gstRatePercent={gstRate * 100}
+            serviceChargeRatePercent={serviceRatePct}
+          />
+
           <div className="flex items-center justify-between">
             <h3 className="font-heading font-bold text-xl flex items-center gap-2">
               <Utensils className="w-5 h-5 text-primary" /> Active Orders
@@ -2280,6 +2347,7 @@ export default function LiveOrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </DashboardLayout>
   );
 }

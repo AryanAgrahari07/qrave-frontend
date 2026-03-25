@@ -205,11 +205,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         preferences.get({ key: "orderzi_token" }),
       ]);
 
+      let bootedFromCache = false;
       // Optimistic UI: if we have cached user, render immediately.
       if (cachedAuth) {
         try {
           const parsed = JSON.parse(cachedAuth);
           if (parsed?.user) {
+            bootedFromCache = true;
             setState((s) => ({
               ...s,
               user: parsed.user,
@@ -258,7 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Offline/spotty network should NOT force logout.
         // Only logout on explicit auth failures.
         const status = (err && typeof err === "object" && "status" in err) ? (err as any).status : undefined;
-        if (status === 401 || status === 403) {
+        if ((status === 401 || status === 403) && !bootedFromCache) {
           await setStoredToken(null);
           await preferences.remove({ key: AUTH_CACHE_KEY });
           setState((s) => ({ ...s, user: null, token: null, isReady: true }));
@@ -280,7 +282,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onboardingComplete,
   }), [state, login, staffLogin, logout, setRestaurantId, onboardingComplete]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <GlobalWebSocketListener restaurantId={state.restaurantId} token={state.token} />
+      {children}
+    </AuthContext.Provider>
+  );
+
 }
 
 export function useAuth(): AuthContextValue {

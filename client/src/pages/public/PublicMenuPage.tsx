@@ -17,11 +17,19 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useParams } from "wouter";
-import { usePublicMenu } from "@/hooks/api";
+import { usePublicMenu, usePublicTables } from "@/hooks/api";
 import type { MenuCategory, MenuItem, RestaurantSettings } from "@/types";
 import foodImg from "@assets/generated_images/exquisite_red_gourmet_dish.png";
 import { getOverlayPreset } from "@/components/menu-background/MenuBackgroundSelector";
+import { CartProvider, useCart } from "./cart/CartContext";
+import { CartDrawer } from "./cart/CartDrawer";
+import { OrderTrackingDrawer } from "./cart/OrderTrackingDrawer";
+import { CartCustomizationDialog } from "./cart/CartCustomizationDialog";
+import { ShoppingCart, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -87,145 +95,40 @@ function getTranslated(
   return translations[lang] || translations["en"] || fallback;
 }
 
-// Customization Dialog Component
-function ItemCustomizationDialog({
-  item,
-  currency,
-  t,
-  lang,
-  open,
-  onOpenChange
-}: {
-  item: MenuItem | null;
-  currency: string;
-  t: typeof TRANSLATIONS.en;
-  lang: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  if (!item) return null;
-
-  const hasVariants = item.variants && item.variants.length > 0;
-  const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
-
-  const displayName = getTranslated(item.nameTranslations, lang, item.name);
-  const displayDescription = item.description
-    ? getTranslated(item.descriptionTranslations, lang, item.description)
-    : null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold pr-8">
-            {displayName}
-          </DialogTitle>
-          {displayDescription && (
-            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              {displayDescription}
-            </p>
-          )}
-        </DialogHeader>
-
-        <div className="space-y-6 mt-4">
-          {/* Variants Section */}
-          {hasVariants && (
-            <div>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3 flex items-center">
-                {t.variants}
-              </h3>
-              <div className="space-y-2">
-                {item.variants?.map((variant) => (
-                  <div
-                    key={variant.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors border border-border/50"
-                  >
-                    <div className="flex-1">
-                      <span className="text-sm font-medium text-foreground">
-                        {getTranslated(
-                          (variant as any).nameTranslations ?? variant.variantNameTranslations,
-                          lang,
-                          variant.variantName
-                        )}
-                      </span>
-                      {variant.isDefault && (
-                        <Badge className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20">
-                          Popular
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="text-base font-bold text-primary">
-                      {currency}{variant.price}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Modifiers Section */}
-          {hasModifiers && (
-            <div className="space-y-4">
-              {item.modifierGroups?.map((group) => (
-                <div key={group.id}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide flex items-center gap-1">
-                      {getTranslated((group as any).nameTranslations, lang, group.name)}
-                      {group.isRequired && (
-                        <span className="text-red-500 text-base">*</span>
-                      )}
-                    </h3>
-                    {(group.minSelections || group.maxSelections) && (
-                      <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md">
-                        {group.minSelections && `Min ${group.minSelections}`}
-                        {group.minSelections && group.maxSelections && " • "}
-                        {group.maxSelections && `Max ${group.maxSelections}`}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {group.modifiers?.map((modifier) => (
-                      <div
-                        key={modifier.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors border border-border/50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Plus className="w-4 h-4 text-primary flex-shrink-0" />
-                          <span className="text-sm text-foreground">{getTranslated(modifier.nameTranslations, lang, modifier.name)}</span>
-                        </div>
-                        <span className="text-sm font-bold text-primary">
-                          +{currency}{modifier.price}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Item Card Component
+// Customization Dialog Component has been extracted to CartCustomizationDialog// Item Card Component
 const MenuItemCard = memo(function MenuItemCard({
   item,
   currency,
   lang,
   t,
-  onOpenCustomization
+  onOpenCustomization,
+  qrOrderingEnabled,
+  onAddToCart,
+  currentQuantity,
+  onIncrement,
+  onDecrement,
 }: {
   item: MenuItem;
   currency: string;
   lang: string;
   t: typeof TRANSLATIONS.en;
   onOpenCustomization: (item: MenuItem) => void;
+  qrOrderingEnabled: boolean;
+  onAddToCart: (item: MenuItem) => void;
+  currentQuantity: number;
+  onIncrement: (item: MenuItem) => void;
+  onDecrement: (item: MenuItem) => void;
 }) {
   const hasVariants = item.variants && item.variants.length > 0;
   const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
   const hasCustomizations = hasVariants || hasModifiers;
+  const rawImageUrl = typeof item.imageUrl === "string" ? item.imageUrl.trim() : "";
+  // Some backends accidentally send "undefined"/"null" as strings; treat as missing.
+  const imageUrl =
+    rawImageUrl && rawImageUrl !== "undefined" && rawImageUrl !== "null" ? rawImageUrl : "";
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [imageUrl]);
+  const hasImage = !!imageUrl && !imageFailed;
 
   const displayName = getTranslated(item.nameTranslations, lang, item.name);
   const displayDesc = item.description
@@ -234,84 +137,139 @@ const MenuItemCard = memo(function MenuItemCard({
 
   return (
     <div className={cn(
-      "group relative",
+      "group relative flex gap-3 sm:gap-4",
       !item.isAvailable && "opacity-50"
     )}>
-      <div className="flex gap-3 sm:gap-4">
-        {/* Item Details */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="font-medium text-sm sm:text-base leading-snug group-hover:text-primary transition-colors">
-              {displayName}
-            </h3>
-            {!hasVariants && (
-              <span className="text-sm sm:text-base font-semibold text-primary whitespace-nowrap">
-                {currency}{item.price}
-              </span>
-            )}
-          </div>
-
-          {displayDesc && (
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-2 line-clamp-2">
-              {displayDesc}
-            </p>
-          )}
-
-          {/* Tags */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {!item.isAvailable && (
-              <Badge variant="destructive" className="text-[10px] sm:text-xs px-1.5 py-0 h-5">
-                {t.soldOut}
-              </Badge>
-            )}
-            {item.dietaryTags?.map((tag, i) => {
-              const isVeg = tag.toLowerCase() === "veg";
-              const isNonVeg = tag.toLowerCase() === "non-veg";
-              return (
-                <Badge
-                  key={i}
-                  className={cn(
-                    "text-[10px] sm:text-xs px-1.5 py-0 h-5 font-medium",
-                    isVeg && "bg-green-50 text-green-700 border-green-200",
-                    isNonVeg && "bg-red-50 text-red-700 border-red-200",
-                    !isVeg && !isNonVeg && "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {tag}
-                </Badge>
-              );
-            })}
-          </div>
-
-          {/* View Customization Button */}
-          {hasCustomizations && (
-            <button
-              onClick={() => onOpenCustomization(item)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-            >
-              <span>{t.viewDetails}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-medium text-sm sm:text-base leading-snug group-hover:text-primary transition-colors">
+            {displayName}
+          </h3>
+          {!hasVariants && (
+            <span className="text-sm sm:text-base font-semibold text-primary whitespace-nowrap">
+              {currency}{item.price}
+            </span>
           )}
         </div>
 
-        {/* Item Image */}
-        {item.imageUrl && (
+        {displayDesc && (
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-2 line-clamp-2">
+            {displayDesc}
+          </p>
+        )}
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {!item.isAvailable && (
+            <Badge variant="destructive" className="text-[10px] sm:text-xs px-1.5 py-0 h-5">
+              {t.soldOut}
+            </Badge>
+          )}
+          {item.dietaryTags?.map((tag, i) => {
+            const isVeg = tag.toLowerCase() === "veg";
+            const isNonVeg = tag.toLowerCase() === "non-veg";
+            return (
+              <Badge
+                key={i}
+                className={cn(
+                  "text-[10px] sm:text-xs px-1.5 py-0 h-5 font-medium",
+                  isVeg && "bg-green-50 text-green-700 border-green-200",
+                  isNonVeg && "bg-red-50 text-red-700 border-red-200",
+                  !isVeg && !isNonVeg && "bg-muted text-muted-foreground"
+                )}
+              >
+                {tag}
+              </Badge>
+            );
+          })}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "flex flex-col items-end gap-2 shrink-0",
+          !hasImage && qrOrderingEnabled && item.isAvailable && "w-20 sm:w-24"
+        )}
+      >
+        {hasImage && (
           <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-muted flex-shrink-0 shadow-sm ring-1 ring-border/30">
             <img
-              src={item.imageUrl}
+              src={imageUrl}
               alt={item.name}
               loading="lazy"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              onError={() => setImageFailed(true)}
             />
           </div>
+        )}
+
+        {qrOrderingEnabled && item.isAvailable && (
+          hasCustomizations ? (
+            <button
+              onClick={() => onOpenCustomization(item)}
+              className={cn(
+                "w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors border border-primary/20",
+                hasImage && "mt-auto"
+              )}
+            >
+              <span>Add</span>
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          ) : currentQuantity > 0 ? (
+            <div
+              className={cn(
+                "w-full inline-flex items-center justify-center gap-2 px-2 py-1 text-xs font-semibold text-primary bg-primary/10 rounded-lg border border-primary/20",
+                hasImage && "mt-auto"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onDecrement(item)}
+                className="h-6 w-6 rounded-md border border-primary/30 bg-background text-primary hover:bg-primary/10 transition-colors"
+                aria-label={`Decrease ${item.name} quantity`}
+              >
+                -
+              </button>
+              <span className="min-w-5 text-center">{currentQuantity}</span>
+              <button
+                type="button"
+                onClick={() => onIncrement(item)}
+                className="h-6 w-6 rounded-md border border-primary/30 bg-background text-primary hover:bg-primary/10 transition-colors"
+                aria-label={`Increase ${item.name} quantity`}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onAddToCart(item)}
+              className={cn(
+                "w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors border border-primary/20",
+                hasImage && "mt-auto"
+              )}
+            >
+              <span>Add</span>
+            </button>
+          )
+        )}
+
+        {!qrOrderingEnabled && hasCustomizations && (
+          <button
+            onClick={() => onOpenCustomization(item)}
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors",
+              hasImage && "mt-auto"
+            )}
+          >
+            <span>{t.viewDetails}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
     </div>
   );
 });
 
-export default function PublicMenuPage() {
+function PublicMenuPageInner() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
 
@@ -322,9 +280,20 @@ export default function PublicMenuPage() {
   const [dietaryFilter, setDietaryFilter] = useState<'veg' | 'non-veg' | 'any'>('any');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [customizationDialogOpen, setCustomizationDialogOpen] = useState(false);
+  const [isTrackOpen, setIsTrackOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const hasInitializedExpansion = useRef(false);
   const { resolvedTheme, toggleTheme } = useTheme();
+
+  const [showTableSelection, setShowTableSelection] = useState(false);
+  const [tempTableInput, setTempTableInput] = useState("");
+  const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
+  const { addItem, state: cartState, setIsCartOpen, initializeForRestaurant, setTableId, updateQuantity } = useCart();
+  const { data: tables = [], isLoading: tablesLoading } = usePublicTables(slug || null, isTableDropdownOpen);
+
+  useEffect(() => {
+    if (slug) initializeForRestaurant(slug);
+  }, [slug, initializeForRestaurant]);
 
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   const { data: menuData, isLoading, error } = usePublicMenu(slug ?? null, dietaryFilter);
@@ -401,6 +370,63 @@ export default function PublicMenuPage() {
 
   const restaurant = menuData?.restaurant;
   const currency = restaurant?.currency || "₹";
+
+  const settings = restaurant?.settings as RestaurantSettings | undefined;
+  const qrOrderingEnabled = (restaurant as any)?.plan === 'MAX' && !!settings?.qrOrdering?.enabled;
+  const qrOrderingVerification = !!settings?.qrOrdering?.verification;
+
+  // Auto-prompt walk-in users for a table if they came via generic link
+  useEffect(() => {
+    // Check URL params directly in case CartContext hasn't synced yet
+    const urlTableId = new URLSearchParams(window.location.search).get("table");
+    
+    if (qrOrderingEnabled && cartState.tableId === null && !urlTableId && !isLoading && !error && menuData) {
+      // Small timeout to not jar the initial render
+      const t = setTimeout(() => setShowTableSelection(true), 150);
+      return () => clearTimeout(t);
+    }
+  }, [qrOrderingEnabled, cartState.tableId, isLoading, error, menuData]);
+
+  // Sync tempTableInput when dialog opens
+  useEffect(() => {
+    if (showTableSelection) {
+      setTempTableInput(cartState.tableId || "");
+    }
+  }, [showTableSelection, cartState.tableId]);
+
+
+  const handleSimpleAddToCart = useCallback((item: MenuItem) => {
+    addItem({
+      menuItemId: item.id,
+      name: item.name,
+      nameTranslations: item.nameTranslations,
+      price: item.price,
+      quantity: 1,
+    });
+  }, [addItem]);
+
+  const handleSimpleDecrementInMenu = useCallback((item: MenuItem) => {
+    const matchingItem = cartState.items.find(
+      (i) =>
+        i.menuItemId === item.id &&
+        !i.selectedVariantId &&
+        (!i.selectedModifiers || i.selectedModifiers.length === 0) &&
+        !i.notes
+    );
+    if (matchingItem) {
+      updateQuantity(matchingItem.id, -1);
+    }
+  }, [cartState.items, updateQuantity]);
+
+  const simpleItemQuantities = useMemo(() => {
+    const quantities: Record<string, number> = {};
+    cartState.items.forEach((i) => {
+      if (!i.selectedVariantId && (!i.selectedModifiers || i.selectedModifiers.length === 0) && !i.notes) {
+        quantities[i.menuItemId] = (quantities[i.menuItemId] || 0) + i.quantity;
+      }
+    });
+    return quantities;
+  }, [cartState.items]);
 
   // Calculate if restaurant is currently open based on settings
   const isOpen = useMemo(() => {
@@ -540,17 +566,28 @@ export default function PublicMenuPage() {
             {restaurant?.name || "Restaurant"}
           </h1>
           <div className="mt-0.5 flex items-center justify-between gap-3">
-            {isOpen ? (
-              <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                Open Now
-              </p>
-            ) : (
-              <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                Closed
-              </p>
-            )}
+            <div className="flex items-center gap-3">
+              {isOpen ? (
+                <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  Open Now
+                </p>
+              ) : (
+                <p className="text-white/70 text-xs sm:text-sm flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  Closed
+                </p>
+              )}
+              {qrOrderingEnabled && cartState.tableId && (
+                <Badge
+                  variant="outline"
+                  className="bg-black/20 text-white hover:bg-black/40 border-white/20 cursor-pointer text-[10px] sm:text-xs px-2 py-0 h-5 sm:h-6 backdrop-blur-sm"
+                  onClick={() => setShowTableSelection(true)}
+                >
+                  Table {cartState.tableId}
+                </Badge>
+              )}
+            </div>
 
             <div className="flex items-center gap-1">
               {/* Address action */}
@@ -805,6 +842,11 @@ export default function PublicMenuPage() {
                         lang={lang}
                         t={t}
                         onOpenCustomization={handleOpenCustomization}
+                        qrOrderingEnabled={qrOrderingEnabled}
+                        onAddToCart={handleSimpleAddToCart}
+                        currentQuantity={simpleItemQuantities[item.id] || 0}
+                        onIncrement={handleSimpleAddToCart}
+                        onDecrement={handleSimpleDecrementInMenu}
                       />
                     ))}
                   </div>
@@ -816,14 +858,156 @@ export default function PublicMenuPage() {
       </main>
 
       {/* Customization Dialog */}
-      <ItemCustomizationDialog
+      <CartCustomizationDialog
         item={selectedItem}
         currency={currency}
-        t={t}
         lang={lang}
         open={customizationDialogOpen}
         onOpenChange={setCustomizationDialogOpen}
+        onAddToCart={addItem}
       />
+
+      {/* Floating Cart Button (FAB) */}
+      {qrOrderingEnabled && (cartState.items.length > 0 || cartState.orderId) && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => {
+              if (cartState.items.length > 0) setIsCartOpen(true);
+              else setIsTrackOpen(true);
+            }}
+            className="flex items-center justify-center bg-primary text-primary-foreground p-4 h-14 rounded-full shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+          >
+            <ShoppingCart className="w-6 h-6 mr-2" />
+            <div className="flex flex-col items-start leading-none">
+              <span className="text-xs opacity-90 font-medium">
+                {cartState.orderId && cartState.items.length === 0 ? "View Order" : "View Cart"}
+              </span>
+              {cartState.items.length > 0 && (
+                <span className="text-sm font-bold">
+                  {cartState.items.reduce((acc, i) => acc + i.quantity, 0)} items
+                </span>
+              )}
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Table Selection Dialog */}
+      <Dialog open={showTableSelection} onOpenChange={(open) => {
+        // Only allow closing if a table is selected, or if they decide to cancel changes and fall back
+        if (!open && !cartState.tableId) {
+          // If they try to close but don't have a tableId, force it to stay open or let them browse
+          setShowTableSelection(false);
+        } else {
+          setShowTableSelection(open);
+        }
+      }}>
+        <DialogContent className="max-w-xs sm:max-w-sm rounded-2xl p-6 gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-center font-heading">Set Your Table</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 text-center mt-2">
+            <p className="text-sm text-muted-foreground">
+              Please enter your table number or name so we know where to serve you.
+            </p>
+            <Popover open={isTableDropdownOpen} onOpenChange={setIsTableDropdownOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={isTableDropdownOpen}
+                  className="w-full justify-between h-12 text-lg rounded-xl font-normal"
+                >
+                  {tempTableInput
+                    ? tables.find((t: any) => t.tableNumber === tempTableInput)?.tableNumber || tempTableInput
+                    : "Select a table..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="center">
+                <Command>
+                  <CommandInput placeholder="Search table..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>{tablesLoading ? "Loading tables..." : "No table found."}</CommandEmpty>
+                    <CommandGroup>
+                      {tables.map((table: any) => (
+                        <CommandItem
+                          key={table.id}
+                          value={table.tableNumber}
+                          onSelect={() => {
+                            // Shadcn passes lowercase currentValue, so we use table.tableNumber
+                            setTempTableInput(table.tableNumber);
+                            setIsTableDropdownOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              tempTableInput === table.tableNumber ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {table.tableNumber} {table.floorSection ? `(${table.floorSection})` : ""}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <Button
+              size="lg"
+              className="w-full rounded-xl mt-2 font-semibold text-md"
+              onClick={() => {
+                if (tempTableInput.trim()) {
+                  setTableId(tempTableInput.trim());
+                  setShowTableSelection(false);
+                }
+              }}
+              disabled={!tempTableInput.trim()}
+            >
+              Confirm Table
+            </Button>
+            {cartState.tableId && (
+              <Button
+                variant="ghost"
+                onClick={() => setShowTableSelection(false)}
+                className="w-full text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </Button>
+            )}
+            
+            {!cartState.tableId && (
+              <p className="text-[10px] text-muted-foreground/60 mt-2 italic">
+                A table number is required to place an order.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cart Drawer */}
+      {qrOrderingEnabled && (
+        <CartDrawer
+          restaurantSlug={slug!}
+          restaurantName={restaurant?.name || ""}
+          currency={currency}
+          qrOrderingVerification={qrOrderingVerification}
+          gstRatePercent={parseFloat(restaurant?.taxRateGst || "0")}
+          serviceChargeRatePercent={parseFloat(restaurant?.taxRateService || "0")}
+        />
+      )}
+
+      {/* Order Tracking Drawer */}
+      {qrOrderingEnabled && (
+        <OrderTrackingDrawer
+          restaurantSlug={slug!}
+          restaurantName={restaurant?.name || ""}
+          currency={currency}
+          open={isTrackOpen}
+          onOpenChange={setIsTrackOpen}
+        />
+      )}
 
       {/* Footer */}
       <footer className="mt-16 px-4 text-center pb-8">
@@ -834,5 +1018,13 @@ export default function PublicMenuPage() {
         <p className="text-[10px] text-muted-foreground/70 mt-1">Powered by Order<span className="text-primary">zi</span></p>
       </footer>
     </div>
+  );
+}
+
+export default function PublicMenuPage() {
+  return (
+    <CartProvider>
+      <PublicMenuPageInner />
+    </CartProvider>
   );
 }

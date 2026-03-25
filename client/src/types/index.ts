@@ -47,6 +47,10 @@ export interface RestaurantSettings {
   notifications?: RestaurantSettingsNotifications;
   timings?: RestaurantSettingsTimings;
   menuBackground?: MenuBackgroundSettings;
+  qrOrdering?: {
+    enabled?: boolean;
+    verification?: boolean;
+  };
   // Allow future settings keys without breaking the type
   [key: string]: unknown;
 }
@@ -75,7 +79,7 @@ export interface Restaurant {
   taxRateGst?: string;
   taxRateService?: string;
 
-  plan: "STARTER" | "PRO" | "ENTERPRISE";
+  plan: "STARTER" | "PRO" | "MAX" | "ENTERPRISE";
   isActive: boolean;
   isEligibleForTrial?: boolean;
 
@@ -191,6 +195,9 @@ export interface OrderItem {
   }>;
   customizationAmount?: string | null;
   kotNumber?: number | null;
+  isVerified?: boolean;
+  verifiedAt?: string;
+  verifiedBy?: string;
 }
 
 export type paymentStatus = "PAID" | "DUE" | "PARTIALLY_PAID";
@@ -214,10 +221,10 @@ export interface Order {
   orderType: OrderType;
   subtotalAmount: string;
   gstAmount: string;
-  paid_amount: string;
   serviceTaxAmount: string;
   discountAmount?: string;
   totalAmount: string;
+  paid_amount: string;
   notes?: string;
   isClosed?: boolean;
   orderNumber?: number;
@@ -231,6 +238,10 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   closedAt?: string;
+  
+  // Customer QR Ordering
+  placedByCustomer?: boolean;
+  customerSessionId?: string;
 }
 
 export interface OrderStats {

@@ -75,7 +75,7 @@ export default function FloorMapPage() {
   const { data: tables, isLoading, refetch } = useTables(restaurantId);
   const { data: staff } = useStaff(restaurantId);
   const { data: menuData } = useMenuCategories(restaurantId, restaurant?.slug ?? null);
-  const { data: ordersData } = useOrders(restaurantId, { limit: 30, offset: 0 });
+  const { data: ordersData, refetch: refetchOrders } = useOrders(restaurantId, { limit: 30, offset: 0 });
   const orders = ordersData?.orders ?? [];
 
   const assignWaiter = useAssignWaiterToTable(restaurantId);
@@ -579,7 +579,7 @@ export default function FloorMapPage() {
       if (restaurant) {
         try {
           // Fetch the full order for bill data (with discounts applied and all items merged)
-          const refreshed = await refetch();
+          const refreshed = await refetchOrders();
           const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === orderResult.id);
           const finalOrderResult = updatedOrder || orderResult;
           
@@ -714,7 +714,7 @@ export default function FloorMapPage() {
       if (isPrinterConnected && restaurant) {
         try {
           // Fetch the full order for bill data (with discounts applied)
-          const refreshed = await refetch();
+          const refreshed = await refetchOrders();
           const updatedOrder = (refreshed.data?.orders ?? []).find((o: any) => o.id === orderResult.id);
           const finalOrderResult = updatedOrder || orderResult;
           

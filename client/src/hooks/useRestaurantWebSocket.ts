@@ -158,6 +158,22 @@ export function useRestaurantWebSocket(
 
                             if (ev.event.startsWith("order.")) {
                                 debouncedInvalidateOrders();
+
+                                if (ev.event === "order.verification_required") {
+                                    window.dispatchEvent(new CustomEvent("order_verification_required", { detail: ev.data }));
+                                    // Also notify global new-order dialog for QR orders needing verification
+                                    window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { ...ev.data, requiresVerification: true } }));
+                                }
+                                if (ev.event === "order.created") {
+                                    // Only surface a global notification for public/customer QR orders
+                                    const order = ev.data?.order;
+                                    if (order?.placedByCustomer || order?.customerSessionId) {
+                                        window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { order, requiresVerification: false } }));
+                                    }
+                                }
+                                if (ev.event === "order.call_waiter") {
+                                    window.dispatchEvent(new CustomEvent("order_call_waiter", { detail: ev.data }));
+                                }
                             }
                             else if (ev.event.startsWith("table.")) {
                                 debouncedInvalidateTables();
