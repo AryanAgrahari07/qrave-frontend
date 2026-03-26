@@ -5,10 +5,12 @@ import { Download, Printer, ExternalLink, QrCode as QrIcon, Plus, Loader2, Refre
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useRestaurant, useTables, useGenerateQR, useGenerateAllQR, useQRStats } from "@/hooks/api";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { Table as TableType, QRCodeData } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import QRBoardTemplate from "@/components/qr/QRBoardTemplate";
+import { toPng } from "html-to-image";
 
 export default function QRCodesPage() {
   const { restaurantId } = useAuth();
@@ -22,6 +24,9 @@ export default function QRCodesPage() {
   const [mainQR, setMainQR] = useState<QRCodeData | null>(null);
   const [tableQRs, setTableQRs] = useState<Record<string, QRCodeData>>({});
   const [loadingTableId, setLoadingTableId] = useState<string | null>(null);
+
+  const qrBoardRef = useRef<HTMLDivElement>(null);
+  const [boardProps, setBoardProps] = useState<{qrCodeDataUrl: string, tableName: string | null} | null>(null);
 
   const baseUrl = window.location.origin;
   const qrUrl = restaurant?.slug ? `${baseUrl}/r/${restaurant.slug}` : "";
@@ -82,6 +87,36 @@ export default function QRCodesPage() {
     link.click();
     document.body.removeChild(link);
     toast.success(`Downloaded ${filename}`);
+  };
+
+  const downloadQRBoard = async (qrCodeDataURL: string, tableName: string | null, filename: string) => {
+    setBoardProps({ qrCodeDataUrl: qrCodeDataURL, tableName });
+    
+    // Allow React to render the hidden board
+    setTimeout(async () => {
+      if (qrBoardRef.current) {
+        const loadingToast = toast.loading('Generating HD QR Board...');
+        try {
+          const dataUrl = await toPng(qrBoardRef.current, {
+            cacheBust: true,
+            pixelRatio: 2,
+            skipFonts: true,
+            backgroundColor: 'white',
+          });
+          
+          const link = document.createElement("a");
+          link.href = dataUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          toast.success(`Downloaded ${filename}`, { id: loadingToast });
+        } catch (error) {
+          console.error("QR Board generation failed", error);
+          toast.error("Failed to generate QR Board", { id: loadingToast });
+        }
+      }
+    }, 150);
   };
 
   const isLoading = restaurantLoading || tablesLoading;
@@ -150,10 +185,10 @@ export default function QRCodesPage() {
                 ) : (
                   <>
                     <Button
-                      className="shadow-sm w-full sm:w-auto h-8 text-xs"
-                      onClick={() => downloadQR(mainQR.qrCodeDataURL, `${restaurant?.slug || "restaurant"}-qr.png`)}
+                      className="shadow-sm w-full sm:w-auto h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                      onClick={() => downloadQRBoard(mainQR.qrCodeDataURL, null, `${restaurant?.slug || "restaurant"}-qr-board.png`)}
                     >
-                      <Download className="w-3.5 h-3.5 mr-1.5" /> Download
+                      <Download className="w-3.5 h-3.5 mr-1.5" /> Download QR Board
                     </Button>
                     <Button variant="outline" onClick={handleGenerateMainQRClick} disabled={generateQR.isPending || isRefreshing} className="w-full sm:w-auto h-8 text-xs">
                       <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", (generateQR.isPending || isRefreshing) && "animate-spin")} /> Regenerate
@@ -207,7 +242,7 @@ export default function QRCodesPage() {
                         className="border rounded-lg p-3 sm:p-4 text-center hover:border-primary cursor-pointer transition-colors group"
                         onClick={() => {
                           if (tableQR) {
-                            downloadQR(tableQR.qrCodeDataURL, `table-${table.tableNumber}-qr.png`);
+                            downloadQRBoard(tableQR.qrCodeDataURL, table.tableNumber, `table-${table.tableNumber}-qr-board.png`);
                           } else {
                             handleGenerateTableQR(table.id);
                           }
@@ -276,6 +311,18 @@ export default function QRCodesPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Hidden QR Board Template for html2canvas to capture */}
+      <div className="fixed -top-[9999px] -left-[9999px] pointer-events-none opacity-0">
+        {boardProps && (
+          <QRBoardTemplate 
+            ref={qrBoardRef}
+            restaurantName={restaurant?.name || "Restaurant"}
+            tableNumber={boardProps.tableName}
+            qrCodeDataUrl={boardProps.qrCodeDataUrl}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

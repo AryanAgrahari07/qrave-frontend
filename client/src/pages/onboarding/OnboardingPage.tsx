@@ -638,19 +638,19 @@ export default function OnboardingPage() {
                     <div className="space-y-4">
                       <Label className="text-sm font-medium text-foreground">How many tables do you have?</Label>
                       {formData.plan === 'STARTER' && (
-                         <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                           The Starter Trial plan includes a maximum of 5 tables. You can upgrade your plan later to add more.
-                         </p>
+                        <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                          The Starter Trial plan includes a maximum of 5 tables. You can upgrade your plan later to add more.
+                        </p>
                       )}
                       <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 sm:gap-3">
                         {formData.plan === 'STARTER' ? (
-                            <button
-                                type="button"
-                                disabled
-                                className="p-3 sm:p-4 rounded-xl border-2 font-bold text-base sm:text-lg bg-primary text-primary-foreground border-primary shadow-md opacity-100"
-                            >
-                              5
-                            </button>
+                          <button
+                            type="button"
+                            disabled
+                            className="p-3 sm:p-4 rounded-xl border-2 font-bold text-base sm:text-lg bg-primary text-primary-foreground border-primary shadow-md opacity-100"
+                          >
+                            5
+                          </button>
                         ) : [4, 6, 8, 10, 12, 16, 20, 24].map((count) => (
                           <button
                             key={count}

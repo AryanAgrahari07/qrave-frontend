@@ -203,7 +203,33 @@ const MenuItemCard = memo(function MenuItemCard({
         )}
 
         {qrOrderingEnabled && item.isAvailable && (
-          hasCustomizations ? (
+          hasCustomizations && currentQuantity > 0 ? (
+            // Customizable item already in cart → show -qty+ (+ opens dialog for more)
+            <div
+              className={cn(
+                "w-full inline-flex items-center justify-center gap-2 px-2 py-1 text-xs font-semibold text-primary bg-primary/10 rounded-lg border border-primary/20",
+                hasImage && "mt-auto"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onDecrement(item)}
+                className="h-6 w-6 rounded-md border border-primary/30 bg-background text-primary hover:bg-primary/10 transition-colors"
+                aria-label={`Decrease ${item.name} quantity`}
+              >
+                -
+              </button>
+              <span className="min-w-5 text-center">{currentQuantity}</span>
+              <button
+                type="button"
+                onClick={() => onIncrement(item)}
+                className="h-6 w-6 rounded-md border border-primary/30 bg-background text-primary hover:bg-primary/10 transition-colors"
+                aria-label={`Add another ${item.name}`}
+              >
+                +
+              </button>
+            </div>
+          ) : hasCustomizations ? (
             <button
               onClick={() => onOpenCustomization(item)}
               className={cn(
@@ -427,6 +453,24 @@ function PublicMenuPageInner() {
     });
     return quantities;
   }, [cartState.items]);
+
+  // Total quantity across ALL cart entries (simple + customized) for an item
+  const totalItemQuantities = useMemo(() => {
+    const quantities: Record<string, number> = {};
+    cartState.items.forEach((i) => {
+      quantities[i.menuItemId] = (quantities[i.menuItemId] || 0) + i.quantity;
+    });
+    return quantities;
+  }, [cartState.items]);
+
+  // Decrement the last customized cart entry for a given menuItemId
+  const handleCustomizedDecrementInMenu = useCallback((item: MenuItem) => {
+    // Find the last cart entry for this item (could be customized)
+    const matching = cartState.items.filter((i) => i.menuItemId === item.id);
+    if (matching.length === 0) return;
+    const last = matching[matching.length - 1];
+    updateQuantity(last.id, -1);
+  }, [cartState.items, updateQuantity]);
 
   // Calculate if restaurant is currently open based on settings
   const isOpen = useMemo(() => {
@@ -844,9 +888,24 @@ function PublicMenuPageInner() {
                         onOpenCustomization={handleOpenCustomization}
                         qrOrderingEnabled={qrOrderingEnabled}
                         onAddToCart={handleSimpleAddToCart}
-                        currentQuantity={simpleItemQuantities[item.id] || 0}
-                        onIncrement={handleSimpleAddToCart}
-                        onDecrement={handleSimpleDecrementInMenu}
+                        currentQuantity={
+                          (item.variants && item.variants.length > 0) ||
+                          (item.modifierGroups && item.modifierGroups.length > 0)
+                            ? totalItemQuantities[item.id] || 0
+                            : simpleItemQuantities[item.id] || 0
+                        }
+                        onIncrement={
+                          (item.variants && item.variants.length > 0) ||
+                          (item.modifierGroups && item.modifierGroups.length > 0)
+                            ? handleOpenCustomization
+                            : handleSimpleAddToCart
+                        }
+                        onDecrement={
+                          (item.variants && item.variants.length > 0) ||
+                          (item.modifierGroups && item.modifierGroups.length > 0)
+                            ? handleCustomizedDecrementInMenu
+                            : handleSimpleDecrementInMenu
+                        }
                       />
                     ))}
                   </div>

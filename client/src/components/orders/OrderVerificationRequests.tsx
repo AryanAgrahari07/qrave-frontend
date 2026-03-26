@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, XCircle, Loader2, Receipt } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle, Loader2, Receipt, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { usePrinter } from "@/context/PrinterContext";
+import { buildKOTDataFromOrder } from "@/lib/kot-data";
 import {
   Dialog,
   DialogContent,
@@ -22,16 +24,34 @@ export function OrderVerificationRequests({
   currency,
   gstRatePercent = 0,
   serviceChargeRatePercent = 0,
+  restaurantName = "Restaurant",
+  restaurant,
 }: {
   restaurantId: string;
   orders: any[];
   currency: string;
   gstRatePercent?: number;
   serviceChargeRatePercent?: number;
+  restaurantName?: string;
+  restaurant?: any;
 }) {
   const queryClient = useQueryClient();
   const [location] = useLocation();
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const { printKOT, isPrinting } = usePrinter();
+
+  const handlePrintKOT = useCallback(async (order: any) => {
+    const unverifiedItems = order.items.filter((i: any) => i.isVerified === false);
+    const orderForKOT = {
+      ...order,
+      items: unverifiedItems,
+    };
+    const kotData = buildKOTDataFromOrder({
+      order: orderForKOT,
+      restaurant: restaurant ?? { name: restaurantName, id: restaurantId },
+    });
+    await printKOT(kotData);
+  }, [printKOT, restaurant, restaurantName, restaurantId]);
 
   const verifyItemsMutation = useMutation({
     mutationFn: async ({ orderId, action, itemIds, mergeTargetOrderId }: { orderId: string; action: "accept" | "reject" | "merge"; itemIds: string[]; mergeTargetOrderId?: string }) => {
@@ -47,7 +67,10 @@ export function OrderVerificationRequests({
         },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed to verify items");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || "Failed to verify items");
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -57,8 +80,8 @@ export function OrderVerificationRequests({
       queryClient.invalidateQueries({ queryKey: ["orders", restaurantId] });
       queryClient.invalidateQueries({ queryKey: ["orders:kitchen", restaurantId] });
     },
-    onError: () => {
-      toast.error("Failed to process verification request");
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to process verification request");
     },
   });
 
@@ -160,44 +183,99 @@ export function OrderVerificationRequests({
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {/* View Bill button — opens same-style dialog as orders */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-                      onClick={() => setDetailOrderId(order.id)}
-                    >
-                      <Receipt className="w-4 h-4" />
-                      View Bill
-                    </Button>
+                  <div className="flex flex-1 flex-wrap items-center gap-2 justify-start sm:justify-end">
+                    <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                      {/* View Bill button — opens same-style dialog as orders */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto border-border text-muted-foreground hover:text-foreground"
+                        onClick={() => setDetailOrderId(order.id)}
+                      >
+                        <Receipt className="w-4 h-4 mr-1.5" />
+                        View Bill
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handlePrintKOT(order)}
+                        disabled={isPrinting}
+                      >
+                        <Printer className="w-4 h-4 mr-1.5" />
+                        {isPrinting ? "Printing…" : "Print KOT"}
+                      </Button>
+                    </div>
                     
-                    {existingTableOrder ? (
-                      <>
+                    <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto border-red-200 text-red-700 hover:bg-red-50 bg-red-50/50"
+                        onClick={() =>
+                          verifyItemsMutation.mutate({
+                            orderId: order.id,
+                            action: "reject",
+                            itemIds: unverifiedItems.map((i: any) => i.id),
+                          })
+                        }
+                        disabled={verifyItemsMutation.isPending}
+                      >
+                        {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "reject" ? (
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <XCircle className="w-4 h-4 mr-1.5" />
+                        )}
+                        Reject
+                      </Button>
+
+                      {existingTableOrder ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full sm:w-auto border-indigo-200 text-indigo-700 hover:bg-indigo-50 bg-indigo-50/50 whitespace-nowrap"
+                            onClick={() =>
+                              verifyItemsMutation.mutate({
+                                orderId: order.id,
+                                action: "merge",
+                                itemIds: unverifiedItems.map((i: any) => i.id),
+                                mergeTargetOrderId: existingTableOrder.id,
+                              })
+                            }
+                            disabled={verifyItemsMutation.isPending}
+                          >
+                            {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "merge" ? (
+                              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                            ) : (
+                              <Receipt className="w-4 h-4 mr-1.5" />
+                            )}
+                            Merge
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="col-span-2 sm:col-auto w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold whitespace-nowrap shadow-sm"
+                            onClick={() =>
+                              verifyItemsMutation.mutate({
+                                orderId: order.id,
+                                action: "accept",
+                                itemIds: unverifiedItems.map((i: any) => i.id),
+                              })
+                            }
+                            disabled={verifyItemsMutation.isPending}
+                          >
+                            {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "accept" ? (
+                              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                            )}
+                            New Order
+                          </Button>
+                        </>
+                      ) : (
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex-1 sm:flex-none whitespace-nowrap"
-                          onClick={() =>
-                            verifyItemsMutation.mutate({
-                              orderId: order.id,
-                              action: "merge",
-                              itemIds: unverifiedItems.map((i: any) => i.id),
-                              mergeTargetOrderId: existingTableOrder.id,
-                            })
-                          }
-                          disabled={verifyItemsMutation.isPending}
-                        >
-                          {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "merge" ? (
-                            <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                          ) : (
-                            <Receipt className="w-4 h-4 mr-1.5" />
-                          )}
-                          Add to Existing
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white font-semibold flex-1 sm:flex-none whitespace-nowrap"
+                          className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm"
                           onClick={() =>
                             verifyItemsMutation.mutate({
                               orderId: order.id,
@@ -212,51 +290,10 @@ export function OrderVerificationRequests({
                           ) : (
                             <CheckCircle2 className="w-4 h-4 mr-1.5" />
                           )}
-                          New Order
+                          Accept Order
                         </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white font-semibold flex-1 sm:flex-none"
-                        onClick={() =>
-                          verifyItemsMutation.mutate({
-                            orderId: order.id,
-                            action: "accept",
-                            itemIds: unverifiedItems.map((i: any) => i.id),
-                          })
-                        }
-                        disabled={verifyItemsMutation.isPending}
-                      >
-                        {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "accept" ? (
-                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                        )}
-                        Accept
-                      </Button>
-                    )}
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-red-200 text-red-700 hover:bg-red-50 flex-1 sm:flex-none"
-                      onClick={() =>
-                        verifyItemsMutation.mutate({
-                          orderId: order.id,
-                          action: "reject",
-                          itemIds: unverifiedItems.map((i: any) => i.id),
-                        })
-                      }
-                      disabled={verifyItemsMutation.isPending}
-                    >
-                      {verifyItemsMutation.isPending && verifyItemsMutation.variables?.action === "reject" ? (
-                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <XCircle className="w-4 h-4 mr-1.5" />
                       )}
-                      Reject
-                    </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -362,6 +399,15 @@ export function OrderVerificationRequests({
 
                   {/* Dialog action buttons */}
                   <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => handlePrintKOT(order)}
+                      disabled={isPrinting}
+                    >
+                      <Printer className="w-4 h-4" />
+                      {isPrinting ? "Printing…" : "Print KOT"}
+                    </Button>
                     {existingTableOrder ? (
                       <>
                         <Button

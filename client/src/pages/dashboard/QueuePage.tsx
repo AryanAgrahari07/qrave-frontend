@@ -4,8 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users as UsersIcon, Clock, UserPlus, Phone, Loader2, RefreshCw, Bell, X, ChevronRight, QrCode, ExternalLink, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import QRBoardTemplate from "@/components/qr/QRBoardTemplate";
+import { toPng } from "html-to-image";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +55,9 @@ export default function QueuePage() {
 
   // Customer-facing queue QR
   const [queueQrDataUrl, setQueueQrDataUrl] = useState<string | null>(null);
+  const qrBoardRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingBoard, setIsGeneratingBoard] = useState(false);
+  const [boardReady, setBoardReady] = useState(false);
   const queueJoinUrl = useMemo(() => {
     const base = window.location.origin;
     return restaurant?.slug ? `${base}/q/${restaurant.slug}` : "";
@@ -162,6 +167,37 @@ export default function QueuePage() {
     document.body.removeChild(link);
     toast.success(`Downloaded ${filename}`);
   }, []);
+
+  const downloadQRBoard = useCallback(async (filename: string) => {
+    if (!queueQrDataUrl) return;
+    setIsGeneratingBoard(true);
+    setBoardReady(true);
+    setTimeout(async () => {
+      if (qrBoardRef.current) {
+        const loadingToast = toast.loading('Generating HD QR Board...');
+        try {
+          const dataUrl = await toPng(qrBoardRef.current, {
+            cacheBust: true,
+            pixelRatio: 2,
+            skipFonts: true,
+            backgroundColor: 'white',
+          });
+          const link = document.createElement("a");
+          link.href = dataUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          toast.success(`Downloaded ${filename}`, { id: loadingToast });
+        } catch (error) {
+          console.error("QR Board generation failed", error);
+          toast.error("Failed to generate QR Board", { id: loadingToast });
+        } finally {
+          setIsGeneratingBoard(false);
+        }
+      }
+    }, 150);
+  }, [queueQrDataUrl]);
 
   const copyQueueLink = useCallback(async () => {
     if (!queueJoinUrl) return;
@@ -277,6 +313,18 @@ export default function QueuePage() {
                       }
                     >
                       <Download className="w-4 h-4 mr-2" /> Download QR
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                      size="sm"
+                      disabled={!queueQrDataUrl || isGeneratingBoard}
+                      onClick={() =>
+                        downloadQRBoard(`${restaurant?.slug || "restaurant"}-queue-board.png`)
+                      }
+                    >
+                      {isGeneratingBoard ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                      Download QR Board
                     </Button>
                   </div>
                 </div>
@@ -682,6 +730,18 @@ export default function QueuePage() {
             <p className="text-base sm:text-lg font-medium">No one in queue</p>
             <p className="text-xs sm:text-sm">All guests have been seated.</p>
           </div>
+        )}
+      </div>
+
+      {/* Hidden QR Board Template for Queue QR */}
+      <div className="fixed -top-[9999px] -left-[9999px] pointer-events-none opacity-0">
+        {boardReady && queueQrDataUrl && (
+          <QRBoardTemplate
+            ref={qrBoardRef}
+            restaurantName={restaurant?.name || "Restaurant"}
+            qrCodeDataUrl={queueQrDataUrl}
+            punchline="Scan to Join Our Queue"
+          />
         )}
       </div>
     </DashboardLayout>

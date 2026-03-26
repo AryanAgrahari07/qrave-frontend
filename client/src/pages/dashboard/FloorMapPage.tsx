@@ -166,11 +166,21 @@ export default function FloorMapPage() {
   // Get active order for a table (used to derive OCCUPIED state instantly)
   const getTableOrder = useCallback((tableId: string) => {
     return orders.find(
-      (o: Order) =>
-        o.tableId === tableId &&
-        // treat as active unless explicitly closed/served+paid or cancelled
-        !(o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) &&
-        o.status !== "CANCELLED",
+      (o: Order) => {
+        if (o.tableId !== tableId) return false;
+        if (o.paymentStatus === "PAID" && o.status === "SERVED" && o.isClosed) return false;
+        if (o.status === "CANCELLED") return false;
+
+        // Exclude completely unverified customer orders from acting as the active table order
+        const isCompletelyUnverified = o.placedByCustomer && 
+          o.items && 
+          o.items.length > 0 && 
+          o.items.every((i: any) => i.isVerified === false);
+
+        if (isCompletelyUnverified && o.status === "PENDING") return false;
+
+        return true;
+      }
     );
   }, [orders]);
 

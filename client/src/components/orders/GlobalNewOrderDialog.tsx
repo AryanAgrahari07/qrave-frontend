@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ShoppingBag, X, ExternalLink, CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { ShoppingBag, ExternalLink, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,7 +44,9 @@ interface QueuedOrder {
     quantity: number;
     totalPrice: string;
     variantName?: string | null;
+    notes?: string | null;
   }>;
+  orderNotes?: string | null;
   isAddingToExistingSession?: boolean;
   hasExistingTableOrder?: boolean;
   existingTableOrderId?: string | null;
@@ -152,7 +154,9 @@ export function GlobalNewOrderDialog({
               quantity: item.quantity,
               totalPrice: item.totalPrice,
               variantName: item.variantName ?? null,
+              notes: item.notes ?? null,
             })),
+            orderNotes: order.notes ?? null,
             isAddingToExistingSession: !!order.isAddingToExistingSession,
             hasExistingTableOrder: !!order.hasExistingTableOrder,
             existingTableOrderId: order.existingTableOrderId ?? null,
@@ -235,6 +239,11 @@ export function GlobalNewOrderDialog({
                     {item.variantName && (
                       <p className="text-xs text-muted-foreground mt-0.5">Size: {item.variantName}</p>
                     )}
+                    {item.notes && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                        📝 {item.notes}
+                      </p>
+                    )}
                   </div>
                   <span className="shrink-0 font-semibold tabular-nums">
                     ₹{parseFloat(item.totalPrice || "0").toFixed(2)}
@@ -242,6 +251,14 @@ export function GlobalNewOrderDialog({
                 </div>
               ))}
             </div>
+
+            {/* Order-level cooking note */}
+            {active.orderNotes && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                <span className="font-semibold text-xs uppercase tracking-wide block mb-0.5">Cooking Note</span>
+                {active.orderNotes}
+              </div>
+            )}
 
             {/* Total */}
             <Separator />
@@ -251,10 +268,10 @@ export function GlobalNewOrderDialog({
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-4 pt-4 border-t border-border">
               <Button
                 variant="outline"
-                className="sm:mr-auto gap-2 text-muted-foreground w-full sm:w-auto"
+                className="gap-2 text-muted-foreground w-full"
                 onClick={() => {
                   setLocation(`/dashboard/orders#verify-${active.orderId}`);
                   dismiss(active.key);
@@ -268,7 +285,7 @@ export function GlobalNewOrderDialog({
                 <>
                   <Button
                     variant="outline"
-                    className="border-red-200 text-red-700 hover:bg-red-50 flex-1 sm:flex-none"
+                    className="border-red-200 text-red-700 hover:bg-red-50 bg-red-50/50 w-full"
                     onClick={() => respond(active, "reject")}
                     disabled={processingRef.current.has(active.key)}
                   >
@@ -280,7 +297,7 @@ export function GlobalNewOrderDialog({
                     <>
                       <Button
                         variant="outline"
-                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex-1 sm:flex-none whitespace-nowrap"
+                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 bg-indigo-50/50 w-full"
                         onClick={() => respond(active, "merge")}
                         disabled={processingRef.current.has(active.key)}
                       >
@@ -288,7 +305,7 @@ export function GlobalNewOrderDialog({
                         Add to Existing
                       </Button>
                       <Button
-                        className="bg-green-600 hover:bg-green-700 text-white font-semibold flex-1 sm:flex-none whitespace-nowrap"
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold w-full shadow-sm"
                         onClick={() => respond(active, "accept")}
                         disabled={processingRef.current.has(active.key)}
                       >
@@ -297,18 +314,20 @@ export function GlobalNewOrderDialog({
                       </Button>
                     </>
                   ) : (
-                    <Button
-                      className="bg-green-600 hover:bg-green-700 text-white font-semibold flex-1 sm:flex-none"
-                      onClick={() => respond(active, "accept")}
-                      disabled={processingRef.current.has(active.key)}
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                      Accept
-                    </Button>
+                    <div className="col-span-2">
+                      <Button
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold w-full shadow-sm"
+                        onClick={() => respond(active, "accept")}
+                        disabled={processingRef.current.has(active.key)}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                        Accept Order
+                      </Button>
+                    </div>
                   )}
                 </>
               ) : (
-                <Button className="flex-1 sm:flex-none" onClick={() => dismiss(active.key)}>
+                <Button className="w-full" onClick={() => dismiss(active.key)}>
                   Got it
                 </Button>
               )}

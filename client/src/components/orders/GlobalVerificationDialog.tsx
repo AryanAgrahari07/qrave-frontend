@@ -55,7 +55,8 @@ export function GlobalVerificationDialog({ restaurantId }: { restaurantId: strin
         body: JSON.stringify({ action, itemIds }),
       });
       if (!res.ok) {
-        throw new Error("Failed to verify order items");
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || "Failed to verify order items");
       }
       setQueue((prev) => prev.filter((req) => req.key !== requestKey));
       toast.success(`Order items ${action === "accept" ? "accepted" : "rejected"} successfully`);

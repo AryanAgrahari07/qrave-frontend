@@ -132,16 +132,15 @@ export default function LandingPage() {
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
-                <Link href="/demo">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="w-full sm:w-auto text-base sm:text-lg h-13 sm:h-14 px-8 sm:px-10 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold backdrop-blur-sm"
-                  >
-                    <QrCode className="mr-2 w-5 h-5 text-primary" />
-                    Watch Demo
-                  </Button>
-                </Link>
+                <Button
+                  onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto text-base sm:text-lg h-13 sm:h-14 px-8 sm:px-10 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold backdrop-blur-sm"
+                >
+                  <QrCode className="mr-2 w-5 h-5 text-primary" />
+                  Watch Demo
+                </Button>
               </div>
 
               {/* Social proof */}
@@ -294,15 +293,14 @@ export default function LandingPage() {
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
-              <Link href="/demo">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:w-auto text-base sm:text-lg h-14 sm:h-16 px-10 sm:px-14 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold"
-                >
-                  Book a Demo
-                </Button>
-              </Link>
+              <Button
+                onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto text-base sm:text-lg h-14 sm:h-16 px-10 sm:px-14 rounded-xl border-white/15 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/25 transition-all font-semibold"
+              >
+                Book a Demo
+              </Button>
             </div>
             <p className="mt-6 text-sm text-white/25">No credit card · 14-day free trial · Cancel anytime</p>
           </motion.div>

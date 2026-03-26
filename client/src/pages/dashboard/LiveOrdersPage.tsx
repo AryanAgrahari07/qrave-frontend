@@ -1533,6 +1533,8 @@ export default function LiveOrdersPage() {
             currency={currency}
             gstRatePercent={gstRate * 100}
             serviceChargeRatePercent={serviceRatePct}
+            restaurant={restaurant}
+            restaurantName={restaurant?.name ?? "Restaurant"}
           />
 
           <div className="flex items-center justify-between">

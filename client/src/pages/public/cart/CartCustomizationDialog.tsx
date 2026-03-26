@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Minus, Plus } from "lucide-react";
+import { toast } from "sonner";
 import type { MenuItem } from "@/types";
 
 function getTranslated(translations: Record<string, string> | undefined | null, lang: string, fallback: string) {
@@ -65,17 +66,17 @@ export function CartCustomizationDialog({
 
   const currentPrice = useMemo(() => {
     if (!item) return 0;
-    let base = item.price;
+    let base = parseFloat(String(item.price)) || 0;
     if (selectedVariantId && item.variants) {
       const v = item.variants.find((x) => x.id === selectedVariantId);
-      if (v) base = v.price;
+      if (v) base = parseFloat(String(v.price)) || 0;
     }
 
     let mods = 0;
     if (item.modifierGroups) {
       item.modifierGroups.forEach((g) => {
         g.modifiers?.forEach((m) => {
-          if (selectedModifiers[m.id]) mods += m.price;
+          if (selectedModifiers[m.id]) mods += parseFloat(String(m.price)) || 0;
         });
       });
     }
@@ -89,6 +90,20 @@ export function CartCustomizationDialog({
   const displayDesc = item.description ? getTranslated(item.descriptionTranslations, lang, item.description) : null;
 
   const handleAdd = () => {
+    // Validate required modifier groups (minSelections)
+    if (item.modifierGroups) {
+      for (const group of item.modifierGroups) {
+        const min = group.minSelections ?? 0;
+        if (min > 0) {
+          const selectedCount = group.modifiers?.filter((m) => selectedModifiers[m.id]).length ?? 0;
+          if (selectedCount < min) {
+            const groupName = group.name || "a required group";
+            toast.error(`Please select at least ${min} option${min > 1 ? "s" : ""} for "${groupName}"`);
+            return;
+          }
+        }
+      }
+    }
     const selectedMods: any[] = [];
     if (item.modifierGroups) {
       item.modifierGroups.forEach((g) => {
