@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { api } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,19 +60,7 @@ export function OrderVerificationRequests({
       if (action === "merge" && mergeTargetOrderId) {
         body.mergeTargetOrderId = mergeTargetOrderId;
       }
-      const res = await fetch(`/api/restaurants/${restaurantId}/orders/${orderId}/verify-items`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || "Failed to verify items");
-      }
-      return res.json();
+      return api.patch(`/api/restaurants/${restaurantId}/orders/${orderId}/verify-items`, body);
     },
     onSuccess: (_, variables) => {
       const actionName = variables.action === "accept" ? "accepted" : variables.action === "merge" ? "merged" : "rejected";

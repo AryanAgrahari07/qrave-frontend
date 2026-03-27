@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ShoppingBag, ExternalLink, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -79,21 +80,12 @@ export function GlobalNewOrderDialog({
       if (processingRef.current.has(req.key)) return;
       processingRef.current.add(req.key);
       try {
-        const token = localStorage.getItem("token");
         const body: any = { action, itemIds: req.itemIds };
         if (action === "merge" && req.existingTableOrderId) {
           body.mergeTargetOrderId = req.existingTableOrderId;
         }
 
-        const res = await fetch(`/api/restaurants/${rId}/orders/${req.orderId}/verify-items`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error("Failed to process order items");
+        await api.patch(`/api/restaurants/${rId}/orders/${req.orderId}/verify-items`, body);
         dismiss(req.key);
         
         const successMsg = action === "accept" 

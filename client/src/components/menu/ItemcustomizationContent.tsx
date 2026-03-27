@@ -111,10 +111,10 @@ export function ItemCustomizationContent({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background text-foreground">
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
+      <div className="px-4 py-3 border-b dark:border-border flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0 bg-transparent">
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -147,7 +147,7 @@ export function ItemCustomizationContent({
                       className={cn(
                         "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
                         selectedVariantId === variant.id
-                          ? "border-primary bg-primary/5"
+                          ? "border-primary bg-primary/5 dark:bg-primary/10"
                           : "border-border hover:border-primary/50"
                       )}
                       onClick={() => setSelectedVariantId(variant.id)}
@@ -221,7 +221,7 @@ export function ItemCustomizationContent({
                             className={cn(
                               "flex items-center justify-between p-2.5 sm:p-3 rounded-lg border-2 transition-colors cursor-pointer active:scale-[0.98]",
                               isSelected
-                                ? "border-primary bg-primary/5"
+                                ? "border-primary bg-primary/5 dark:bg-primary/10"
                                 : "border-border hover:border-primary/50"
                             )}
                             onClick={() => handleModifierToggle(modifier.id, group)}
@@ -277,7 +277,7 @@ export function ItemCustomizationContent({
       </ScrollArea>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t bg-background">
+      <div className="px-4 py-3 border-t dark:border-border bg-background">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label className="font-bold">Quantity</Label>

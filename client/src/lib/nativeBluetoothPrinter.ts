@@ -16,10 +16,15 @@ export interface PairedDevice {
   name: string;
   address: string;
   type: number;
+  bonded?: boolean;
 }
 
 interface BluetoothPrinterPluginDef {
   listPairedDevices(): Promise<{ devices: PairedDevice[] }>;
+  startDiscovery(): Promise<{ devices: PairedDevice[] }>;
+  stopDiscovery(): Promise<void>;
+  pairDevice(opts: { address: string }): Promise<{ paired: boolean; address: string; name?: string }>;
+  openBluetoothSettings(): Promise<void>;
   connect(opts: { address: string }): Promise<{ connected: boolean; address: string; name?: string }>;
   disconnect(): Promise<void>;
   write(opts: { data: string }): Promise<void>; // base64
@@ -54,6 +59,27 @@ export function isNativeBluetoothAvailable(): boolean {
 export async function listPairedDevices(): Promise<PairedDevice[]> {
   const result = await NativePlugin.listPairedDevices();
   return result.devices ?? [];
+}
+
+/** Start scanning for nearby Bluetooth devices (native only). */
+export async function startDiscovery(): Promise<PairedDevice[]> {
+  const result = await NativePlugin.startDiscovery();
+  return result.devices ?? [];
+}
+
+/** Stop scanning (native only). */
+export async function stopDiscovery(): Promise<void> {
+  return NativePlugin.stopDiscovery();
+}
+
+/** Initiate pairing with a device by MAC address (native only). */
+export async function pairDevice(address: string): Promise<{ paired: boolean; address: string; name?: string }> {
+  return NativePlugin.pairDevice({ address });
+}
+
+/** Open Android Bluetooth settings. */
+export async function openBluetoothSettings(): Promise<void> {
+  return NativePlugin.openBluetoothSettings();
 }
 
 /** Connect to a printer by MAC address. */
@@ -104,4 +130,9 @@ export function onPrinterConnected(handler: (data: { connected: boolean; address
 
 export function onPrinterDisconnected(handler: () => void): Promise<{ remove: () => void }> {
   return NativePlugin.addListener("printerDisconnected", handler);
+}
+
+/** Listen for devices found during discovery. */
+export function onDeviceFound(handler: (data: PairedDevice) => void): Promise<{ remove: () => void }> {
+  return NativePlugin.addListener("deviceFound", handler);
 }

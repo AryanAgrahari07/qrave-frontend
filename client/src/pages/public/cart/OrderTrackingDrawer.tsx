@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useCart } from "./CartContext";
+import { buildUrl } from "@/lib/api";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,7 +64,7 @@ export function OrderTrackingDrawer({
     queryFn: async () => {
       if (!state.orderId || !state.customerSessionId) return null;
       const res = await fetch(
-        `/api/public/restaurants/${restaurantSlug}/orders/${state.orderId}`,
+        buildUrl(`/api/public/restaurants/${restaurantSlug}/orders/${state.orderId}`),
         { headers: { "x-customer-session-id": state.customerSessionId } }
       );
       if (!res.ok) {
@@ -93,7 +94,7 @@ export function OrderTrackingDrawer({
     mutationFn: async () => {
       if (!state.orderId || !state.customerSessionId) return;
       const res = await fetch(
-        `/api/public/restaurants/${restaurantSlug}/orders/${state.orderId}/call-waiter`,
+        buildUrl(`/api/public/restaurants/${restaurantSlug}/orders/${state.orderId}/call-waiter`),
         {
           method: "POST",
           headers: { "x-customer-session-id": state.customerSessionId },

@@ -22,11 +22,12 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useRestaurant } from "@/hooks/api";
-import { useThermalPrinter } from "@/hooks/useThermalPrinter";
+import { usePrinter } from "@/context/PrinterContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSubscription } from "@/context/SubscriptionContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { GlobalNewOrderDialog } from "@/components/orders/GlobalNewOrderDialog";
+import { PrinterPickerDialog } from "@/components/printer/PrinterPickerDialog";
 import { useState, useMemo, useCallback } from "react";
 import type { PlanFeatures } from "@/lib/plan-config";
 
@@ -69,8 +70,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     isConnected: isPrinterConnected,
     isConnecting: isPrinterConnecting,
     connect: connectPrinter,
+    quickConnect: quickConnectPrinter,
     disconnect: disconnectPrinter,
-  } = useThermalPrinter(32);
+    lastPrinterId,
+    openPicker,
+    isNativeDevice,
+  } = usePrinter();
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -160,9 +165,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               {!isPrinterConnected && !isPrinterConnecting && (
                 <>
-                  <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={connectPrinter}>
-                    Pair Printer
-                  </Button>
+                  {lastPrinterId && isNativeDevice ? (
+                    <div className="flex flex-col gap-1.5 mt-2.5">
+                      <Button size="sm" className="w-full h-8 text-xs font-semibold" onClick={quickConnectPrinter}>
+                        Connect
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full h-8 text-xs bg-transparent border-muted-foreground/20 text-muted-foreground" onClick={openPicker}>
+                        Setup New
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={connectPrinter}>
+                      {lastPrinterId ? "Connect Printer" : "Pair Printer"}
+                    </Button>
+                  )}
                   <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/60">
                     Keep this tab open after pairing.
                   </p>
@@ -275,9 +291,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               {!isPrinterConnected && !isPrinterConnecting && (
                 <>
-                  <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={() => { if (isPrinterConnected) disconnectPrinter(); else connectPrinter(); }}>
-                    Pair Printer
-                  </Button>
+                  {lastPrinterId && isNativeDevice ? (
+                    <div className="flex flex-col gap-1.5 mt-2.5">
+                      <Button size="sm" className="w-full h-8 text-xs font-semibold" onClick={quickConnectPrinter}>
+                        Connect
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full h-8 text-xs bg-transparent border-muted-foreground/20 text-muted-foreground" onClick={openPicker}>
+                        Setup New
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="w-full mt-2.5 h-8 text-xs font-semibold" onClick={connectPrinter}>
+                      {lastPrinterId ? "Connect Printer" : "Pair Printer"}
+                    </Button>
+                  )}
                   <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/60">
                     Keep this tab open after pairing.
                   </p>
@@ -302,6 +329,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content */}
       <main className="flex-1 lg:ml-64 min-h-screen flex flex-col">
         <GlobalNewOrderDialog restaurantId={restaurantId} />
+        <PrinterPickerDialog />
         <header className="h-16 bg-background border-b border-border sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button

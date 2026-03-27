@@ -19,6 +19,13 @@ interface UploadUrlResponse {
   key: string;
 }
 
+interface DirectUploadResponse {
+  job: {
+    id: string;
+    status: string;
+  };
+}
+
 interface ExtractionJobResponse {
   job: {
     id: string;
@@ -63,36 +70,34 @@ export function MenuCardUploader({ restaurantId, onExtractionComplete }: MenuCar
     setUploadProgress(10);
 
     try {
-      // Step 1: Get presigned URL
-      const { jobId, uploadUrl, publicUrl, key }: UploadUrlResponse = await api.post(
-        `/api/menu/${restaurantId}/menu-card/upload-url`,
-        {
-          fileName: file.name,
-          fileSize: file.size,
-          contentType: file.type,
-        },
-      );
-      setUploadProgress(20);
-
-      // Step 2: Upload to S3
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+      // Step 1: Read file as Base64 for direct backend upload to bypass Android S3 CORS
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      const uploadPromise = new Promise<DirectUploadResponse>((resolve, reject) => {
+        reader.onload = async () => {
+          try {
+            const base64Image = reader.result as string;
+            setUploadProgress(40);
+            
+            // Step 2: Upload direct to backend API and create extraction job
+            const response: DirectUploadResponse = await api.post(
+              `/api/menu/${restaurantId}/menu-card/upload-direct`,
+              {
+                base64Image,
+                fileName: file.name,
+                contentType: file.type,
+              }
+            );
+            resolve(response);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
       });
 
-      if (!uploadResponse.ok) throw new Error("Upload failed");
-      setUploadProgress(50);
-
-      // Step 3: Create extraction job
-      const { job }: ExtractionJobResponse = await api.post(
-        `/api/menu/${restaurantId}/extract`,
-        {
-          imageUrl: publicUrl,
-          imageS3Key: key,
-          imageSizeBytes: file.size,
-        },
-      );
+      const { job } = await uploadPromise;
       setUploadProgress(100);
 
       toast.success("🎉 Image uploaded! AI is analyzing your menu...");

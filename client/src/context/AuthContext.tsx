@@ -140,18 +140,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Each step wrapped individually — logout must ALWAYS succeed
     try {
       const isNative = Capacitor.isNativePlatform();
-      const rt = isNative ? await secureStorage.get(REFRESH_TOKEN_KEY) : null;
+      let rt: string | null = null;
+      try { rt = isNative ? await secureStorage.get(REFRESH_TOKEN_KEY) : null; } catch { /* ignore */ }
       await api.post("/api/auth/logout", isNative && rt ? { refreshToken: rt } : undefined);
     } catch {
-      /* ignore */
+      /* ignore server-side logout failure */
     }
 
-    await setStoredToken(null);
-    if (Capacitor.isNativePlatform()) await secureStorage.remove(REFRESH_TOKEN_KEY);
-    // We intentionally DO NOT remove RESTAURANT_ID_KEY so terminal devices remain paired.
-    await preferences.remove({ key: AUTH_CACHE_KEY });
+    try { await setStoredToken(null); } catch { /* ignore */ }
+    if (Capacitor.isNativePlatform()) {
+      try { await secureStorage.remove(REFRESH_TOKEN_KEY); } catch { /* ignore */ }
+      try { await secureStorage.clear(); } catch { /* ignore */ }
+    }
+    try { await preferences.remove({ key: AUTH_CACHE_KEY }); } catch { /* ignore */ }
     setState((s) => ({ ...s, user: null, token: null, isLoading: false, isReady: true }));
   }, []);
 
@@ -197,13 +201,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (state.isReady) return;
 
     (async () => {
-      await migrateLegacyTokenIfNeeded();
+      try {
+        await migrateLegacyTokenIfNeeded();
+      } catch (e) {
+        console.warn("[AuthContext] Legacy migration failed (non-critical):", e);
+      }
 
-      const [{ value: cachedAuth }, { value: cachedRestaurantId }, { value: token }] = await Promise.all([
-        preferences.get({ key: AUTH_CACHE_KEY }),
-        preferences.get({ key: RESTAURANT_ID_KEY }),
-        preferences.get({ key: "orderzi_token" }),
-      ]);
+      let cachedAuth: string | null = null;
+      let cachedRestaurantId: string | null = null;
+      let token: string | null = null;
+
+      try {
+        const results = await Promise.all([
+          preferences.get({ key: AUTH_CACHE_KEY }),
+          preferences.get({ key: RESTAURANT_ID_KEY }),
+          preferences.get({ key: "orderzi_token" }),
+        ]);
+        cachedAuth = results[0].value;
+        cachedRestaurantId = results[1].value;
+        token = results[2].value;
+      } catch (e) {
+        // If preferences/secure storage is corrupted, clear everything and force fresh login
+        console.error("[AuthContext] Failed to read stored data, clearing and forcing login:", e);
+        try {
+          await setStoredToken(null);
+          await preferences.remove({ key: AUTH_CACHE_KEY });
+          await preferences.remove({ key: RESTAURANT_ID_KEY });
+          if (Capacitor.isNativePlatform()) {
+            try { await secureStorage.clear(); } catch { /* ignore */ }
+          }
+        } catch { /* ignore cleanup errors */ }
+        setState((s) => ({ ...s, user: null, token: null, isReady: true }));
+        return;
+      }
 
       let bootedFromCache = false;
       // Optimistic UI: if we have cached user, render immediately.

@@ -44,12 +44,15 @@ interface ExtractionJob {
   image_size_bytes: number;
   extracted_data?: {
     currency?: string;
-    categories?: Array<{
+      categories?: Array<{
       name: string;
+      nameHindi?: string;
       items: Array<{
         name: string;
+        nameHindi?: string;
         price: number;
         description: string;
+        descriptionHindi?: string;
         dietaryType: string;
         confidence: number;
       }>;

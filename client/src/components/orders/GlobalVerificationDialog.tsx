@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Utensils, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -45,19 +46,7 @@ export function GlobalVerificationDialog({ restaurantId }: { restaurantId: strin
     if (processingRef.current.has(requestKey)) return;
     processingRef.current.add(requestKey);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/restaurants/${restaurantId}/orders/${orderId}/verify-items`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ action, itemIds }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || "Failed to verify order items");
-      }
+      await api.patch(`/api/restaurants/${restaurantId}/orders/${orderId}/verify-items`, { action, itemIds });
       setQueue((prev) => prev.filter((req) => req.key !== requestKey));
       toast.success(`Order items ${action === "accept" ? "accepted" : "rejected"} successfully`);
       queryClient.invalidateQueries({ queryKey: ["orders", restaurantId] });

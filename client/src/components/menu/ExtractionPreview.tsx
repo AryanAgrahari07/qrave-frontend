@@ -20,11 +20,14 @@ interface ExtractionPreviewProps {
 interface ExtractedItem {
   id: string;
   name: string;
+  nameHindi: string;
   price: number;
   description: string;
+  descriptionHindi: string;
   dietaryType: string;
   confidence: number;
   categoryName: string;
+  categoryNameHindi: string;
 }
 
 export function ExtractionPreview({ 
@@ -54,11 +57,14 @@ export function ExtractionPreview({
           extractedItems.push({
             id: `${cat.name}-${idx}`,
             name: item.name || "Unnamed Item",
+            nameHindi: item.nameHindi || item.name || "अनाम आइटम",
             price: item.price || 0,
             description: item.description || `Delicious ${item.name}`,
+            descriptionHindi: item.descriptionHindi || `स्वादिष्ट ${item.name}`,
             dietaryType: item.dietaryType || "Veg",
             confidence: item.confidence || 0.5,
             categoryName: cat.name,
+            categoryNameHindi: cat.nameHindi || cat.name || "अनाम श्रेणी",
           });
         });
       });
@@ -84,9 +90,12 @@ export function ExtractionPreview({
     // Format items with all required fields
     const formattedItems = items.map(item => ({
       categoryName: item.categoryName,
+      categoryNameHindi: item.categoryNameHindi,
       name: item.name,
+      nameHindi: item.nameHindi,
       price: item.price,
       description: item.description,
+      descriptionHindi: item.descriptionHindi,
       dietaryType: item.dietaryType as 'Veg' | 'Non-Veg',
     }));
 
@@ -191,7 +200,13 @@ export function ExtractionPreview({
                           <Input
                             value={item.name}
                             onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                            placeholder="Item name *"
+                            placeholder="English Name *"
+                            className="font-medium"
+                          />
+                          <Input
+                            value={item.nameHindi}
+                            onChange={(e) => updateItem(item.id, 'nameHindi', e.target.value)}
+                            placeholder="Hindi Name (हिंदी) *"
                             className="font-medium"
                           />
                           <Input
@@ -205,7 +220,13 @@ export function ExtractionPreview({
                           <Textarea
                             value={item.description}
                             onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                            placeholder="Description *"
+                            placeholder="English Description *"
+                            rows={2}
+                          />
+                          <Textarea
+                            value={item.descriptionHindi}
+                            onChange={(e) => updateItem(item.id, 'descriptionHindi', e.target.value)}
+                            placeholder="Hindi Description (विवरण) *"
                             rows={2}
                           />
                           <Select
@@ -225,6 +246,7 @@ export function ExtractionPreview({
                         <>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{item.name}</span>
+                            <span className="text-sm text-muted-foreground mr-2">| {item.nameHindi}</span>
                             <Badge 
                               variant="outline"
                               className={
@@ -246,6 +268,9 @@ export function ExtractionPreview({
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {item.description}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.descriptionHindi}
                           </p>
                         </>
                       )}

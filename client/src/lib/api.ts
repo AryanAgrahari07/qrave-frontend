@@ -45,7 +45,7 @@ export async function migrateLegacyTokenIfNeeded(): Promise<void> {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   if (path.startsWith("http")) return path;
   const p = path.startsWith("/") ? path : `/${path}`;
   // Web: use relative URL → goes through the Vite proxy (same origin as the
@@ -99,7 +99,10 @@ async function refreshAccessToken(): Promise<void> {
     refreshPromise = (async () => {
       const isNative = Capacitor.isNativePlatform();
 
-      const refreshToken = isNative ? await secureStorage.get(REFRESH_TOKEN_KEY) : null;
+      let refreshToken: string | null = null;
+      if (isNative) {
+        try { refreshToken = await secureStorage.get(REFRESH_TOKEN_KEY); } catch { /* corrupted storage */ }
+      }
       const includeRefresh = isNative;
 
       const refreshUrl = includeRefresh ? "/api/auth/refresh?includeRefresh=true" : "/api/auth/refresh";
@@ -114,7 +117,7 @@ async function refreshAccessToken(): Promise<void> {
       if (!res.ok) {
         // Refresh failed -> clear local access token and native refresh token
         await setStoredToken(null);
-        if (isNative) await secureStorage.remove(REFRESH_TOKEN_KEY);
+        if (isNative) { try { await secureStorage.remove(REFRESH_TOKEN_KEY); } catch { /* ignore */ } }
 
         // Notify app-level auth state to reset UI immediately.
         if (typeof window !== "undefined") {

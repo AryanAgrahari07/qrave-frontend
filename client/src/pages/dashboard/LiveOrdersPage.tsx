@@ -1333,7 +1333,7 @@ export default function LiveOrdersPage() {
         </AlertDialog>
 
         {customizingItem ? (
-          <div className="fixed inset-0 z-50 bg-white">
+          <div className="fixed inset-0 z-50 bg-background">
             <ItemCustomizationContent
               menuItem={customizingItem}
               currency={currency}

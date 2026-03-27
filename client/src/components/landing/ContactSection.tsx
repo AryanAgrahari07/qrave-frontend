@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { buildUrl } from "@/lib/api";
 
 export default function ContactSection() {
   const { toast } = useToast();
@@ -17,7 +18,7 @@ export default function ContactSection() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/inquiries", {
+      const res = await fetch(buildUrl("/api/inquiries"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

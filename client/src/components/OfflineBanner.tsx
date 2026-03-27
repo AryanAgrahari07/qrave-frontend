@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, WifiOff } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 
 // FE-2: Enhanced offline banner that shows when:
 // 1. navigator.onLine === false (device is offline)
-// 2. A "orderzi_ws_disconnected" custom event fires and WS stays down for >30s
+// 2. A "orderzi_ws_disconnected" custom event fires and WS stays disconnected
+//    for longer than the grace period (60s on native, 30s on web)
 export function OfflineBanner() {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [wsDisconnected, setWsDisconnected] = useState(false);
@@ -16,18 +18,23 @@ export function OfflineBanner() {
         window.addEventListener("online", handleOnline);
         window.addEventListener("offline", handleOffline);
 
-        // Listen for custom WS connectivity events dispatched by useRestaurantWebSocket
+        // Android WebSockets take longer to establish (WSS handshake over mobile).
+        // Use a longer grace period on native so transient reconnects don't show the banner.
+        const isNative = typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
+        const GRACE_MS = isNative ? 60_000 : 30_000;
+
         const handleWsDisconnect = () => {
-            // Only show the banner if WS stays disconnected for >30s
             if (wsTimerRef.current) clearTimeout(wsTimerRef.current);
             wsTimerRef.current = setTimeout(() => {
-                // Don't show WS banner if device is already offline (handled by isOffline)
+                // Don't show WS banner if the device is already offline (handled by isOffline)
                 if (navigator.onLine) setWsDisconnected(true);
-            }, 30000);
+            }, GRACE_MS);
         };
 
         const handleWsConnect = () => {
+            // Always clear immediately when WS comes back online
             if (wsTimerRef.current) clearTimeout(wsTimerRef.current);
+            wsTimerRef.current = null;
             setWsDisconnected(false);
         };
 

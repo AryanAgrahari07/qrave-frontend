@@ -28,7 +28,8 @@ export default function QRCodesPage() {
   const qrBoardRef = useRef<HTMLDivElement>(null);
   const [boardProps, setBoardProps] = useState<{qrCodeDataUrl: string, tableName: string | null} | null>(null);
 
-  const baseUrl = window.location.origin;
+  const isNativeApp = !!(window as any).Capacitor;
+  const baseUrl = isNativeApp ? (import.meta.env.VITE_APP_URL || "https://orderzi.com") : window.location.origin;
   const qrUrl = restaurant?.slug ? `${baseUrl}/r/${restaurant.slug}` : "";
 
   const handleGenerateMainQR = async () => {

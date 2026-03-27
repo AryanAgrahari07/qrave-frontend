@@ -6,6 +6,7 @@ import { Loader2, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useState } from "react";
+import { buildUrl } from "@/lib/api";
 
 export function CartDrawer({
   restaurantSlug,
@@ -62,7 +63,7 @@ export function CartDrawer({
         headers["x-customer-session-id"] = state.customerSessionId!;
       }
 
-      const res = await fetch(url, {
+      const res = await fetch(buildUrl(url), {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -241,12 +242,12 @@ export function CartDrawer({
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="text-sm font-semibold">Total</span>
                 <span className="text-xl font-bold font-heading">
-                {currency}
+                  {currency}
                   {grandTotal.toFixed(2)}
                 </span>
               </div>
             </div>
-            
+
             {!state.tableId && (
               <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-200 text-center">
                 Please exit the cart and select your table number first.
@@ -267,7 +268,7 @@ export function CartDrawer({
                 state.orderId ? "Add Items to Order" : "Place Order"
               )}
             </Button>
-            
+
             {qrOrderingVerification && !state.orderId && (
               <p className="text-center text-[10px] sm:text-xs text-muted-foreground mt-3">
                 Your order will be verified by our staff before preparation.

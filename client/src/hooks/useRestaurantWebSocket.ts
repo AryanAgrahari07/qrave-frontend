@@ -1,7 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
 import { queryKeys } from "./api";
 import { useSoundSettings } from "./useSoundSettings";
+
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+/** Derive the correct WebSocket base URL regardless of platform.
+ * On Android Capacitor, window.location.protocol is 'capacitor:' — not useful.
+ * We always use VITE_API_URL on native; fall back to window.location on web.
+ */
+function getWsBaseUrl(): { wsProtocol: string; host: string } {
+  const isNative = typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
+  if (isNative && API_URL) {
+    try {
+      const parsed = new URL(API_URL);
+      const wsProtocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+      return { wsProtocol, host: parsed.host };
+    } catch { /* fall through */ }
+  }
+  // Web: derive from current page
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return { wsProtocol, host: window.location.host };
+}
 
 interface WebSocketEvent {
     type: "event";
@@ -85,11 +106,13 @@ export function useRestaurantWebSocket(
             const establishConnection = async () => {
                 let wsToken = token;
 
-                // If token is a JWT, exchange it for a short-lived WS ticket
+                // If token is a JWT, exchange it for a short-lived WS ticket.
+                // Use the absolute VITE_API_URL for the ticket fetch — critical on Android
+                // where window.location.origin is 'capacitor://localhost' (not the real server).
                 if (token && token.length > 50 && token.includes(".")) {
                     try {
-                        const host = import.meta.env.VITE_API_URL || window.location.origin;
-                        const res = await fetch(`${host}/api/auth/ws-ticket`, {
+                        const apiBase = API_URL || window.location.origin;
+                        const res = await fetch(`${apiBase}/api/auth/ws-ticket`, {
                             method: "POST",
                             headers: {
                                 "Authorization": `Bearer ${token}`
@@ -98,22 +121,22 @@ export function useRestaurantWebSocket(
                         if (res.ok) {
                             const data = await res.json();
                             if (data.ticket) wsToken = data.ticket;
+                        } else {
+                            // Ticket exchange failed — fall back to sending the raw JWT.
+                            // Connection will still work if the backend accepts JWT in the query param.
+                            console.warn("WS Ticket exchange returned", res.status, "— using raw token");
                         }
                     } catch (e) {
-                        console.warn("WS Ticket fetch failed", e);
+                        console.warn("WS Ticket fetch failed — using raw token", e);
                     }
                 }
 
                 if (!isComponentMounted) return;
 
-                // Determine WS URL
-                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-                const hostUrlInfo = import.meta.env.VITE_API_URL
-                    ? new URL(import.meta.env.VITE_API_URL).host
-                    : window.location.host;
-
-                // Using secure ticket approach vs long-lived JWT in URL
-                const url = `${protocol}//${hostUrlInfo}/ws${wsToken ? `?token=${wsToken}` : ""}`;
+                // Determine WS URL — always use VITE_API_URL on native to avoid
+                // 'capacitor:' protocol from window.location on Android.
+                const { wsProtocol, host: hostUrlInfo } = getWsBaseUrl();
+                const url = `${wsProtocol}//${hostUrlInfo}/ws${wsToken ? `?token=${wsToken}` : ""}`;
 
                 const ws = new WebSocket(url);
                 wsRef.current = ws;
