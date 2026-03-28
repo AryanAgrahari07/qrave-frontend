@@ -48,12 +48,14 @@ export function OrderTrackingDrawer({
   currency,
   open,
   onOpenChange,
+  lang,
 }: {
   restaurantSlug: string;
   restaurantName: string;
   currency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  lang: string;
 }) {
   const { state, setOrderSession, clearOrderSession } = useCart();
   const queryClient = useQueryClient();
@@ -237,8 +239,11 @@ export function OrderTrackingDrawer({
       const qty = Number(item.quantity || 0);
       const total = Number(item.totalPrice || 0);
       const unit = Number(item.unitPrice) || (qty ? total / qty : 0);
+      const name = item.itemNameTranslations?.[lang] || item.itemNameTranslations?.["en"] || item.itemName;
+      const variantName = item.variantNameTranslations?.[lang] || item.variantNameTranslations?.["en"] || item.variantName;
+
       return {
-        name: item.itemName + (item.variantName ? ` (${item.variantName})` : ''),
+        name: name + (variantName ? ` (${variantName})` : ''),
         quantity: qty,
         price: unit,
         total: total,
@@ -426,11 +431,11 @@ export function OrderTrackingDrawer({
                             <span className="text-primary font-bold mr-2">
                               {item.quantity}×
                             </span>
-                            {item.itemName}
+                            {item.itemNameTranslations?.[lang] || item.itemNameTranslations?.["en"] || item.itemName}
                           </p>
                           {item.variantName && (
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Size: {item.variantName}
+                              Size: {item.variantNameTranslations?.[lang] || item.variantNameTranslations?.["en"] || item.variantName}
                             </p>
                           )}
                           <div className="mt-1 flex flex-wrap gap-1">
@@ -439,7 +444,7 @@ export function OrderTrackingDrawer({
                                 key={i}
                                 className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded"
                               >
-                                {mod.name}
+                                {mod.nameTranslations?.[lang] || mod.nameTranslations?.["en"] || mod.name}
                               </span>
                             ))}
                           </div>

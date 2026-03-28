@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { queryKeys } from "./api";
+
 import { useSoundSettings } from "./useSoundSettings";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -187,9 +188,9 @@ export function useRestaurantWebSocket(
                                 }
                                 if (ev.event === "order.created") {
                                     console.log("[WS] Received order.created", ev.data);
-                                    // Only surface a global notification for public/customer QR orders
+                                    // Only surface a global notification if the action was performed by a customer
                                     const order = ev.data?.order;
-                                    if (order?.placedByCustomer || order?.customerSessionId) {
+                                    if (ev.data?.actor === "customer") {
                                         window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { order, requiresVerification: false } }));
                                     }
                                 }
@@ -197,7 +198,8 @@ export function useRestaurantWebSocket(
                                     console.log("[WS] Received order.items_added", ev.data);
                                     const order = ev.data?.order;
                                     const newItems = ev.data?.newItems;
-                                    if (order?.placedByCustomer || order?.customerSessionId) {
+                                    // Only surface a global notification if the items were added by a customer
+                                    if (ev.data?.actor === "customer") {
                                         window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { order, requiresVerification: false, onlyShowItems: newItems } }));
                                     }
                                 }

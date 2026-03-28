@@ -15,6 +15,7 @@ export function CartDrawer({
   qrOrderingVerification,
   gstRatePercent = 0,
   serviceChargeRatePercent = 0,
+  lang,
 }: {
   restaurantSlug: string;
   restaurantName: string;
@@ -22,6 +23,7 @@ export function CartDrawer({
   qrOrderingVerification: boolean; // Tells us what the status will be
   gstRatePercent?: number;
   serviceChargeRatePercent?: number;
+  lang: string;
 }) {
   const { state, isCartOpen, setIsCartOpen, removeItem, updateQuantity, setOrderSession, clearOrderSession } = useCart();
   const [orderNotes, setOrderNotes] = useState("");
@@ -135,7 +137,7 @@ export function CartDrawer({
                 <div key={item.id} className="bg-background border rounded-lg p-3 sm:p-4 shadow-sm">
                   <div className="flex justify-between items-start gap-2">
                     <div className="font-medium text-sm sm:text-base leading-tight">
-                      {item.name}
+                      {item.nameTranslations?.[lang] || item.nameTranslations?.["en"] || item.name}
                     </div>
                     <div className="font-bold text-primary shrink-0">
                       {currency}
@@ -145,13 +147,13 @@ export function CartDrawer({
 
                   {item.variantName && (
                     <p className="text-xs text-muted-foreground mt-1 tracking-wide uppercase">
-                      Size: {item.variantName}
+                      Size: {item.variantNameTranslations?.[lang] || item.variantNameTranslations?.["en"] || item.variantName}
                     </p>
                   )}
 
                   {item.selectedModifiers && item.selectedModifiers.length > 0 && (
                     <div className="text-xs text-muted-foreground mt-1">
-                      {item.selectedModifiers.map((m) => m.name).join(", ")}
+                      {item.selectedModifiers.map((m) => m.nameTranslations?.[lang] || m.nameTranslations?.["en"] || m.name).join(", ")}
                     </div>
                   )}
 

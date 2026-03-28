@@ -1054,6 +1054,7 @@ function PublicMenuPageInner() {
           qrOrderingVerification={qrOrderingVerification}
           gstRatePercent={parseFloat(restaurant?.taxRateGst || "0")}
           serviceChargeRatePercent={parseFloat(restaurant?.taxRateService || "0")}
+          lang={lang}
         />
       )}
 
@@ -1065,6 +1066,7 @@ function PublicMenuPageInner() {
           currency={currency}
           open={isTrackOpen}
           onOpenChange={setIsTrackOpen}
+          lang={lang}
         />
       )}
 
