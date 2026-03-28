@@ -57,14 +57,17 @@ interface QueuedOrder {
 export function GlobalNewOrderDialog() {
   const { restaurantId } = useAuth();
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [queue, setQueue] = useState<QueuedOrder[]>([]);
   const processingRef = useRef<Set<string>>(new Set());
   // Use a ref to always read latest restaurantId inside the stable event handler
   const restaurantIdRef = useRef(restaurantId);
   useEffect(() => { restaurantIdRef.current = restaurantId; }, [restaurantId]);
 
-  const active = queue[0] || null;
+  // Never show staff-facing order popups on public customer routes (/r/:slug, /q/:slug)
+  const isPublicRoute = location.startsWith("/r/") || location.startsWith("/q/");
+
+  const active = !isPublicRoute ? (queue[0] || null) : null;
 
   const dismiss = useCallback(
     (key: string) => setQueue((prev) => prev.filter((r) => r.key !== key)),
