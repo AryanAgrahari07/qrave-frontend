@@ -46,7 +46,6 @@ import { ItemCustomizationDialog } from "@/components/menu/Itemcustomizationdial
 import { CustomizedOrderItemDisplay } from "@/components/menu/Customizedorderitemdisplay";
 import { ItemCustomizationContent } from "@/components/menu/ItemcustomizationContent";
 import { OrderVerificationRequests } from "@/components/orders/OrderVerificationRequests";
-import { GlobalNewOrderDialog } from "@/components/orders/GlobalNewOrderDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -771,7 +770,6 @@ export default function WaiterTerminalPage() {
 
     return (
       <>
-        <GlobalNewOrderDialog restaurantId={restaurantId} />
         {customizingItem ? (
           <div className="fixed inset-0 z-50 bg-background">
             <ItemCustomizationContent
@@ -816,7 +814,6 @@ export default function WaiterTerminalPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-background p-4 md:p-6">
-      <GlobalNewOrderDialog restaurantId={restaurantId} />
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

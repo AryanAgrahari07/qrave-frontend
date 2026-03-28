@@ -11,17 +11,17 @@ const API_URL = import.meta.env.VITE_API_URL || "";
  * We always use VITE_API_URL on native; fall back to window.location on web.
  */
 function getWsBaseUrl(): { wsProtocol: string; host: string } {
-  const isNative = typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
-  if (isNative && API_URL) {
-    try {
-      const parsed = new URL(API_URL);
-      const wsProtocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-      return { wsProtocol, host: parsed.host };
-    } catch { /* fall through */ }
-  }
-  // Web: derive from current page
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return { wsProtocol, host: window.location.host };
+    const isNative = typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
+    if (isNative && API_URL) {
+        try {
+            const parsed = new URL(API_URL);
+            const wsProtocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+            return { wsProtocol, host: parsed.host };
+        } catch { /* fall through */ }
+    }
+    // Web: derive from current page
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return { wsProtocol, host: window.location.host };
 }
 
 interface WebSocketEvent {
@@ -44,7 +44,7 @@ export function useRestaurantWebSocket(
     const pingIntervalRef = useRef<number | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const enabled = options.enabled !== false && !!restaurantId;
-    
+
     // Sound settings are handled at the NotificationBell level
 
     useEffect(() => {
@@ -111,23 +111,11 @@ export function useRestaurantWebSocket(
                 // where window.location.origin is 'capacitor://localhost' (not the real server).
                 if (token && token.length > 50 && token.includes(".")) {
                     try {
-                        const apiBase = API_URL || window.location.origin;
-                        const res = await fetch(`${apiBase}/api/auth/ws-ticket`, {
-                            method: "POST",
-                            headers: {
-                                "Authorization": `Bearer ${token}`
-                            }
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.ticket) wsToken = data.ticket;
-                        } else {
-                            // Ticket exchange failed — fall back to sending the raw JWT.
-                            // Connection will still work if the backend accepts JWT in the query param.
-                            console.warn("WS Ticket exchange returned", res.status, "— using raw token");
-                        }
-                    } catch (e) {
-                        console.warn("WS Ticket fetch failed — using raw token", e);
+                        const { api } = await import("@/lib/api");
+                        const data = await api.post<{ ticket: string }>("/api/auth/ws-ticket");
+                        if (data.ticket) wsToken = data.ticket;
+                    } catch (e: any) {
+                        console.warn("WS Ticket exchange failed — using raw token", e);
                     }
                 }
 
@@ -172,6 +160,15 @@ export function useRestaurantWebSocket(
                             return;
                         }
 
+                        if (payload.type === "error") {
+                            console.error("WebSocket server Error:", payload.message);
+                            if (payload.message === "Unauthorized") {
+                                // Close WS if unauthorized to force reconnect or await token refresh
+                                ws.close();
+                            }
+                            return;
+                        }
+
                         if (payload.type === "event" && payload.restaurantId === restaurantId) {
                             const ev = payload as WebSocketEvent;
 
@@ -183,15 +180,25 @@ export function useRestaurantWebSocket(
                                 debouncedInvalidateOrders();
 
                                 if (ev.event === "order.verification_required") {
+                                    console.log("[WS] Received order.verification_required", ev.data);
                                     window.dispatchEvent(new CustomEvent("order_verification_required", { detail: ev.data }));
                                     // Also notify global new-order dialog for QR orders needing verification
                                     window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { ...ev.data, requiresVerification: true } }));
                                 }
                                 if (ev.event === "order.created") {
+                                    console.log("[WS] Received order.created", ev.data);
                                     // Only surface a global notification for public/customer QR orders
                                     const order = ev.data?.order;
                                     if (order?.placedByCustomer || order?.customerSessionId) {
                                         window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { order, requiresVerification: false } }));
+                                    }
+                                }
+                                if (ev.event === "order.items_added") {
+                                    console.log("[WS] Received order.items_added", ev.data);
+                                    const order = ev.data?.order;
+                                    const newItems = ev.data?.newItems;
+                                    if (order?.placedByCustomer || order?.customerSessionId) {
+                                        window.dispatchEvent(new CustomEvent("order_new_customer_order", { detail: { order, requiresVerification: false, onlyShowItems: newItems } }));
                                     }
                                 }
                                 if (ev.event === "order.call_waiter") {

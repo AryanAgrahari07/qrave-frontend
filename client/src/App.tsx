@@ -19,6 +19,7 @@ import { PlanGate } from "@/components/PlanGate";
 import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
 import { Capacitor } from "@capacitor/core";
 import { NativeSplashScreen } from "@/components/NativeSplashScreen";
+import { GlobalNewOrderDialog } from "@/components/orders/GlobalNewOrderDialog";
 
 // A wrapper around `lazy` that auto-refreshes if a chunk fails to load due to deployment updates.
 const lazyImport = (importFunc: () => Promise<{ default: React.ComponentType<any> }>) => {
@@ -241,6 +242,7 @@ function App() {
                 <PrinterProvider width={32}>
                   <TooltipProvider>
                     <OfflineBanner />
+                    <GlobalNewOrderDialog />
                     <Toaster />
                     <SonnerToaster position="top-center" richColors />
                     {showSplash && <NativeSplashScreen onComplete={() => setShowSplash(false)} />}

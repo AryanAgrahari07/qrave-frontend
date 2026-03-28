@@ -128,7 +128,12 @@ async function refreshAccessToken(): Promise<void> {
       }
 
       const data = await res.json();
-      if (data?.token) await setStoredToken(data.token);
+      if (data?.token) {
+        await setStoredToken(data.token);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("orderzi_auth_refreshed", { detail: { token: data.token } }));
+        }
+      }
 
       // Rotation on native
       if (isNative && data?.refreshToken) {

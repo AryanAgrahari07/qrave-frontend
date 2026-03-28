@@ -1,0 +1,1 @@
+import{aT as u}from"./index-BQrD0WyE.js";function d(a=32){const{printer:n,isConnected:t,isConnecting:i,isPrinting:r,connect:e,disconnect:s,printBill:o,printKOT:c,testPrint:p}=u();return{printer:n,isConnected:t,isConnecting:i,isPrinting:r,connect:e,disconnect:s,printBill:o,printKOT:c,testPrint:p}}export{d as u};

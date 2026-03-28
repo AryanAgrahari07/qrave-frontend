@@ -93,6 +93,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      "/ws": {
+        target: (process.env.VITE_API_URL || "ws://localhost:3001").replace(/^http/, 'ws'),
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+      },
     },
     fs: {
       strict: true,

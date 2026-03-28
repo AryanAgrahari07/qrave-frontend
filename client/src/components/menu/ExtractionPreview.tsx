@@ -167,21 +167,21 @@ export function ExtractionPreview({
 
   return (
     <Dialog open onOpenChange={onCancel}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>Review Extracted Items ({items.length})</DialogTitle>
-            <Badge variant={avgConfidence > 80 ? "default" : "secondary"}>
+      <DialogContent className="max-w-4xl max-h-[90vh] w-[95vw] sm:w-full p-4 sm:p-6">
+        <DialogHeader className="pt-4 sm:pt-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pr-8 sm:pr-0">
+            <DialogTitle className="text-left text-lg sm:text-xl">Review Extracted Items ({items.length})</DialogTitle>
+            <Badge variant={avgConfidence > 80 ? "default" : "secondary"} className="shrink-0">
               {avgConfidence}% Confidence
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground text-left pr-4 sm:pr-0 mt-1">
             Review and edit before adding to menu. All fields are required.
           </p>
         </DialogHeader>
 
         <ScrollArea className="max-h-[60vh]">
-          <div className="space-y-6 pr-4">
+          <div className="space-y-6 pr-2 sm:pr-4">
             {Object.entries(groupedByCategory).map(([categoryName, categoryItems]) => (
               <div key={categoryName} className="space-y-3">
                 <div className="flex items-center gap-2 sticky top-0 bg-background pb-2 border-b">
@@ -192,9 +192,9 @@ export function ExtractionPreview({
                 {categoryItems.map((item) => (
                   <div 
                     key={item.id} 
-                    className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50"
+                    className="flex items-start gap-2 sm:gap-3 p-3 rounded-lg border hover:bg-muted/50"
                   >
-                    <div className="flex-1 space-y-2">
+                    <div className="flex-1 min-w-0 space-y-2">
                       {editingId === item.id ? (
                         <>
                           <Input
@@ -244,24 +244,32 @@ export function ExtractionPreview({
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{item.name}</span>
-                            <span className="text-sm text-muted-foreground mr-2">| {item.nameHindi}</span>
-                            <Badge 
-                              variant="outline"
-                              className={
-                                item.dietaryType === 'Veg' 
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-red-100 text-red-800'
-                              }
-                            >
-                              {item.dietaryType}
-                            </Badge>
-                            {item.confidence < 0.7 && (
-                              <Badge variant="secondary" className="text-xs">
-                                Low Confidence
+                          <div className="flex flex-col gap-1.5 sm:gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                              <span className="font-semibold text-base leading-tight break-words">{item.name}</span>
+                              {item.nameHindi && (
+                                <span className="text-sm text-muted-foreground leading-tight sm:border-l sm:pl-2 break-words">
+                                  {item.nameHindi}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge 
+                                variant="outline"
+                                className={`shrink-0 ${
+                                  item.dietaryType === 'Veg' 
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : 'bg-red-100 text-red-800 border-red-200'
+                                }`}
+                              >
+                                {item.dietaryType}
                               </Badge>
-                            )}
+                              {item.confidence < 0.7 && (
+                                <Badge variant="secondary" className="text-xs shrink-0">
+                                  Low Confidence
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <p className="font-mono font-semibold">
                             {job.extracted_data?.currency || '₹'}{item.price.toFixed(2)}
@@ -276,7 +284,7 @@ export function ExtractionPreview({
                       )}
                     </div>
 
-                    <div className="flex gap-1">
+                    <div className="flex flex-col gap-1.5 shrink-0 ml-1">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -301,20 +309,21 @@ export function ExtractionPreview({
           </div>
         </ScrollArea>
 
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            <CheckCircle className="w-4 h-4 inline mr-1" />
-            {items.length} items ready
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pt-4 border-t w-full">
+          <div className="flex items-center justify-center sm:justify-start text-sm text-muted-foreground font-medium w-full sm:w-auto text-center sm:text-left">
+            <CheckCircle className="w-4 h-4 inline mr-1.5 text-primary shrink-0" />
+            <span>{items.length} items ready</span>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={confirmMutation.isPending}>
+          <div className="flex flex-row gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={onCancel} disabled={confirmMutation.isPending}>
               Cancel
             </Button>
             <Button 
+              className="flex-1 sm:flex-none"
               onClick={handleConfirm} 
               disabled={confirmMutation.isPending || items.length === 0}
             >
-              {confirmMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {confirmMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0" />}
               Add {items.length} Items
             </Button>
           </div>

@@ -192,8 +192,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })();
     };
 
+    const refreshHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.token) {
+        setState((s) => ({ ...s, token: detail.token }));
+      }
+    };
+
     window.addEventListener("orderzi_auth_expired", handler);
-    return () => window.removeEventListener("orderzi_auth_expired", handler);
+    window.addEventListener("orderzi_auth_refreshed", refreshHandler);
+    
+    return () => {
+      window.removeEventListener("orderzi_auth_expired", handler);
+      window.removeEventListener("orderzi_auth_refreshed", refreshHandler);
+    };
   }, []);
 
   // Init: optimistic boot from cache, then validate in background.

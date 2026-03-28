@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/context/AuthContext";
 import { ShoppingBag, ExternalLink, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,11 +54,8 @@ interface QueuedOrder {
   existingTableOrderId?: string | null;
 }
 
-export function GlobalNewOrderDialog({
-  restaurantId,
-}: {
-  restaurantId: string | null;
-}) {
+export function GlobalNewOrderDialog() {
+  const { restaurantId } = useAuth();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [queue, setQueue] = useState<QueuedOrder[]>([]);
@@ -87,14 +85,14 @@ export function GlobalNewOrderDialog({
 
         await api.patch(`/api/restaurants/${rId}/orders/${req.orderId}/verify-items`, body);
         dismiss(req.key);
-        
-        const successMsg = action === "accept" 
-          ? "Order accepted successfully" 
-          : action === "merge" 
-            ? "Merged with existing order successfully" 
+
+        const successMsg = action === "accept"
+          ? "Order accepted successfully"
+          : action === "merge"
+            ? "Merged with existing order successfully"
             : "Order rejected successfully";
         toast.success(successMsg);
-        
+
         queryClient.invalidateQueries({ queryKey: ["orders", rId] });
         queryClient.invalidateQueries({ queryKey: ["orders-kitchen", rId] });
         queryClient.invalidateQueries({ queryKey: ["orders-stats", rId] });
@@ -113,20 +111,31 @@ export function GlobalNewOrderDialog({
     const handle = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       const order = detail?.order;
+      
+      console.log("[GlobalNewOrderDialog] Received order event:", { orderId: order?.id, requiresVerification: detail?.requiresVerification, onlyShowItemsLength: detail?.onlyShowItems?.length, detail });
+
       if (!order?.id) return;
 
       const requiresVerification = !!detail.requiresVerification;
+      const onlyShowItems = detail.onlyShowItems;
 
       // For verification orders: show only unverified items
       // For confirmed orders: show all items
-      const relevantItems = requiresVerification
+      let relevantItems = requiresVerification
         ? (order.items || []).filter((i: any) => i.isVerified === false)
         : (order.items || []);
 
-      if (relevantItems.length === 0) return;
+      if (onlyShowItems && Array.isArray(onlyShowItems)) {
+         relevantItems = onlyShowItems;
+      }
 
-      const itemIds = relevantItems.map((i: any) => i.id as string);
-      const requestKey = `${order.id}:${requiresVerification ? "v" : "c"}`;
+      if (relevantItems.length === 0) {
+        console.log("[GlobalNewOrderDialog] Dropping event - no relevant items to show.");
+        return;
+      }
+
+      const itemIds = relevantItems.map((i: any) => i.id || i.menuItemId);
+      const requestKey = `${order.id}:${requiresVerification ? "v" : "c"}:${new Date().getTime()}`; // unique key so repeated item appends pop up again
       const tableNum: string | null =
         order?.table?.tableNumber ?? order?.tableNumber ?? null;
 
@@ -284,7 +293,7 @@ export function GlobalNewOrderDialog({
                     <XCircle className="w-4 h-4 mr-1.5" />
                     Reject
                   </Button>
-                  
+
                   {active.hasExistingTableOrder && !active.isAddingToExistingSession ? (
                     <>
                       <Button
